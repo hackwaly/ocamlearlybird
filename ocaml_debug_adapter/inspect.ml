@@ -196,26 +196,61 @@ module Make (Args : sig
   let make_int32_var = make_plain_var Int32.to_string
   let make_int64_var = make_plain_var Int64.to_string
   let make_nativeint_var = make_plain_var Nativeint.to_string
+  let make_string_var = make_plain_var String.escaped
+
+  let make_bytes_var name _ _ rv = 
+    Lwt.return (make_var name "<bytes>" (Some (fun () -> 
+      let%lwt obj = Remote_value.obj conn rv in 
+      let buf = (obj : bytes) in
+      let vars = ref [] in
+      Bytes.iteri (fun i c -> 
+        vars := (make_var (string_of_int i) (string_of_int (Char.code c)) None) :: !vars;
+      ) buf;
+      Lwt.return (List.rev !vars)
+    )))
 
   let var_makers = 
+    let moregeneral path env ty = 
+      Ctype.moregeneral env false path ty
+    in
+    let same_path path _ (ty : Types.type_expr) = 
+      match (Ctype.repr ty).desc with
+      | Tconstr (path', [], _) -> Path.same path path'
+      | _ -> false
+    in
     [
-      Predef.type_int, make_int_var; 
-      Predef.type_float, make_float_var; 
-      Predef.type_char, make_char_var; 
-      Predef.type_int32, make_int32_var; 
-      Predef.type_nativeint, make_nativeint_var; 
-      Predef.type_int64, make_int64_var; 
+      moregeneral Predef.type_int, make_int_var; 
+      moregeneral Predef.type_float, make_float_var; 
+      moregeneral Predef.type_char, make_char_var; 
+      moregeneral Predef.type_int32, make_int32_var; 
+      moregeneral Predef.type_nativeint, make_nativeint_var; 
+      moregeneral Predef.type_int64, make_int64_var; 
+      same_path Predef.path_string, make_string_var;
+      same_path Predef.path_bytes, make_bytes_var;
     ]
 
   let find_var_maker env ty =
-    List.find_opt (fun (sch, _) -> 
-      Ctype.moregeneral env false sch ty
-    ) var_makers |> BatOption.map snd
+    List.find_opt (fun (test, _) -> test env ty) var_makers |> BatOption.map snd
 
-  let make_value_var name env ty rv =
+  let rec make_value_var name env ty rv =
     match find_var_maker env ty with
     | Some var_maker -> var_maker name env ty rv
-    | None -> Lwt.return (make_var name "…" None)
+    | None -> (
+        match (Ctype.repr ty).desc with
+        | Tvar _ | Tunivar _ -> Lwt.return (make_var name "<poly>" None)
+        | Tarrow _ -> Lwt.return (make_var name "<fun>" None)
+        | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_list ->
+          let rec build_vars vars idx rv =
+            if Remote_value.is_block rv then (
+              let%lwt hd = Remote_value.field conn rv 0 in
+              let%lwt tl = Remote_value.field conn rv 1 in
+              let%lwt var = make_value_var (string_of_int idx) env ty_arg1 hd in
+              build_vars (var :: vars) (idx + 1) tl
+            ) else Lwt.return vars
+          in
+          Lwt.return (make_var name "<list>" (Some (fun () -> build_vars [] 0 rv)))
+        | _ -> Lwt.return (make_var name "…" None)
+      )
 
   let make_scope_var frame_idx kind =
     let name = match kind with
