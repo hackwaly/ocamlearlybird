@@ -163,6 +163,10 @@ module Make (Args : sig
     );%lwt
     Lwt.return (BatOption.get !ret)
 
+
+  let publish_var var = 
+    Hashtbl.replace var_by_handle var.var_handle var
+
   let make_var name value get_vars =
     let handle, vars = match get_vars with
       | None -> 0, None
@@ -182,11 +186,36 @@ module Make (Args : sig
       var_vars = vars;
     }
 
-  let publish_var var = 
-    Hashtbl.replace var_by_handle var.var_handle var
+  let make_plain_var to_string name _ _ rv =
+    let%lwt obj = Remote_value.obj conn rv in 
+    Lwt.return (make_var name (to_string obj) None)
 
-  let make_value_var name _ _ _ =
-    make_var name "" None
+  let make_int_var = make_plain_var string_of_int
+  let make_float_var = make_plain_var string_of_float
+  let make_char_var = make_plain_var Char.escaped
+  let make_int32_var = make_plain_var Int32.to_string
+  let make_int64_var = make_plain_var Int64.to_string
+  let make_nativeint_var = make_plain_var Nativeint.to_string
+
+  let var_makers = 
+    [
+      Predef.type_int, make_int_var; 
+      Predef.type_float, make_float_var; 
+      Predef.type_char, make_char_var; 
+      Predef.type_int32, make_int32_var; 
+      Predef.type_nativeint, make_nativeint_var; 
+      Predef.type_int64, make_int64_var; 
+    ]
+
+  let find_var_maker env ty =
+    List.find_opt (fun (sch, _) -> 
+      Ctype.moregeneral env false sch ty
+    ) var_makers |> BatOption.map snd
+
+  let make_value_var name env ty rv =
+    match find_var_maker env ty with
+    | Some var_maker -> var_maker name env ty rv
+    | None -> Lwt.return (make_var name "…" None)
 
   let make_scope_var frame_idx kind =
     let name = match kind with
@@ -212,8 +241,8 @@ module Make (Args : sig
             let ty = Ctype.correct_levels valdesc.Types.val_type in
             let pos = Ident.find_same ident tbl in
             let%lwt rv = get_remote_value pos in
-            let var = make_value_var name env ty rv in
-            Lwt.return_some (var :> variable)
+            let%lwt var = make_value_var name env ty rv in
+            Lwt.return_some var
         )
       )
     ))
