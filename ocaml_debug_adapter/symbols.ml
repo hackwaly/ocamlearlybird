@@ -1,0 +1,215 @@
+open Instruct
+
+type debug_module_info = {
+  name : string;
+  path : string;
+  events : debug_event array;
+}
+
+type t = {
+  all_dirs : string list;
+  module_info_tbl : (string, debug_module_info) Hashtbl.t;
+  event_by_pc : (int, debug_event) Hashtbl.t;
+}
+
+exception Bad_magic_number
+
+let read_exactly ic count =
+  let buf = Bytes.create count in
+  Lwt_io.read_into_exactly ic buf 0 count;%lwt
+  Lwt.return (Bytes.to_string buf)
+
+let read_toc ic =
+  let%lwt len = Lwt_io.length ic in
+  let pos_trailer = Int64.sub len (Int64.of_int 16) in
+  Lwt_io.set_position ic pos_trailer;%lwt
+  let%lwt num_sections = Lwt_io.BE.read_int ic in
+  let%lwt magic = read_exactly ic (String.length Config.exec_magic_number) in
+  if magic <> Config.exec_magic_number then raise Bad_magic_number;
+  let pos_toc = Int64.sub pos_trailer (Int64.of_int (8 * num_sections)) in
+  Lwt_io.set_position ic pos_toc;%lwt
+  let section_table = ref [] in
+  for%lwt i = 1 to num_sections do
+    let%lwt name = read_exactly ic 4 in
+    let%lwt len = Lwt_io.BE.read_int ic in
+    section_table := (name, len) :: !section_table;
+    Lwt.return_unit;
+  done;%lwt
+  Lwt.return (pos_toc, !section_table)
+
+let seek_section (pos, section_table) name =
+  let rec seek_sec pos = function
+    | [] -> raise Not_found
+    | (name', len) :: rest ->
+      let pos = Int64.sub pos (Int64.of_int len) in
+      if name' = name then pos
+      else seek_sec pos rest
+  in seek_sec pos section_table
+
+let relocate_event orig ev =
+  ev.ev_pos <- orig + ev.ev_pos;
+  match ev.ev_repr with
+  | Event_parent repr -> repr := ev.ev_pos
+  | _ -> ()
+
+let partition_modules evl =
+  let rec partition_modules' ev evl =
+    match evl with
+      [] -> [ev],[]
+    | ev'::evl ->
+      let evl,evll = partition_modules' ev' evl in
+      if ev.ev_module = ev'.ev_module then ev::evl,evll else [ev],evl::evll
+  in
+  match evl with
+    [] -> []
+  | ev::evl -> let evl,evll = partition_modules' ev evl in evl::evll
+
+let resolve_source_file modname dirs =
+  let derive_filename_from_module mod_name ext =
+    String.uncapitalize_ascii mod_name ^ ext
+  in
+  let rec resolve file dirs =
+    match dirs with
+    | dir :: dirs ->
+      let path = (dir ^ "/" ^ file) in
+      if%lwt Lwt_unix.file_exists path then Lwt.return path
+      else resolve file dirs
+    | [] -> Lwt.fail Not_found
+  in
+  resolve (derive_filename_from_module modname ".ml") dirs
+
+let pos_of_event (ev : debug_event) : Lexing.position =
+  match ev.ev_kind with
+  | Event_before -> ev.ev_loc.Location.loc_start
+  | Event_after _ -> ev.ev_loc.Location.loc_end
+  | _ -> ev.ev_loc.Location.loc_start
+
+let read_symbols ic toc =
+  let pos = seek_section toc "DBUG" in
+  Lwt_io.set_position ic pos;%lwt
+  let%lwt num_eventlists = Lwt_io.BE.read_int ic in
+  let module_info_tbl = Hashtbl.create 0 in
+  let event_by_pc = Hashtbl.create 0 in
+  let module String_set = BatSet.Make (String) in
+  let all_dirs = ref String_set.empty in
+  for%lwt i = 1 to num_eventlists do
+    let%lwt orig = Lwt_io.BE.read_int ic in
+    let%lwt evl = Lwt_io.read_value ic in
+    let evl = (evl : Instruct.debug_event list) in
+    List.iter (relocate_event orig) evl;
+    let%lwt dirs = Lwt_io.read_value ic in
+    let dirs = (dirs : string list) in
+    List.iter (fun dir ->
+      all_dirs := String_set.add dir !all_dirs
+    ) dirs;
+    let evll = partition_modules evl in
+    Lwt_list.iter_s (fun evl ->
+      let name = (List.hd evl).ev_module in
+      let%lwt path = resolve_source_file name dirs in
+      List.iter (fun ev ->
+        Hashtbl.add event_by_pc ev.ev_pos ev
+      ) evl;
+      let events = (
+        evl
+        |> List.filter (fun ev ->
+          match ev.ev_kind with
+          | Event_pseudo -> false
+          | _ -> true
+        )
+        |> Array.of_list
+      ) in
+      let cmp ev1 ev2 =
+        let open Lexing in
+        compare
+          (pos_of_event ev1).pos_cnum
+          (pos_of_event ev2).pos_cnum
+      in
+      Array.sort cmp events;
+      let module_info = {name; path; events} in
+      Hashtbl.add module_info_tbl name module_info;
+      Lwt.return_unit
+    ) evll
+  done;%lwt
+  Lwt.return {event_by_pc; all_dirs = String_set.to_list !all_dirs; module_info_tbl}
+
+let load (ic : Lwt_io.input_channel) : t option Lwt.t =
+  match%lwt
+    let%lwt toc = read_toc ic in
+    read_symbols ic toc
+  with
+  | exception (Bad_magic_number | Not_found) -> Lwt.return_none
+  | result -> Lwt.return_some result
+
+let all_dirs (symbols : t) : string list =
+  symbols.all_dirs
+
+let line_column_of_pos (pos : Lexing.position) : int * int =
+  Lexing.(pos.pos_lnum, pos.pos_cnum - pos.pos_bol + 1)
+
+let line_column_of_event (ev : debug_event) : int * int =
+  line_column_of_pos (pos_of_event ev)
+
+let path_to_modname (path : string) : string =
+  String.capitalize_ascii Filename.(path |> basename |> remove_extension)
+
+let get_module_info (symbols : t) (modname : string) : debug_module_info =
+  Hashtbl.find symbols.module_info_tbl modname
+
+let event_at_pc (symbols : t) (pc : int) : debug_event =
+  Hashtbl.find symbols.event_by_pc pc
+
+let module_infos (symbols : t) : debug_module_info list =
+  BatHashtbl.values symbols.module_info_tbl |> BatList.of_enum
+
+let find_event_opt_near_pos (symbols : t) (modname : string) (pos : (int * int)) : debug_event option =
+  let modinfo = Hashtbl.find symbols.module_info_tbl modname in
+  let events = modinfo.events in
+  let (line1, col1) = pos in
+  let cmp ev =
+    let (line2, col2) = line_column_of_event ev in
+    if line1 = line2 then col1 - col2 else line1 - line2
+  in
+  let rec bsearch lo hi =
+    if lo >= hi then hi
+    else begin
+      let pivot = (lo + hi) / 2 in
+      let ev = events.(pivot) in
+      let r = cmp ev in
+      if r > 0 then bsearch (pivot + 1) hi
+      else bsearch lo pivot
+    end
+  in
+  let i = bsearch 0 (Array.length events) in
+  let j = i -1 in
+  if i >= Array.length events || j < 0 then
+    let ev = events.(if j < 0 then i else j) in
+    let cr = cmp ev in
+    match ev.ev_kind with
+    | Event_before when cr <= 0 -> Some ev
+    | Event_after _ when cr >= 0 -> Some ev
+    | _ -> None
+  else
+    let ev1 = events.(j) in
+    let ev2 = events.(i) in
+    let cr1 = cmp ev1 in
+    let cr2 = cmp ev2 in
+    match ev1.ev_kind, ev2.ev_kind with
+    | _, Event_after _ when cr2 >= 0 -> Some ev2
+    | Event_before, _ when cr1 <= 0 -> Some ev1
+    | Event_after _, Event_before when cr1 >= 0 && cr2 <= 0 ->
+      let p1 = pos_of_event ev1 in
+      let p2 = pos_of_event ev2 in
+      let l, c = line1, col1 in
+      let l1, c1 = line_column_of_pos p1 in
+      let l2, c2 = line_column_of_pos p2 in
+      Some (
+        if l1 = l2 then (
+          if abs (c1 - c) < (c2 - c) then ev1 else ev2
+        )
+        else (
+          if abs (l1 - l) < (l2 - l) then ev1 else ev2
+        )
+      )
+    | Event_after _, _ when cr1 >= 0 -> Some ev1
+    | _, Event_before when cr2 <= 0 -> Some ev2
+    | _ -> None

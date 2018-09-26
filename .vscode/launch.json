@@ -1,0 +1,17 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OCaml",
+      "type": "ocamldebug",
+      "request": "launch",
+      "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
+      "preLaunchTask": "build",
+      "console": "internalConsole",
+      "stopOnEntry": false
+    }
+  ]
+}

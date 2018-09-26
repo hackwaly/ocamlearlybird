@@ -1,0 +1,12 @@
+(executable
+ (name main)
+ (flags (:standard -warn-error -a+31))
+ (preprocess (pps lwt_ppx ppx_deriving_yojson ppx_deriving.make))
+ (libraries
+  lwt
+  lwt.unix
+  yojson
+  ppx_deriving_yojson.runtime
+  debug_adapter_protocol
+  compiler-libs.bytecomp
+  compiler-libs.common))

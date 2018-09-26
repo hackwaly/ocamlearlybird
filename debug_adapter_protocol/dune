@@ -1,0 +1,11 @@
+(library
+ (name debug_adapter_protocol)
+ (preprocess (pps lwt_ppx ppx_deriving_yojson ppx_deriving.make))
+ (libraries
+  lwt
+  lwt.unix
+  angstrom
+  angstrom.lwt-unix
+  yojson
+  batteries
+  ppx_deriving_yojson.runtime))
