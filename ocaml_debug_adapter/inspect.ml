@@ -190,13 +190,16 @@ module Make (Args : sig
     let%lwt obj = Remote_value.obj conn rv in 
     Lwt.return (make_var name (to_string obj) None)
 
+  let make_unit_var = make_plain_var (fun _ -> "()")
+  let make_bool_var = make_plain_var string_of_bool
   let make_int_var = make_plain_var string_of_int
   let make_float_var = make_plain_var string_of_float
   let make_char_var = make_plain_var Char.escaped
   let make_int32_var = make_plain_var Int32.to_string
   let make_int64_var = make_plain_var Int64.to_string
   let make_nativeint_var = make_plain_var Nativeint.to_string
-  let make_string_var = make_plain_var String.escaped
+  let make_string_var = make_plain_var (fun s -> Printf.sprintf "%S" s)
+  let make_exn_var = make_plain_var Printexc.to_string
 
   let make_bytes_var name _ _ rv = 
     Lwt.return (make_var name "<bytes>" (Some (fun () -> 
@@ -204,7 +207,7 @@ module Make (Args : sig
       let buf = (obj : bytes) in
       let vars = ref [] in
       Bytes.iteri (fun i c -> 
-        vars := (make_var (string_of_int i) (string_of_int (Char.code c)) None) :: !vars;
+        vars := (make_var (string_of_int i) (Printf.sprintf "%0#x" (Char.code c)) None) :: !vars;
       ) buf;
       Lwt.return (List.rev !vars)
     )))
@@ -225,8 +228,11 @@ module Make (Args : sig
       moregeneral Predef.type_int32, make_int32_var; 
       moregeneral Predef.type_nativeint, make_nativeint_var; 
       moregeneral Predef.type_int64, make_int64_var; 
+      same_path Predef.path_unit, make_unit_var;
+      same_path Predef.path_bool, make_bool_var;
       same_path Predef.path_string, make_string_var;
       same_path Predef.path_bytes, make_bytes_var;
+      same_path Predef.path_exn, make_exn_var;
     ]
 
   let find_var_maker env ty =
@@ -237,8 +243,22 @@ module Make (Args : sig
     | Some var_maker -> var_maker name env ty rv
     | None -> (
         match (Ctype.repr ty).desc with
+        | Tsubst ty | Tpoly (ty, _) -> make_value_var name env ty rv
         | Tvar _ | Tunivar _ -> Lwt.return (make_var name "<poly>" None)
         | Tarrow _ -> Lwt.return (make_var name "<fun>" None)
+        | Ttuple tys -> 
+          let rec build_vars vars idx tys =
+            match tys with
+            | [] -> Lwt.return vars
+            | ty :: tys -> 
+              let%lwt rv = Remote_value.field conn rv idx in
+              let%lwt var = make_value_var (string_of_int idx) env ty rv in
+              build_vars (var :: vars) (idx + 1) tys
+          in
+          Lwt.return (make_var name "<tuple>" (Some (fun () -> 
+            let%lwt vars = build_vars [] 0 tys in
+            Lwt.return (List.rev vars)
+          )))
         | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_list ->
           let rec build_vars vars idx rv =
             if Remote_value.is_block rv then (
@@ -248,7 +268,34 @@ module Make (Args : sig
               build_vars (var :: vars) (idx + 1) tl
             ) else Lwt.return vars
           in
-          Lwt.return (make_var name "<list>" (Some (fun () -> build_vars [] 0 rv)))
+          Lwt.return (make_var name "<list>" (Some (fun () -> 
+            let%lwt vars = build_vars [] 0 rv in
+            Lwt.return (List.rev vars)
+          )))
+        | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_array ->
+          let%lwt length = Remote_value.size conn rv in
+          let rec build_vars vars idx =
+            if idx < length then (
+              let%lwt fld_rv = Remote_value.field conn rv idx in
+              let%lwt fld_var = make_value_var (string_of_int idx) env ty_arg1 fld_rv in
+              build_vars (fld_var :: vars) (idx + 1)
+            ) else Lwt.return vars
+          in
+          Lwt.return (make_var name "<array>" (Some (fun () -> 
+            let%lwt vars = build_vars [] 0 in
+            Lwt.return (List.rev vars)
+          )))
+        | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_lazy_t ->
+          let%lwt tag = Remote_value.tag conn rv in
+          if tag = Obj.lazy_tag then Lwt.return (make_var name "<lazy>" None)
+          else (
+            let%lwt forced_rv = 
+              if tag = Obj.forward_tag 
+              then Remote_value.field conn rv 0
+              else Lwt.return rv
+            in
+            make_value_var name env ty_arg1 forced_rv
+          )
         | _ -> Lwt.return (make_var name "…" None)
       )
 
