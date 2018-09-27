@@ -238,6 +238,9 @@ module Make (Args : sig
   let find_var_maker env ty =
     List.find_opt (fun (test, _) -> test env ty) var_makers |> BatOption.map snd
 
+  let abstract_type =
+    Ctype.newty (Tconstr (Pident (Ident.create "abstract"), [], ref Types.Mnil))
+
   let rec make_value_var name env ty rv =
     match find_var_maker env ty with
     | Some var_maker -> var_maker name env ty rv
@@ -295,6 +298,80 @@ module Make (Args : sig
               else Lwt.return rv
             in
             make_value_var name env ty_arg1 forced_rv
+          )
+        | Tconstr(path, ty_list, _) -> (
+            try%lwt (
+              let decl = Env.find_type path env in
+              match decl with
+              | {type_kind = Type_abstract; type_manifest = None; _} -> 
+                Lwt.return (make_var name "<abstr>" None)
+              | {type_kind = Type_abstract; type_manifest = Some body; _} -> (
+                  let ty = 
+                    try Ctype.apply env decl.type_params body ty_list
+                    with Ctype.Cannot_apply -> abstract_type 
+                  in
+                  make_value_var name env ty rv
+                )
+              | {type_kind = Type_variant constr_list; type_unboxed; _} ->
+                let unbx = type_unboxed.unboxed in
+                let open Types in
+                let%lwt tag = 
+                  if unbx then Lwt.return Cstr_unboxed
+                  else if Remote_value.is_block rv then 
+                    let%lwt tag = Remote_value.tag conn rv in
+                    Lwt.return (Cstr_block tag)
+                  else
+                    let%lwt obj = Remote_value.obj conn rv in
+                    Lwt.return (Cstr_constant obj)
+                in
+                let {cd_id; cd_args; cd_res; _} = Datarepr.find_constr_by_tag tag constr_list in
+                let type_params =
+                  match cd_res with
+                    Some t ->
+                    begin match (Ctype.repr t).desc with
+                        Tconstr (_,params,_) ->
+                        params
+                      | _ -> assert false end
+                  | None -> decl.type_params
+                in (
+                  match cd_args with
+                  | Cstr_tuple l -> (
+                      let ty_args =
+                        List.map (fun ty -> 
+                          try Ctype.apply env type_params ty ty_list 
+                          with Ctype.Cannot_apply -> abstract_type) l
+                      in
+                      if ty_args = [] then 
+                        Lwt.return (make_var name (Ident.name cd_id) None) 
+                      else if unbx then
+                        Lwt.return (
+                          make_var name (Ident.name cd_id) (Some (fun () -> 
+                            let%lwt var = make_value_var "0" env (List.hd ty_args) rv in
+                            Lwt.return [var]
+                          ))
+                        )
+                      else 
+                        let rec build_vars vars idx tys =
+                          match tys with
+                          | [] -> Lwt.return vars
+                          | ty :: tys -> 
+                            let%lwt rv = Remote_value.field conn rv idx in
+                            let%lwt var = make_value_var (string_of_int idx) env ty rv in
+                            build_vars (var :: vars) (idx + 1) tys
+                        in
+                        Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
+                          let%lwt vars = build_vars [] 0 ty_args in
+                          Lwt.return (List.rev vars)
+                        )))
+                    )
+                  | _ -> Lwt.return (make_var name "…" None)
+                )
+              | _ -> Lwt.return (make_var name "…" None)
+            ) with 
+            | Not_found -> 
+              Lwt.return (make_var name "<abstr>" None)
+            | Datarepr.Constr_not_found -> 
+              Lwt.return (make_var name "<unknown constructor>" None)
           )
         | _ -> Lwt.return (make_var name "…" None)
       )
