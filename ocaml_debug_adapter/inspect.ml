@@ -366,6 +366,59 @@ module Make (Args : sig
                     )
                   | _ -> Lwt.return (make_var name "…" None)
                 )
+              | {type_kind = Type_record(lbl_list, rep); _} ->
+                let type_params = decl.type_params in
+                let unbx =
+                  match rep with 
+                  | Record_unboxed _ -> true 
+                  | _ -> false
+                in
+                if unbx then 
+                  Lwt.return (make_var name "<record>" (Some (fun () -> 
+                    let lbl = List.hd lbl_list in
+                    let ty_arg =
+                      try
+                        Ctype.apply env type_params lbl.ld_type
+                          ty_list
+                      with
+                        Ctype.Cannot_apply -> abstract_type 
+                    in
+                    let%lwt fld = make_value_var (Ident.name lbl.ld_id) env ty_arg rv in
+                    Lwt.return [fld]
+                  )))
+                else
+                  let rec build_vars vars pos lbl_list  =
+                    match lbl_list with
+                    | {Types.ld_id; ld_type; _} :: lbl_list -> (
+                        let ty_arg =
+                          try
+                            Ctype.apply env type_params ld_type
+                              ty_list
+                          with
+                            Ctype.Cannot_apply -> abstract_type 
+                        in
+                        let%lwt tag = Remote_value.tag conn rv in
+                        let%lwt rv = 
+                          if tag = Obj.double_array_tag then
+                            let%lwt fld = Remote_value.double_field conn rv pos in
+                            Lwt.return (Remote_value.repr fld)
+                          else
+                            Remote_value.field conn rv pos
+                        in
+                        let%lwt var = make_value_var (Ident.name ld_id) env ty_arg rv in
+                        build_vars (var :: vars) (pos + 1) lbl_list
+                      )
+                    | [] -> Lwt.return vars
+                  in
+                  let pos =
+                    match rep with
+                    | Record_extension -> 1
+                    | _ -> 0
+                  in
+                  Lwt.return (make_var name "<record>" (Some (fun () -> 
+                    let%lwt vars = build_vars [] pos lbl_list in
+                    Lwt.return (List.rev vars)
+                  )))
               | _ -> Lwt.return (make_var name "…" None)
             ) with 
             | Not_found -> 
