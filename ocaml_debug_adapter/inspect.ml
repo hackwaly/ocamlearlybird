@@ -249,18 +249,9 @@ module Make (Args : sig
         | Tsubst ty | Tpoly (ty, _) -> make_value_var name env ty rv
         | Tvar _ | Tunivar _ -> Lwt.return (make_var name "<poly>" None)
         | Tarrow _ -> Lwt.return (make_var name "<fun>" None)
-        | Ttuple tys -> 
-          let rec build_vars vars idx tys =
-            match tys with
-            | [] -> Lwt.return vars
-            | ty :: tys -> 
-              let%lwt rv = Remote_value.field conn rv idx in
-              let%lwt var = make_value_var (string_of_int idx) env ty rv in
-              build_vars (var :: vars) (idx + 1) tys
-          in
+        | Ttuple ty_list -> 
           Lwt.return (make_var name "<tuple>" (Some (fun () -> 
-            let%lwt vars = build_vars [] 0 tys in
-            Lwt.return (List.rev vars)
+            make_tuple_fields_vars env ty_list 0 rv false
           )))
         | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_list ->
           let rec build_vars vars idx rv =
@@ -299,7 +290,7 @@ module Make (Args : sig
             in
             make_value_var name env ty_arg1 forced_rv
           )
-        | Tconstr(path, ty_list, _) -> (
+        | Tconstr(path, ty_args, _) -> (
             try%lwt (
               let decl = Env.find_type path env in
               match decl with
@@ -307,16 +298,16 @@ module Make (Args : sig
                 Lwt.return (make_var name "<abstr>" None)
               | {type_kind = Type_abstract; type_manifest = Some body; _} -> (
                   let ty = 
-                    try Ctype.apply env decl.type_params body ty_list
+                    try Ctype.apply env decl.type_params body ty_args
                     with Ctype.Cannot_apply -> abstract_type 
                   in
                   make_value_var name env ty rv
                 )
               | {type_kind = Type_variant constr_list; type_unboxed; _} ->
-                let unbx = type_unboxed.unboxed in
+                let unboxed = type_unboxed.unboxed in
                 let open Types in
                 let%lwt tag = 
-                  if unbx then Lwt.return Cstr_unboxed
+                  if unboxed then Lwt.return Cstr_unboxed
                   else if Remote_value.is_block rv then 
                     let%lwt tag = Remote_value.tag conn rv in
                     Lwt.return (Cstr_block tag)
@@ -327,98 +318,36 @@ module Make (Args : sig
                 let {cd_id; cd_args; cd_res; _} = Datarepr.find_constr_by_tag tag constr_list in
                 let type_params =
                   match cd_res with
-                    Some t ->
-                    begin match (Ctype.repr t).desc with
-                        Tconstr (_,params,_) ->
-                        params
-                      | _ -> assert false end
+                  | Some t -> (
+                      match (Ctype.repr t).desc with
+                      | Tconstr (_, params, _) -> params
+                      | _ -> assert false
+                    )
                   | None -> decl.type_params
                 in (
                   match cd_args with
-                  | Cstr_tuple l -> (
-                      let ty_args =
+                  | Cstr_tuple [] -> Lwt.return (make_var name (Ident.name cd_id) None)
+                  | Cstr_tuple ty_list -> (
+                      let ty_list =
                         List.map (fun ty -> 
-                          try Ctype.apply env type_params ty ty_list 
-                          with Ctype.Cannot_apply -> abstract_type) l
+                          try Ctype.apply env type_params ty ty_args 
+                          with Ctype.Cannot_apply -> abstract_type) ty_list
                       in
-                      if ty_args = [] then 
-                        Lwt.return (make_var name (Ident.name cd_id) None) 
-                      else if unbx then
-                        Lwt.return (
-                          make_var name (Ident.name cd_id) (Some (fun () -> 
-                            let%lwt var = make_value_var "0" env (List.hd ty_args) rv in
-                            Lwt.return [var]
-                          ))
-                        )
-                      else 
-                        let rec build_vars vars idx tys =
-                          match tys with
-                          | [] -> Lwt.return vars
-                          | ty :: tys -> 
-                            let%lwt rv = Remote_value.field conn rv idx in
-                            let%lwt var = make_value_var (string_of_int idx) env ty rv in
-                            build_vars (var :: vars) (idx + 1) tys
-                        in
-                        Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
-                          let%lwt vars = build_vars [] 0 ty_args in
-                          Lwt.return (List.rev vars)
-                        )))
+                      Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
+                        make_tuple_fields_vars env ty_list 0 rv unboxed
+                      )))
                     )
-                  | _ -> Lwt.return (make_var name "…" None)
+                  | Cstr_record lbl_list -> 
+                    Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
+                      make_record_fields_vars env path type_params ty_args lbl_list 0 rv unboxed
+                    )))
                 )
               | {type_kind = Type_record(lbl_list, rep); _} ->
-                let type_params = decl.type_params in
-                let unbx =
-                  match rep with 
-                  | Record_unboxed _ -> true 
-                  | _ -> false
-                in
-                if unbx then 
-                  Lwt.return (make_var name "<record>" (Some (fun () -> 
-                    let lbl = List.hd lbl_list in
-                    let ty_arg =
-                      try
-                        Ctype.apply env type_params lbl.ld_type
-                          ty_list
-                      with
-                        Ctype.Cannot_apply -> abstract_type 
-                    in
-                    let%lwt fld = make_value_var (Ident.name lbl.ld_id) env ty_arg rv in
-                    Lwt.return [fld]
-                  )))
-                else
-                  let rec build_vars vars pos lbl_list  =
-                    match lbl_list with
-                    | {Types.ld_id; ld_type; _} :: lbl_list -> (
-                        let ty_arg =
-                          try
-                            Ctype.apply env type_params ld_type
-                              ty_list
-                          with
-                            Ctype.Cannot_apply -> abstract_type 
-                        in
-                        let%lwt tag = Remote_value.tag conn rv in
-                        let%lwt rv = 
-                          if tag = Obj.double_array_tag then
-                            let%lwt fld = Remote_value.double_field conn rv pos in
-                            Lwt.return (Remote_value.repr fld)
-                          else
-                            Remote_value.field conn rv pos
-                        in
-                        let%lwt var = make_value_var (Ident.name ld_id) env ty_arg rv in
-                        build_vars (var :: vars) (pos + 1) lbl_list
-                      )
-                    | [] -> Lwt.return vars
-                  in
-                  let pos =
-                    match rep with
-                    | Record_extension -> 1
-                    | _ -> 0
-                  in
-                  Lwt.return (make_var name "<record>" (Some (fun () -> 
-                    let%lwt vars = build_vars [] pos lbl_list in
-                    Lwt.return (List.rev vars)
-                  )))
+                let unboxed = match rep with Record_unboxed _ -> true  | _ -> false in
+                let pos = match rep with Record_extension -> 1 | _ -> 0 in
+                Lwt.return (make_var name "<record>" (Some (fun () -> 
+                  make_record_fields_vars env path decl.type_params ty_args lbl_list pos rv unboxed
+                )))
               | _ -> Lwt.return (make_var name "…" None)
             ) with 
             | Not_found -> 
@@ -428,6 +357,57 @@ module Make (Args : sig
           )
         | _ -> Lwt.return (make_var name "…" None)
       )
+
+  and make_tuple_fields_vars env ty_list pos rv unboxed = 
+    if unboxed then
+      let%lwt var = make_value_var "0" env (List.hd ty_list) rv in
+      Lwt.return [var]
+    else 
+      let rec build_vars vars pos idx tys =
+        match tys with
+        | [] -> Lwt.return vars
+        | ty :: tys -> 
+          let%lwt rv = Remote_value.field conn rv pos in
+          let%lwt var = make_value_var (string_of_int idx) env ty rv in
+          build_vars (var :: vars) (pos + 1) (idx + 1) tys
+      in
+      let%lwt vars = build_vars [] pos 0 ty_list in
+      Lwt.return (List.rev vars)
+
+  and make_record_fields_vars env path ty_params ty_args lbl_list pos rv unboxed =
+    ignore path; (* TODO: first field label use path *)
+    let open Types in 
+    if unboxed then 
+      let lbl = List.hd lbl_list in
+      let ty_arg =
+        try Ctype.apply env ty_params lbl.ld_type ty_args
+        with Ctype.Cannot_apply -> abstract_type 
+      in
+      let%lwt var = make_value_var (Ident.name lbl.ld_id) env ty_arg rv in
+      Lwt.return [var]
+    else
+      let rec build_vars vars pos lbl_list  =
+        match lbl_list with
+        | {Types.ld_id; ld_type; _} :: lbl_list -> (
+            let ty_arg =
+              try Ctype.apply env ty_params ld_type ty_args
+              with Ctype.Cannot_apply -> abstract_type 
+            in
+            let%lwt tag = Remote_value.tag conn rv in
+            let%lwt rv = 
+              if tag = Obj.double_array_tag then
+                let%lwt fld = Remote_value.double_field conn rv pos in
+                Lwt.return (Remote_value.repr fld)
+              else
+                Remote_value.field conn rv pos
+            in
+            let%lwt var = make_value_var (Ident.name ld_id) env ty_arg rv in
+            build_vars (var :: vars) (pos + 1) lbl_list
+          )
+        | [] -> Lwt.return vars
+      in
+      let%lwt vars = build_vars [] pos lbl_list in
+      Lwt.return (List.rev vars)
 
   let make_scope_var frame_idx kind =
     let name = match kind with
