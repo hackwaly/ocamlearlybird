@@ -18,7 +18,6 @@ module Make (Args : sig
 
   open Args
 
-  module Ident_map = BatMap.Make (Ident)
   module Remote_value = Debug_conn.Remote_value
 
   type variable = {
@@ -31,7 +30,7 @@ module Make (Args : sig
   let stack = ref ([||] : (int * Instruct.debug_event) array)
   let site_id = ref 0
   let var_by_handle = (Hashtbl.create 0 : (int, variable) Hashtbl.t)
-  let make_handle = 
+  let make_handle =
     let next_handle = ref 1 in
     fun () ->
       let id = !next_handle in
@@ -101,14 +100,14 @@ module Make (Args : sig
       }
     )
 
-  let loaded_sources_command _ = 
+  let loaded_sources_command _ =
     Lwt.return_ok Loaded_sources_command.Response.Body.{
       sources = BatHashtbl.values source_by_modname |> BatList.of_enum
     }
 
   let source_command _ = assert%lwt false
 
-  let threads_command _ = 
+  let threads_command _ =
     Lwt.return_ok Threads_command.Response.Body.{
       threads = [
         Thread.({
@@ -118,7 +117,7 @@ module Make (Args : sig
       ]
     }
 
-  let stack_trace_command _ = 
+  let stack_trace_command _ =
     let stack_frames =
       !stack
       |> Array.to_list
@@ -148,10 +147,10 @@ module Make (Args : sig
       total_frames = None;
     }
 
-  let with_frame idx fn = 
+  let with_frame idx fn =
     let cur_idx = ref 0 in
     let ret = ref None in
-    walk_stack (fun (stack_pos, ev) -> 
+    walk_stack (fun (stack_pos, ev) ->
       let at_frame = !cur_idx = idx in
       if%lwt Lwt.return at_frame then (
         let%lwt res = fn (stack_pos, ev) in
@@ -163,8 +162,19 @@ module Make (Args : sig
     );%lwt
     Lwt.return (BatOption.get !ret)
 
+  let rec eval_path (path : Path.t) =
+    match path with
+    | Pident id ->
+      let pos = Symbols.get_global_position symbols id in
+      Remote_value.global conn pos
+    | Pdot (root, _field_name, pos) ->
+      let%lwt root = eval_path root in
+      if not (Remote_value.is_block root)
+      then raise Not_found
+      else Remote_value.field conn root pos
+    | Papply _ -> assert%lwt false
 
-  let publish_var var = 
+  let publish_var var =
     Hashtbl.replace var_by_handle var.var_handle var
 
   let make_var name value get_vars =
@@ -174,12 +184,12 @@ module Make (Args : sig
           let pin_site_id = !site_id in
           let handle = make_handle () in
           handle, Some (Lazy.from_fun (fun () ->
-            if pin_site_id <> !site_id 
+            if pin_site_id <> !site_id
             then Lwt.return_nil
             else get_vars ()
           ))
         )
-    in { 
+    in {
       var_handle = handle;
       var_name = name;
       var_value = value;
@@ -187,7 +197,7 @@ module Make (Args : sig
     }
 
   let make_plain_var to_string name _ _ rv =
-    let%lwt obj = Remote_value.obj conn rv in 
+    let%lwt obj = Remote_value.obj conn rv in
     Lwt.return (make_var name (to_string obj) None)
 
   let make_unit_var = make_plain_var (fun _ -> "()")
@@ -201,33 +211,33 @@ module Make (Args : sig
   let make_string_var = make_plain_var (fun s -> Printf.sprintf "%S" s)
   let make_exn_var = make_plain_var Printexc.to_string
 
-  let make_bytes_var name _ _ rv = 
-    Lwt.return (make_var name "<bytes>" (Some (fun () -> 
-      let%lwt obj = Remote_value.obj conn rv in 
+  let make_bytes_var name _ _ rv =
+    Lwt.return (make_var name "<bytes>" (Some (fun () ->
+      let%lwt obj = Remote_value.obj conn rv in
       let buf = (obj : bytes) in
       let vars = ref [] in
-      Bytes.iteri (fun i c -> 
+      Bytes.iteri (fun i c ->
         vars := (make_var (string_of_int i) (Printf.sprintf "%0#x" (Char.code c)) None) :: !vars;
       ) buf;
       Lwt.return (List.rev !vars)
     )))
 
-  let var_makers = 
-    let moregeneral path env ty = 
+  let var_makers =
+    let moregeneral path env ty =
       Ctype.moregeneral env false path ty
     in
-    let same_path path _ (ty : Types.type_expr) = 
+    let same_path path _ (ty : Types.type_expr) =
       match (Ctype.repr ty).desc with
       | Tconstr (path', [], _) -> Path.same path path'
       | _ -> false
     in
     [
-      moregeneral Predef.type_int, make_int_var; 
-      moregeneral Predef.type_float, make_float_var; 
-      moregeneral Predef.type_char, make_char_var; 
-      moregeneral Predef.type_int32, make_int32_var; 
-      moregeneral Predef.type_nativeint, make_nativeint_var; 
-      moregeneral Predef.type_int64, make_int64_var; 
+      moregeneral Predef.type_int, make_int_var;
+      moregeneral Predef.type_float, make_float_var;
+      moregeneral Predef.type_char, make_char_var;
+      moregeneral Predef.type_int32, make_int32_var;
+      moregeneral Predef.type_nativeint, make_nativeint_var;
+      moregeneral Predef.type_int64, make_int64_var;
       same_path Predef.path_unit, make_unit_var;
       same_path Predef.path_bool, make_bool_var;
       same_path Predef.path_string, make_string_var;
@@ -246,13 +256,48 @@ module Make (Args : sig
     | Some var_maker -> var_maker name env ty rv
     | None -> (
         match (Ctype.repr ty).desc with
-        | Tsubst ty | Tpoly (ty, _) -> make_value_var name env ty rv
+        | Tlink ty | Tsubst ty | Tpoly (ty, _) -> make_value_var name env ty rv
         | Tvar _ | Tunivar _ -> Lwt.return (make_var name "<poly>" None)
         | Tarrow _ -> Lwt.return (make_var name "<fun>" None)
-        | Ttuple ty_list -> 
-          Lwt.return (make_var name "<tuple>" (Some (fun () -> 
+        | Ttuple ty_list ->
+          Lwt.return (make_var name "<tuple>" (Some (fun () ->
             make_tuple_fields_vars env ty_list 0 rv false
           )))
+        | Tvariant row -> (
+            let row = Btype.row_repr row in
+            if Remote_value.is_block rv then
+              let%lwt tag = Remote_value.field conn rv 0 in
+              let%lwt (tag : int) = Remote_value.obj conn tag in
+              let rec find = function
+                | (l, f) :: fields ->
+                  if Btype.hash_variant l = tag then
+                    match Btype.row_field_repr f with
+                    | Rpresent (Some ty) | Reither (_, [ty], _, _) -> Some (l, ty)
+                    | _ -> find fields
+                  else find fields
+                | [] -> None in
+              match find row.row_fields with
+              | Some (l, ty) -> Lwt.return (
+                make_var name l (Some (fun () ->
+                  let%lwt rv = Remote_value.field conn rv 1 in
+                  let%lwt var = make_value_var "0" env ty rv in
+                  Lwt.return [var]
+                ))
+              )
+              | None -> Lwt.return (make_var name "<variant>" None)
+            else
+              let%lwt (tag : int) = Remote_value.obj conn rv in
+              let rec find = function
+                | (l, _) :: fields ->
+                  if Btype.hash_variant l = tag then Some l
+                  else find fields
+                | [] -> None in
+              Lwt.return (make_var name (
+                match find row.row_fields with
+                | Some l -> l
+                | None -> "<variant>"
+              ) None)
+          )
         | Tconstr (path, [ty_arg1], _) when Path.same path Predef.path_list ->
           let rec build_vars vars idx rv =
             if Remote_value.is_block rv then (
@@ -262,7 +307,7 @@ module Make (Args : sig
               build_vars (var :: vars) (idx + 1) tl
             ) else Lwt.return vars
           in
-          Lwt.return (make_var name "<list>" (Some (fun () -> 
+          Lwt.return (make_var name "<list>" (Some (fun () ->
             let%lwt vars = build_vars [] 0 rv in
             Lwt.return (List.rev vars)
           )))
@@ -275,7 +320,7 @@ module Make (Args : sig
               build_vars (fld_var :: vars) (idx + 1)
             ) else Lwt.return vars
           in
-          Lwt.return (make_var name "<array>" (Some (fun () -> 
+          Lwt.return (make_var name "<array>" (Some (fun () ->
             let%lwt vars = build_vars [] 0 in
             Lwt.return (List.rev vars)
           )))
@@ -283,8 +328,8 @@ module Make (Args : sig
           let%lwt tag = Remote_value.tag conn rv in
           if tag = Obj.lazy_tag then Lwt.return (make_var name "<lazy>" None)
           else (
-            let%lwt forced_rv = 
-              if tag = Obj.forward_tag 
+            let%lwt forced_rv =
+              if tag = Obj.forward_tag
               then Remote_value.field conn rv 0
               else Lwt.return rv
             in
@@ -294,21 +339,21 @@ module Make (Args : sig
             try%lwt (
               let decl = Env.find_type path env in
               match decl with
-              | {type_kind = Type_abstract; type_manifest = None; _} -> 
+              | {type_kind = Type_abstract; type_manifest = None; _} ->
                 Lwt.return (make_var name "<abstr>" None)
               | {type_kind = Type_abstract; type_manifest = Some body; _} -> (
-                  let ty = 
+                  let ty =
                     try Ctype.apply env decl.type_params body ty_args
-                    with Ctype.Cannot_apply -> abstract_type 
+                    with Ctype.Cannot_apply -> abstract_type
                   in
                   make_value_var name env ty rv
                 )
               | {type_kind = Type_variant constr_list; type_unboxed; _} ->
                 let unboxed = type_unboxed.unboxed in
                 let open Types in
-                let%lwt tag = 
+                let%lwt tag =
                   if unboxed then Lwt.return Cstr_unboxed
-                  else if Remote_value.is_block rv then 
+                  else if Remote_value.is_block rv then
                     let%lwt tag = Remote_value.tag conn rv in
                     Lwt.return (Cstr_block tag)
                   else
@@ -329,44 +374,99 @@ module Make (Args : sig
                   | Cstr_tuple [] -> Lwt.return (make_var name (Ident.name cd_id) None)
                   | Cstr_tuple ty_list -> (
                       let ty_list =
-                        List.map (fun ty -> 
-                          try Ctype.apply env type_params ty ty_args 
+                        List.map (fun ty ->
+                          try Ctype.apply env type_params ty ty_args
                           with Ctype.Cannot_apply -> abstract_type) ty_list
                       in
-                      Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
+                      Lwt.return (make_var name (Ident.name cd_id) (Some (fun () ->
                         make_tuple_fields_vars env ty_list 0 rv unboxed
                       )))
                     )
-                  | Cstr_record lbl_list -> 
-                    Lwt.return (make_var name (Ident.name cd_id) (Some (fun () -> 
+                  | Cstr_record lbl_list ->
+                    Lwt.return (make_var name (Ident.name cd_id) (Some (fun () ->
                       make_record_fields_vars env path type_params ty_args lbl_list 0 rv unboxed
                     )))
                 )
               | {type_kind = Type_record(lbl_list, rep); _} ->
                 let unboxed = match rep with Record_unboxed _ -> true  | _ -> false in
                 let pos = match rep with Record_extension -> 1 | _ -> 0 in
-                Lwt.return (make_var name "<record>" (Some (fun () -> 
+                Lwt.return (make_var name "<record>" (Some (fun () ->
                   make_record_fields_vars env path decl.type_params ty_args lbl_list pos rv unboxed
                 )))
-              | _ -> Lwt.return (make_var name "…" None)
-            ) with 
-            | Not_found -> 
+              | {type_kind = Type_open; _} -> (
+                  let%lwt tag = Remote_value.tag conn rv in
+                  let%lwt slot =
+                    if tag <> 0 then Lwt.return rv
+                    else Remote_value.field conn rv 0
+                  in
+                  let%lwt ident = Remote_value.field conn slot 0 in
+                  let%lwt ident = Remote_value.obj conn ident in
+                  (* let lid = Longident.parse ident in *)
+                  Lwt.return (make_var name ident None)
+                )
+            ) with
+            | Not_found ->
               Lwt.return (make_var name "<abstr>" None)
-            | Datarepr.Constr_not_found -> 
+            | Datarepr.Constr_not_found ->
               Lwt.return (make_var name "<unknown constructor>" None)
           )
-        | _ -> Lwt.return (make_var name "…" None)
+        | Tobject (fields_ty, _) ->
+          Lwt.return (make_var name "<object>" (Some (fun () ->
+            make_object_fields_vars fields_ty
+          )))
+        | Tfield (_, _, _, _) | Tnil -> assert%lwt false
+        | Tpackage _ ->
+          Lwt.return (make_var name "<module>" None)
       )
+(*
+  and make_object_fields_vars env fields_ty rv =
+    let%lwt meths = Remote_value.field conn rv 0 in
+    let%lwt num_meths = Remote_value.field conn meths 0 in
+    let%lwt num_meths = Remote_value.obj conn num_meths in
+    let get_dyn_meth name =
+      let rec find_dyn_meth low high tag =
+        if not (low < high) then
+          Remote_value.field conn meths (low * 2 + 2)
+        else
+          let mid = (low + high) / 2 in
+          let%lwt midv = Remote_value.field conn meths (mid * 2 + 1) in
+          let%lwt midv = Remote_value.obj conn midv in
+          if tag <= midv then find_dyn_meth low mid tag
+          else find_dyn_meth (mid + 1) high tag
+      in
+      find_dyn_meth 0 num_meths (Btype.hash_variant name)
+    in
+    let rec build_vars vars (fields_ty : Types.type_expr) =
+      match fields_ty.desc with
+      | Tfield (name, _, ty, fields_ty) ->
+        let%lwt meth = get_dyn_meth name in
+        let%lwt var = make_value_var name env ty meth in
+        build_vars (var :: vars) fields_ty
+      | Tnil -> Lwt.return vars
+      | _ -> assert%lwt false
+    in
+    build_vars [] fields_ty *)
 
-  and make_tuple_fields_vars env ty_list pos rv unboxed = 
+  and make_object_fields_vars fields_ty =
+    let rec build_vars vars (fields_ty : Types.type_expr) =
+      match fields_ty.desc with
+      | Tfield (name, _, _, fields_ty) ->
+        let var = make_var name "<method>" None in
+        build_vars (var :: vars) fields_ty
+      | Tnil -> Lwt.return vars
+      | _ -> assert%lwt false
+    in
+    build_vars [] fields_ty
+
+  and make_tuple_fields_vars env ty_list pos rv unboxed =
     if unboxed then
       let%lwt var = make_value_var "0" env (List.hd ty_list) rv in
       Lwt.return [var]
-    else 
+    else
       let rec build_vars vars pos idx tys =
         match tys with
         | [] -> Lwt.return vars
-        | ty :: tys -> 
+        | ty :: tys ->
           let%lwt rv = Remote_value.field conn rv pos in
           let%lwt var = make_value_var (string_of_int idx) env ty rv in
           build_vars (var :: vars) (pos + 1) (idx + 1) tys
@@ -376,12 +476,12 @@ module Make (Args : sig
 
   and make_record_fields_vars env path ty_params ty_args lbl_list pos rv unboxed =
     ignore path; (* TODO: first field label use path *)
-    let open Types in 
-    if unboxed then 
+    let open Types in
+    if unboxed then
       let lbl = List.hd lbl_list in
       let ty_arg =
         try Ctype.apply env ty_params lbl.ld_type ty_args
-        with Ctype.Cannot_apply -> abstract_type 
+        with Ctype.Cannot_apply -> abstract_type
       in
       let%lwt var = make_value_var (Ident.name lbl.ld_id) env ty_arg rv in
       Lwt.return [var]
@@ -391,10 +491,10 @@ module Make (Args : sig
         | {Types.ld_id; ld_type; _} :: lbl_list -> (
             let ty_arg =
               try Ctype.apply env ty_params ld_type ty_args
-              with Ctype.Cannot_apply -> abstract_type 
+              with Ctype.Cannot_apply -> abstract_type
             in
             let%lwt tag = Remote_value.tag conn rv in
-            let%lwt rv = 
+            let%lwt rv =
               if tag = Obj.double_array_tag then
                 let%lwt fld = Remote_value.double_field conn rv pos in
                 Lwt.return (Remote_value.repr fld)
@@ -409,50 +509,74 @@ module Make (Args : sig
       let%lwt vars = build_vars [] pos lbl_list in
       Lwt.return (List.rev vars)
 
-  let make_scope_var frame_idx kind =
+  let make_scope_var (ev : Instruct.debug_event) frame_idx kind =
     let name = match kind with
       | `Stack -> "stack"
       | `Heap -> "heap"
     in
-    make_var name "" (Some (fun () -> 
-      with_frame frame_idx (fun (_, ev) -> 
-        let env = Envaux.env_from_summary ev.ev_typenv ev.ev_typsubst in
-        let tbl = match kind with `Stack -> ev.ev_compenv.ce_stack | `Heap -> ev.ev_compenv.ce_heap in
-        let get_remote_value pos =
-          match kind with
-          | `Stack -> Remote_value.local conn (ev.ev_stacksize - pos)
-          | `Heap -> Remote_value.from_environment conn pos
-        in
-        Ident.fold_name Ident_map.add tbl Ident_map.empty
-        |> Ident_map.bindings
-        |> Lwt_list.filter_map_s (fun (ident, _) ->
-          let name = ident.Ident.name in
-          match Env.lookup_value (Longident.Lident name) env with
-          | exception Not_found -> Lwt.return_none
-          | (_, valdesc) ->
-            let ty = Ctype.correct_levels valdesc.Types.val_type in
-            let pos = Ident.find_same ident tbl in
-            let%lwt rv = get_remote_value pos in
-            let%lwt var = make_value_var name env ty rv in
-            Lwt.return_some var
-        )
+    let env = Envaux.env_from_summary ev.ev_typenv ev.ev_typsubst in
+    let tbl = match kind with `Stack -> ev.ev_compenv.ce_stack | `Heap -> ev.ev_compenv.ce_heap in
+    make_var name "" (Some (fun () ->
+      let get_remote_value pos =
+        match kind with
+        | `Stack ->
+          with_frame frame_idx (fun (_, _) ->
+            Remote_value.local conn (ev.ev_stacksize - pos)
+          )
+        | `Heap -> Remote_value.from_environment conn pos
+      in
+      Ident.fold_name Ident.Map.add tbl Ident.Map.empty
+      |> Ident.Map.bindings
+      |> Lwt_list.filter_map_s (fun (ident, _) ->
+        let name = ident.Ident.name in
+        match Env.lookup_value (Longident.Lident name) env with
+        | exception Not_found -> Lwt.return_none
+        | (_, valdesc) ->
+          let ty = Ctype.correct_levels valdesc.Types.val_type in
+          let pos = Ident.find_same ident tbl in
+          let%lwt rv = get_remote_value pos in
+          let%lwt var = make_value_var name env ty rv in
+          Lwt.return_some var
       )
     ))
 
-  let scopes_command (args : Scopes_command.Request.Arguments.t) = 
+  let make_global_var (ev : Instruct.debug_event) =
+    let env = Envaux.env_from_summary ev.ev_typenv ev.ev_typsubst in
+    make_var "global" "" (Some (fun () ->
+      Lwt_list.map_s (fun (mi : Symbols.debug_module_info) ->
+        Lwt.return (make_var mi.name "<module>" (Some (fun () ->
+          Env.fold_values (fun name path vd vars ->
+            let%lwt vars = vars in
+            let%lwt var =
+              try%lwt
+                let%lwt rv = eval_path path in
+                make_value_var name env vd.val_type rv
+              with _ ->
+                Lwt.return (make_var name "<uninitialized>" None)
+            in
+            Lwt.return (var :: vars)
+          ) (Some (Longident.parse mi.name)) env (Lwt.return_nil)
+        )))
+      ) (Symbols.module_infos symbols)
+    ))
+
+  let scopes_command (args : Scopes_command.Request.Arguments.t) =
     let make_scope_by_var var =  Scope.(
       make ~name:var.var_name ~variables_reference:var.var_handle ~expensive:true ()
     ) in
-    let scope_vars = [
-      make_scope_var args.frame_id `Stack;
-      make_scope_var args.frame_id `Heap;
-    ] in
-    List.iter publish_var scope_vars;
-    Lwt.return_ok Scopes_command.Response.Body.({
-      scopes = List.map make_scope_by_var scope_vars
-    })
+    with_frame args.frame_id (fun (_stack_pos, ev) ->
+      let scope_vars = [
+        make_scope_var ev args.frame_id `Stack;
+        make_scope_var ev args.frame_id `Heap;
+        make_global_var ev;
+      ] in
+      List.iter publish_var scope_vars;
+      Lwt.return_ok Scopes_command.Response.Body.({
+        scopes = List.map make_scope_by_var scope_vars
+      })
+    )
 
-  let variables_command (args : Variables_command.Request.Arguments.t) = 
+  let variables_command (args : Variables_command.Request.Arguments.t) =
     let var = Hashtbl.find var_by_handle args.variables_reference in
     let%lwt vars = Lazy.force (BatOption.get var.var_vars) in
     List.iter publish_var vars;

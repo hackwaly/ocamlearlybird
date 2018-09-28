@@ -1,5 +1,30 @@
 open Instruct
 
+module Num_tbl (M : Map.S) = struct
+
+  type t = {
+    cnt: int; (* The next number *)
+    tbl: int M.t ; (* The table of already numbered objects *)
+  }
+
+  let empty = { cnt = 0; tbl = M.empty }
+
+  let find nt key =
+    M.find key nt.tbl
+
+  let enter nt key =
+    let n = !nt.cnt in
+    nt := { cnt = n + 1; tbl = M.add key n !nt.tbl };
+    n
+
+  let incr nt =
+    let n = !nt.cnt in
+    nt := { cnt = n + 1; tbl = !nt.tbl };
+    n
+
+end
+module Global_map = Num_tbl(Ident.Map)
+
 type debug_module_info = {
   name : string;
   path : string;
@@ -7,6 +32,7 @@ type debug_module_info = {
 }
 
 type t = {
+  global_table : Global_map.t;
   all_dirs : string list;
   module_info_tbl : (string, debug_module_info) Hashtbl.t;
   event_by_pc : (int, debug_event) Hashtbl.t;
@@ -85,6 +111,9 @@ let pos_of_event (ev : debug_event) : Lexing.position =
   | _ -> ev.ev_loc.Location.loc_start
 
 let read_symbols ic toc =
+  let pos = seek_section toc "SYMB" in
+  Lwt_io.set_position ic pos;%lwt
+  let%lwt (global_table : Global_map.t) = Lwt_io.read_value ic in
   let pos = seek_section toc "DBUG" in
   Lwt_io.set_position ic pos;%lwt
   let%lwt num_eventlists = Lwt_io.BE.read_int ic in
@@ -130,7 +159,12 @@ let read_symbols ic toc =
       Lwt.return_unit
     ) evll
   done;%lwt
-  Lwt.return {event_by_pc; all_dirs = String_set.to_list !all_dirs; module_info_tbl}
+  Lwt.return {
+    global_table;
+    event_by_pc;
+    all_dirs = String_set.to_list !all_dirs;
+    module_info_tbl;
+  }
 
 let load (ic : Lwt_io.input_channel) : t option Lwt.t =
   match%lwt
@@ -139,6 +173,9 @@ let load (ic : Lwt_io.input_channel) : t option Lwt.t =
   with
   | exception (Bad_magic_number | Not_found) -> Lwt.return_none
   | result -> Lwt.return_some result
+
+let get_global_position symbols id =
+  Global_map.find symbols.global_table id
 
 let all_dirs (symbols : t) : string list =
   symbols.all_dirs
