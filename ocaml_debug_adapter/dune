@@ -12,3 +12,7 @@
   debug_adapter_protocol
   compiler-libs.bytecomp
   compiler-libs.common))
+
+(install
+ (section bin)
+ (files (main.exe as ocamlearlybird)))
