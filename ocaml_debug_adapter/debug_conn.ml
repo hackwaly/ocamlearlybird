@@ -1,8 +1,5 @@
 [@@@warning "-27"]
 
-open Debug_adapter_protocol
-open Debug_protocol
-
 type follow_fork_mode =
   | Fork_parent
   | Fork_child
@@ -177,7 +174,7 @@ module Remote_value = struct
   let obj conn rv =
     match rv with
     | Local obj -> Lwt.return (Obj.obj obj)
-    | Remote rv -> 
+    | Remote rv ->
       guard conn (fun conn ->
         Lwt_io.write_char conn.out_chan 'M';%lwt
         output_remote_value conn rv;%lwt
@@ -194,7 +191,7 @@ module Remote_value = struct
     else
       match rv with
       | Local obj -> Lwt.return (Obj.tag obj)
-      | Remote rv -> 
+      | Remote rv ->
         guard conn (fun conn ->
           Lwt_io.write_char conn.out_chan 'H';%lwt
           output_remote_value conn rv;%lwt
@@ -220,7 +217,7 @@ module Remote_value = struct
   let field conn rv idx =
     match rv with
     | Local obj -> Lwt.return (Local (Obj.field obj idx))
-    | Remote rv -> 
+    | Remote rv ->
       guard conn (fun conn ->
         Lwt_io.write_char conn.out_chan 'F';%lwt
         output_remote_value conn rv;%lwt
@@ -230,23 +227,9 @@ module Remote_value = struct
           let%lwt value = input_remote_value conn in
           Lwt.return (Remote value)
         | '\001' ->
-          let%lwt value = Lwt_io.BE.read_float64 conn.in_chan in
+          (* Not big-endian here *)
+          let%lwt value = Lwt_io.read_float64 conn.in_chan in
           Lwt.return (Local (Obj.repr value))
-        | _ -> assert false
-      )
-
-  let double_field conn rv idx = 
-    match rv with
-    | Local obj -> Lwt.return (Obj.double_field obj idx)
-    | Remote rv -> 
-      guard conn (fun conn ->
-        Lwt_io.write_char conn.out_chan 'F';%lwt
-        output_remote_value conn rv;%lwt
-        Lwt_io.BE.write_int conn.out_chan idx;%lwt
-        match%lwt Lwt_io.read_char conn.in_chan with
-        | '\000' -> assert%lwt false
-        | '\001' ->
-          Lwt_io.BE.read_float64 conn.in_chan
         | _ -> assert false
       )
 
@@ -284,7 +267,7 @@ module Remote_value = struct
   let closure_code conn rv =
     match rv with
     | Local _ -> assert false
-    | Remote rv -> 
+    | Remote rv ->
       guard conn (fun conn ->
         Lwt_io.write_char conn.out_chan 'C';%lwt
         output_remote_value conn rv;%lwt
@@ -294,7 +277,7 @@ module Remote_value = struct
   let pointer rv =
     match rv with
     | Local _ -> ""
-    | Remote rv -> 
+    | Remote rv ->
       let bytes = ref [] in
       String.iter (fun c -> bytes := c :: !bytes) rv;
       let obytes = if Sys.big_endian then List.rev !bytes else !bytes in

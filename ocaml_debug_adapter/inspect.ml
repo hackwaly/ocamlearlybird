@@ -13,6 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
+    val trans_coords : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
   end) = struct
 
@@ -494,13 +495,7 @@ module Make (Args : sig
               with Ctype.Cannot_apply -> abstract_type
             in
             let%lwt tag = Remote_value.tag conn rv in
-            let%lwt rv =
-              if tag = Obj.double_array_tag then
-                let%lwt fld = Remote_value.double_field conn rv pos in
-                Lwt.return (Remote_value.repr fld)
-              else
-                Remote_value.field conn rv pos
-            in
+            let%lwt rv = Remote_value.field conn rv pos in
             let%lwt var = make_value_var (Ident.name ld_id) env ty_arg rv in
             build_vars (var :: vars) (pos + 1) lbl_list
           )

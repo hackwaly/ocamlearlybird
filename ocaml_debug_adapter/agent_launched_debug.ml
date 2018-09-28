@@ -18,6 +18,15 @@ module Make (Args : sig
   include Agent_null
   include Args
 
+  let trans_coords kind (line, column) =
+    let to_client_line_adjust = if init_args.lines_start_at1 then 0 else -1 in
+    let to_client_column_adjust = if init_args.columns_start_at1 then 0 else -1 in
+    match kind with
+    | `Adapter_to_client ->
+      (line + to_client_line_adjust, column + to_client_column_adjust)
+    | `Client_to_adapter ->
+      (line - to_client_line_adjust, column - to_client_column_adjust)
+
   let source_by_modname =
     let tbl = Hashtbl.create 0 in
     List.iter (fun (mi : Symbols.debug_module_info) ->
@@ -36,10 +45,12 @@ module Make (Args : sig
 
   module Breakpoints = Breakpoints.Make (struct
       include Args
+      let trans_coords = trans_coords
       let source_by_modname = source_by_modname
     end)
   module Inspect = Inspect.Make (struct
       include Args
+      let trans_coords = trans_coords
       let source_by_modname = source_by_modname
     end)
   module Time_travel = Time_travel.Make (struct
@@ -49,7 +60,7 @@ module Make (Args : sig
       let get_frames = Inspect.get_frames
     end)
 
-  let shutdown () = 
+  let shutdown () =
     Debug_conn.stop conn;%lwt
     replace_agent (module Agent_disconnected);
     Lwt.return_unit

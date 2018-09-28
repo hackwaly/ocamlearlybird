@@ -13,6 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
+    val trans_coords : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
   end) = struct
 
@@ -25,16 +26,16 @@ module Make (Args : sig
 
   let bppcs_by_modname = (Hashtbl.create 0 : (string, Int_set.t) Hashtbl.t)
 
-  let has_breakpoint_at (rep : Debug_conn.report) = 
+  let has_breakpoint_at (rep : Debug_conn.report) =
     let ev = Symbols.event_at_pc symbols rep.rep_program_pointer in
     let bppcs = try Hashtbl.find bppcs_by_modname ev.ev_module with Not_found -> Int_set.empty in
     Int_set.mem ev.ev_pos bppcs
 
-  let set_breakpoints_command (args : Set_breakpoints_command.Request.Arguments.t) = 
+  let set_breakpoints_command (args : Set_breakpoints_command.Request.Arguments.t) =
     let path = BatOption.get args.source.path in
     let modname = Symbols.path_to_modname path in
     let bp_events = List.map (fun (bp : Source_breakpoint.t) ->
-      let pos = (bp.line, BatOption.default 0 bp.column) in
+      let pos = (bp.line, BatOption.default 0 bp.column) |> trans_coords `Client_to_adapter in
       Symbols.find_event_opt_near_pos symbols modname pos
     ) args.breakpoints in
     let prev_bppcs = try Hashtbl.find bppcs_by_modname modname with Not_found -> Int_set.empty in
@@ -54,7 +55,7 @@ module Make (Args : sig
     ) Int_set.(diff next_bppcs prev_bppcs |> to_list);%lwt
     let breakpoints = List.map (function
       | Some ev -> (
-          let (line, column) = Symbols.line_column_of_event ev in
+          let (line, column) = Symbols.line_column_of_event ev |> trans_coords `Adapter_to_client in
           Breakpoint.({
             id = Some ev.ev_pos;
             verified = true;
@@ -84,7 +85,7 @@ module Make (Args : sig
   let set_exception_breakpoints_command _ = Lwt.return_error ("Not supported", None)
   let set_function_breakpoints_command _ = Lwt.return_error ("Not supported", None)
 
-  let () = 
+  let () =
     Lwt.async (fun () ->
       BatHashtbl.keys symbols.event_by_pc
       |> BatEnum.fold (fun wait pc ->
