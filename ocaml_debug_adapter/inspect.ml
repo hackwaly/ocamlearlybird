@@ -24,13 +24,16 @@ module Make (Args : sig
   type variable = {
     var_handle : int;
     var_name : string;
+    var_eval : bool;
     var_value : string;
     var_vars : variable list Lwt.t Lazy.t option;
   }
 
   let stack = ref ([||] : (int * Instruct.debug_event) array)
-  let site_id = ref 0
   let var_by_handle = (Hashtbl.create 0 : (int, variable) Hashtbl.t)
+  let scope_handles = ref ([] : int list)
+  let scope_vars_by_frame_id = (Hashtbl.create 0 : (int, variable list) Hashtbl.t)
+
   let make_handle =
     let next_handle = ref 1 in
     fun () ->
@@ -79,7 +82,10 @@ module Make (Args : sig
   let report ((rep : Debug_conn.report), guided) =
     let%lwt frames = get_frames None in
     stack := frames;
-    incr site_id;
+    Hashtbl.clear scope_vars_by_frame_id;
+    List.iter (fun handle ->
+      Hashtbl.remove var_by_handle handle;
+    ) !scope_handles;
     if guided = `No_guide && rep.rep_type = Exited then (
       Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
     ) else (
@@ -175,24 +181,23 @@ module Make (Args : sig
       else Remote_value.field conn root pos
     | Papply _ -> assert%lwt false
 
-  let publish_var var =
-    Hashtbl.replace var_by_handle var.var_handle var
+  let publish_var ?(scope=false) var =
+    Hashtbl.replace var_by_handle var.var_handle var;
+    if scope then (
+      scope_handles := var.var_handle :: !scope_handles
+    )
 
   let make_var name value get_vars =
     let handle, vars = match get_vars with
       | None -> 0, None
       | Some get_vars -> (
-          let pin_site_id = !site_id in
           let handle = make_handle () in
-          handle, Some (Lazy.from_fun (fun () ->
-            if pin_site_id <> !site_id
-            then Lwt.return_nil
-            else get_vars ()
-          ))
+          handle, Some (Lazy.from_fun get_vars)
         )
     in {
       var_handle = handle;
       var_name = name;
+      var_eval = false;
       var_value = value;
       var_vars = vars;
     }
@@ -419,34 +424,6 @@ module Make (Args : sig
         | Tpackage _ ->
           Lwt.return (make_var name "<module>" None)
       )
-(*
-  and make_object_fields_vars env fields_ty rv =
-    let%lwt meths = Remote_value.field conn rv 0 in
-    let%lwt num_meths = Remote_value.field conn meths 0 in
-    let%lwt num_meths = Remote_value.obj conn num_meths in
-    let get_dyn_meth name =
-      let rec find_dyn_meth low high tag =
-        if not (low < high) then
-          Remote_value.field conn meths (low * 2 + 2)
-        else
-          let mid = (low + high) / 2 in
-          let%lwt midv = Remote_value.field conn meths (mid * 2 + 1) in
-          let%lwt midv = Remote_value.obj conn midv in
-          if tag <= midv then find_dyn_meth low mid tag
-          else find_dyn_meth (mid + 1) high tag
-      in
-      find_dyn_meth 0 num_meths (Btype.hash_variant name)
-    in
-    let rec build_vars vars (fields_ty : Types.type_expr) =
-      match fields_ty.desc with
-      | Tfield (name, _, ty, fields_ty) ->
-        let%lwt meth = get_dyn_meth name in
-        let%lwt var = make_value_var name env ty meth in
-        build_vars (var :: vars) fields_ty
-      | Tnil -> Lwt.return vars
-      | _ -> assert%lwt false
-    in
-    build_vars [] fields_ty *)
 
   and make_object_fields_vars fields_ty =
     let rec build_vars vars (fields_ty : Types.type_expr) =
@@ -494,7 +471,6 @@ module Make (Args : sig
               try Ctype.apply env ty_params ld_type ty_args
               with Ctype.Cannot_apply -> abstract_type
             in
-            let%lwt tag = Remote_value.tag conn rv in
             let%lwt rv = Remote_value.field conn rv pos in
             let%lwt var = make_value_var (Ident.name ld_id) env ty_arg rv in
             build_vars (var :: vars) (pos + 1) lbl_list
@@ -531,7 +507,7 @@ module Make (Args : sig
           let pos = Ident.find_same ident tbl in
           let%lwt rv = get_remote_value pos in
           let%lwt var = make_value_var name env ty rv in
-          Lwt.return_some var
+          Lwt.return_some {var with var_eval = true}
       )
     ))
 
@@ -539,7 +515,7 @@ module Make (Args : sig
     let env = Envaux.env_from_summary ev.ev_typenv ev.ev_typsubst in
     make_var "global" "" (Some (fun () ->
       Lwt_list.map_s (fun (mi : Symbols.debug_module_info) ->
-        Lwt.return (make_var mi.name "<module>" (Some (fun () ->
+        let var = make_var mi.name "<module>" (Some (fun () ->
           Env.fold_values (fun name path vd vars ->
             let%lwt vars = vars in
             let%lwt var =
@@ -551,36 +527,70 @@ module Make (Args : sig
             in
             Lwt.return (var :: vars)
           ) (Some (Longident.parse mi.name)) env (Lwt.return_nil)
-        )))
+        )) in
+        Lwt.return {var with var_eval = true}
       ) (Symbols.module_infos symbols)
     ))
+
+  let get_and_register_scope_vars frame_id =
+    let%lwt scope_vars = match Hashtbl.find_opt scope_vars_by_frame_id frame_id with
+      | Some vars -> Lwt.return vars
+      | None ->
+        with_frame frame_id (fun (_stack_pos, ev) ->
+          Lwt.return [
+            make_scope_var ev frame_id `Stack;
+            make_scope_var ev frame_id `Heap;
+            make_global_var ev;
+          ]
+        ) in
+    List.iter (publish_var ~scope:true) scope_vars;
+    Hashtbl.replace scope_vars_by_frame_id frame_id scope_vars;
+    Lwt.return scope_vars
 
   let scopes_command (args : Scopes_command.Request.Arguments.t) =
     let make_scope_by_var var =  Scope.(
       make ~name:var.var_name ~variables_reference:var.var_handle ~expensive:true ()
     ) in
-    with_frame args.frame_id (fun (_stack_pos, ev) ->
-      let scope_vars = [
-        make_scope_var ev args.frame_id `Stack;
-        make_scope_var ev args.frame_id `Heap;
-        make_global_var ev;
-      ] in
-      List.iter publish_var scope_vars;
-      Lwt.return_ok Scopes_command.Response.Body.({
-        scopes = List.map make_scope_by_var scope_vars
-      })
-    )
+    let%lwt scope_vars = get_and_register_scope_vars args.frame_id in
+    Lwt.return_ok Scopes_command.Response.Body.({
+      scopes = List.map make_scope_by_var scope_vars
+    })
 
   let variables_command (args : Variables_command.Request.Arguments.t) =
-    let var = Hashtbl.find var_by_handle args.variables_reference in
-    let%lwt vars = Lazy.force (BatOption.get var.var_vars) in
+    let var = Hashtbl.find_opt var_by_handle args.variables_reference in
+    let%lwt vars = match var with
+      | Some var -> Lazy.force (BatOption.get var.var_vars)
+      | None -> Lwt.return_nil
+    in
     List.iter publish_var vars;
-    let variables = vars |> List.map (fun var -> Variable.(
-      make ~name:var.var_name ~value:var.var_value ~variables_reference:var.var_handle ()
-    )) in
+    let variables =
+      vars |> List.map (fun var -> Variable.(
+        let evaluate_name = if var.var_eval then Some var.var_name else None in
+        make ~name:var.var_name ~value:var.var_value ~evaluate_name ~variables_reference:var.var_handle ()
+      )) in
     Lwt.return_ok Variables_command.Response.Body.{ variables }
+
+  let evaluate_command (args : Evaluate_command.Request.Arguments.t) =
+    let%lwt scope_vars = get_and_register_scope_vars (args.frame_id |> BatOption.default 0) in
+    let rec lookup id = function
+      | scope_var :: scope_vars -> (
+          let%lwt vars = Lazy.force (BatOption.get scope_var.var_vars) in
+          match List.find_opt (fun var -> var.var_name = id) vars with
+          | Some var -> Lwt.return_some var
+          | None -> lookup id scope_vars
+        )
+      | [] -> Lwt.return_none
+    in
+    match%lwt lookup args.expression scope_vars with
+    | Some var ->
+      publish_var var;
+      Lwt.return_ok Evaluate_command.Response.Body.(
+        make ~result:var.var_value ~variables_reference:var.var_handle ()
+      )
+    | None -> Lwt.return_error ("Not found", None)
+
+  let completions_command _ = Lwt.return_error ("Not supported", None)
 
   let set_variable_command _ = Lwt.return_error ("Not supported", None)
   let set_expression_command _ = Lwt.return_error ("Not supported", None)
-  let completions_command _ = Lwt.return_error ("Not supported", None)
 end

@@ -79,9 +79,10 @@ module Make (Args : sig
   let stack_trace_command = Inspect.stack_trace_command
   let scopes_command = Inspect.scopes_command
   let variables_command = Inspect.variables_command
+  let evaluate_command = Inspect.evaluate_command
+  let completions_command = Inspect.completions_command
   let set_variable_command = Inspect.set_variable_command
   let set_expression_command = Inspect.set_expression_command
-  let completions_command = Inspect.completions_command
 
   let configuration_done_command = Time_travel.configuration_done_command
   let pause_command = Time_travel.pause_command
