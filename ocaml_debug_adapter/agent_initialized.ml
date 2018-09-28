@@ -20,6 +20,18 @@ module Make (Args : sig
     | Unix.ADDR_INET (addr, port) ->
       Unix.string_of_inet_addr addr ^ ":" ^ string_of_int port
 
+  let with_chdir =
+    let chdir_lock = Lwt_mutex.create () in
+    fun cwd fn ->
+      match cwd with
+      | Some cwd ->
+        Lwt_mutex.with_lock chdir_lock (fun () ->
+          let%lwt cwd' = Lwt_unix.getcwd () in
+          Lwt_unix.chdir cwd;%lwt
+          (fn ())[%finally Lwt_unix.chdir cwd']
+        )
+      | None -> fn ()
+
   let spawn args sock =
     let open Launch_command.Request.Arguments in
     if args.console <> Console.Internal_console && init_args.supports_run_in_terminal_request then (
@@ -39,7 +51,7 @@ module Make (Args : sig
       ) args.env in
       (* TODO: *)
       let%lwt _ = Rpc.exec_command rpc (module Run_in_terminal_command) Run_in_terminal_command.Request.Arguments.{
-        kind = Some kind; title = None; cwd; env; args = "ocamlrun" :: args.program :: args.args
+        kind = Some kind; title = None; cwd; env; args = "ocamlrun" :: args.program :: args.arguments
       } in
       Lwt.return Agent_launched.In_terminal
     ) else (
@@ -64,7 +76,9 @@ module Make (Args : sig
         |> List.map (fun (key, value) -> key ^ "=" ^ value)
         |> Array.of_list
       ) in
-      let proc = Lwt_process.open_process_full ~env ("", [|"ocamlrun"; args.program|]) in
+      let%lwt proc = with_chdir args.cwd (fun () ->
+        Lwt.return (Lwt_process.open_process_full ~env ("", [|"ocamlrun"; args.program|]))
+      ) in
       Lwt.return (Agent_launched.Process proc)
     )
 

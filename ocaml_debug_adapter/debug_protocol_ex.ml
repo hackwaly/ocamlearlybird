@@ -26,13 +26,13 @@ module Launch_command = struct
       end
 
       type t = {
-        program : string;
         no_debug : bool [@default false] [@key "noDebug"];
-        console : Console.t [@default Console.Internal_console];
-        stop_on_entry : bool [@default false] [@key "stopOnEntry"];
         cwd : string option [@default None];
         env : String_opt_dict.t [@default String_opt_dict.empty];
-        args : string list [@default []];
+        program : string;
+        arguments : string list [@default []];
+        console : Console.t [@default Console.Internal_console];
+        stop_on_entry : bool [@default false] [@key "stopOnEntry"];
         __restart: Yojson.Safe.json option [@default None];
       } [@@deriving yojson { strict = false }]
     end
