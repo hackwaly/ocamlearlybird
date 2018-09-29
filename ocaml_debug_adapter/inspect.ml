@@ -153,7 +153,7 @@ module Make (Args : sig
         in
         Stack_frame.{
           id = i;
-          name = "";
+          name = ev.ev_module;
           source;
           line; column; end_line; end_column;
           module_id = None;
