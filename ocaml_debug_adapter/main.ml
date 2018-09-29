@@ -1,6 +1,6 @@
 module Session_set = BatSet.Make (struct
     type t = Session.t
-    let compare = Pervasives.compare
+    let compare a b = Session.id a - Session.id b
   end)
 
 let sessions = ref Session_set.empty
@@ -32,6 +32,7 @@ let command server (port : int) =
   Lwt_main.run (start server)
 
 let () =
+  Printexc.record_backtrace true;
   let open Cmdliner in
   let server = Arg.(value & flag & info ["server"]) in
   let port = Arg.(value & opt int 4711 & info ["port"]) in

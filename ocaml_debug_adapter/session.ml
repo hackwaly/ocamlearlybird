@@ -5,19 +5,29 @@ open Signatures
 
 type t = (module SESSION)
 
-let create in_chan out_chan = 
+let new_session_id =
+  let next_session_id = ref 0 in
+  fun () ->
+    let session_id = !next_session_id in
+    incr next_session_id;
+    session_id
+
+let id (module Session : SESSION) = Session.id
+
+let create in_chan out_chan =
   let module Session = struct
+    let id = new_session_id ()
     let rpc = Rpc.create in_chan out_chan
     let agent = ref (module Agent_null : AGENT)
     let replace_agent agent' = agent := agent'
 
-    let start () = 
+    let start () =
       Rpc.start rpc
 
     let shutdown () =
       let (module Agent) = !agent in Agent.shutdown ()
 
-    let () = 
+    let () =
       agent := (module Agent_uninitialized.Make (struct
           let rpc = rpc
           let replace_agent = replace_agent
@@ -59,8 +69,8 @@ let create in_chan out_chan =
   end in
   (module Session : SESSION)
 
-let start (module Session : SESSION) = 
+let start (module Session : SESSION) =
   Session.start ()
 
-let shutdown (module Session : SESSION) = 
+let shutdown (module Session : SESSION) =
   Session.shutdown ()

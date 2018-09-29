@@ -9,27 +9,28 @@
       "type": "ocaml-debugger",
       "request": "launch",
       "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
-      "arguments": ["--server", "--port=4712"],
+      "arguments": ["--server", "--port=4713"],
       "preLaunchTask": "build",
       "console": "internalConsole",
+      "debugServer": 4712,
       "env": {
         "OCAMLRUNPARAM": "b"
-      },
-      "debugServer": 4711
+      }
     },
     {
       "name": "Debugger debugger",
-      "type": "ocamldebug",
+      "type": "ocaml-debugger",
       "request": "launch",
       "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
-      "arguments": ["--server", "--port=4711"],
+      "arguments": ["--server", "--port=4712"],
       "preLaunchTask": "build",
       "console": "internalConsole",
       "noDebug": false,
       "stopOnEntry": false,
       "env": {
         "OCAMLRUNPARAM": "b"
-      }
+      },
+      "debugServer": 4711
     }
   ]
 }

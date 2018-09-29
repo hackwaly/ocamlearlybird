@@ -13,7 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
-    val trans_coords : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
+    val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
   end) = struct
 
@@ -35,7 +35,7 @@ module Make (Args : sig
     let path = BatOption.get args.source.path in
     let modname = Symbols.path_to_modname path in
     let bp_events = List.map (fun (bp : Source_breakpoint.t) ->
-      let pos = (bp.line, BatOption.default 0 bp.column) |> trans_coords `Client_to_adapter in
+      let pos = (bp.line, BatOption.default 0 bp.column) |> trans_pos `Client_to_adapter in
       Symbols.find_event_opt_near_pos symbols modname pos
     ) args.breakpoints in
     let prev_bppcs = try Hashtbl.find bppcs_by_modname modname with Not_found -> Int_set.empty in
@@ -55,12 +55,12 @@ module Make (Args : sig
     ) Int_set.(diff next_bppcs prev_bppcs |> to_list);%lwt
     let breakpoints = List.map (function
       | Some ev -> (
-          let (line, column) = Symbols.line_column_of_event ev |> trans_coords `Adapter_to_client in
+          let (line, column) = Symbols.line_column_of_event ev |> trans_pos `Adapter_to_client in
           Breakpoint.({
             id = Some ev.ev_pos;
             verified = true;
             message = None;
-            source = Some (Hashtbl.find source_by_modname modname);
+            source = Hashtbl.find_opt source_by_modname modname;
             line = Some line;
             column = Some column;
             end_line = None;

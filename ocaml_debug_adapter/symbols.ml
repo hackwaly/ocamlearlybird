@@ -199,54 +199,59 @@ let module_infos (symbols : t) : debug_module_info list =
   BatHashtbl.values symbols.module_info_tbl |> BatList.of_enum
 
 let find_event_opt_near_pos (symbols : t) (modname : string) (pos : (int * int)) : debug_event option =
-  let modinfo = Hashtbl.find symbols.module_info_tbl modname in
-  let events = modinfo.events in
-  let (line1, col1) = pos in
-  let cmp ev =
-    let (line2, col2) = line_column_of_event ev in
-    if line1 = line2 then col1 - col2 else line1 - line2
-  in
-  let rec bsearch lo hi =
-    if lo >= hi then hi
-    else begin
-      let pivot = (lo + hi) / 2 in
-      let ev = events.(pivot) in
-      let r = cmp ev in
-      if r > 0 then bsearch (pivot + 1) hi
-      else bsearch lo pivot
-    end
-  in
-  let i = bsearch 0 (Array.length events) in
-  let j = i -1 in
-  if i >= Array.length events || j < 0 then
-    let ev = events.(if j < 0 then i else j) in
-    let cr = cmp ev in
-    match ev.ev_kind with
-    | Event_before when cr <= 0 -> Some ev
-    | Event_after _ when cr >= 0 -> Some ev
-    | _ -> None
-  else
-    let ev1 = events.(j) in
-    let ev2 = events.(i) in
-    let cr1 = cmp ev1 in
-    let cr2 = cmp ev2 in
-    match ev1.ev_kind, ev2.ev_kind with
-    | _, Event_after _ when cr2 >= 0 -> Some ev2
-    | Event_before, _ when cr1 <= 0 -> Some ev1
-    | Event_after _, Event_before when cr1 >= 0 && cr2 <= 0 ->
-      let p1 = pos_of_event ev1 in
-      let p2 = pos_of_event ev2 in
-      let l, c = line1, col1 in
-      let l1, c1 = line_column_of_pos p1 in
-      let l2, c2 = line_column_of_pos p2 in
-      Some (
-        if l1 = l2 then (
-          if abs (c1 - c) < (c2 - c) then ev1 else ev2
-        )
-        else (
-          if abs (l1 - l) < (l2 - l) then ev1 else ev2
-        )
-      )
-    | Event_after _, _ when cr1 >= 0 -> Some ev1
-    | _, Event_before when cr2 <= 0 -> Some ev2
-    | _ -> None
+  let modinfo = Hashtbl.find_opt symbols.module_info_tbl modname in
+  match modinfo with
+  | Some modinfo -> (
+      let events = modinfo.events in
+      let (line1, col1) = pos in
+      let cmp ev =
+        let (line2, col2) = line_column_of_event ev in
+        if line1 = line2 then col1 - col2 else line1 - line2
+      in
+      let rec bsearch lo hi =
+        if lo >= hi then hi
+        else begin
+          let pivot = (lo + hi) / 2 in
+          let ev = events.(pivot) in
+          let r = cmp ev in
+          if r > 0 then bsearch (pivot + 1) hi
+          else bsearch lo pivot
+        end
+      in
+      let i = bsearch 0 (Array.length events) in
+      let j = i -1 in
+      if i >= Array.length events || j < 0 then
+        let ev = events.(if j < 0 then i else j) in
+        let cr = cmp ev in
+        match ev.ev_kind with
+        | Event_before when cr <= 0 -> Some ev
+        | Event_after _ when cr >= 0 -> Some ev
+        | _ -> None
+      else
+        let ev1 = events.(j) in
+        let ev2 = events.(i) in
+        let cr1 = cmp ev1 in
+        let cr2 = cmp ev2 in
+        match ev1.ev_kind, ev2.ev_kind with
+        | _, Event_after _ when cr2 >= 0 -> Some ev2
+        | Event_before, _ when cr1 <= 0 -> Some ev1
+        | Event_after _, Event_before when cr1 >= 0 && cr2 <= 0 ->
+          let p1 = pos_of_event ev1 in
+          let p2 = pos_of_event ev2 in
+          let l, c = line1, col1 in
+          let l1, c1 = line_column_of_pos p1 in
+          let l2, c2 = line_column_of_pos p2 in
+          Some (
+            if l1 = l2 then (
+              if abs (c1 - c) < (c2 - c) then ev1 else ev2
+            )
+            else (
+              if abs (l1 - l) < (l2 - l) then ev1 else ev2
+            )
+          )
+        | Event_after _, _ when cr1 >= 0 -> Some ev1
+        | _, Event_before when cr2 <= 0 -> Some ev2
+        | _ -> None
+    )
+  | None ->
+    None

@@ -19,7 +19,7 @@ module Make (Args : sig
   include Args
   include Agent_launched.Make (Args)
 
-  let trans_coords kind (line, column) =
+  let trans_pos kind (line, column) =
     let to_client_line_adjust = if init_args.lines_start_at1 then 0 else -1 in
     let to_client_column_adjust = if init_args.columns_start_at1 then 0 else -1 in
     match kind with
@@ -31,27 +31,29 @@ module Make (Args : sig
   let source_by_modname =
     let tbl = Hashtbl.create 0 in
     List.iter (fun (mi : Symbols.debug_module_info) ->
-      Hashtbl.add tbl mi.name Source.({
-        name = Some mi.name;
-        path = mi.source;
-        source_reference = None;
-        presentation_hint = None;
-        origin = None; (* TODO *)
-        sources = [];
-        adapter_data = `Assoc [];
-        checksums = [];
-      })
+      if BatOption.is_some mi.source then (
+        Hashtbl.add tbl mi.name Source.({
+          name = Some mi.name;
+          path = mi.source;
+          source_reference = None;
+          presentation_hint = None;
+          origin = None; (* TODO *)
+          sources = [];
+          adapter_data = `Assoc [];
+          checksums = [];
+        })
+      )
     ) (Symbols.module_infos symbols);
     tbl
 
   module Breakpoints = Breakpoints.Make (struct
       include Args
-      let trans_coords = trans_coords
+      let trans_pos = trans_pos
       let source_by_modname = source_by_modname
     end)
   module Inspect = Inspect.Make (struct
       include Args
-      let trans_coords = trans_coords
+      let trans_pos = trans_pos
       let source_by_modname = source_by_modname
     end)
   module Time_travel = Time_travel.Make (struct

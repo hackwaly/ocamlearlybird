@@ -13,7 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
-    val trans_coords : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
+    val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
   end) = struct
 
@@ -80,15 +80,15 @@ module Make (Args : sig
     Lwt.return (!frames |> List.rev |> Array.of_list)
 
   let report ((rep : Debug_conn.report), guided) =
-    let%lwt frames = get_frames None in
-    stack := frames;
-    Hashtbl.clear scope_vars_by_frame_id;
-    List.iter (fun handle ->
-      Hashtbl.remove var_by_handle handle;
-    ) !scope_handles;
     if guided = `No_guide && rep.rep_type = Exited then (
       Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
     ) else (
+      let%lwt frames = get_frames None in
+      stack := frames;
+      Hashtbl.clear scope_vars_by_frame_id;
+      List.iter (fun handle ->
+        Hashtbl.remove var_by_handle handle;
+      ) !scope_handles;
       let reason = match guided, rep.rep_type with
         | `Step, _ -> "step"
         | `No_guide, Event -> "step"
@@ -142,7 +142,7 @@ module Make (Args : sig
         Stack_frame.{
           id = i;
           name = "";
-          source = Some (Hashtbl.find source_by_modname ev.ev_module);
+          source = Hashtbl.find_opt source_by_modname ev.ev_module;
           line; column; end_line; end_column;
           module_id = None;
           presentation_hint = None;

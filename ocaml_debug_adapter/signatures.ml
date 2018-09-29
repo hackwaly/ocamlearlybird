@@ -2,11 +2,12 @@ open Debug_adapter_protocol
 open Debug_protocol
 open Debug_protocol_ex
 
-type launched_process = 
+type launched_process =
   | In_terminal
   | Process of Lwt_process.process_full
 
 module type SESSION = sig
+  val id : int
   val start : unit -> unit Lwt.t
   val shutdown : unit -> unit Lwt.t
 end
