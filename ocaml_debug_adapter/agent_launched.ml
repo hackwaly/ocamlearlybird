@@ -27,13 +27,10 @@ module Make (Args : sig
     )
 
   let shutdown () =
-    let%lwt () = match proc with
-      | In_terminal -> Lwt.return_unit
+    let () = match proc with
+      | In_terminal -> ()
       | Process proc -> (
           proc#terminate;
-          match%lwt proc#status with
-          | exception _ -> Lwt.return_unit
-          | _ -> Lwt.return_unit
         )
     in
     Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
