@@ -32,7 +32,10 @@ module Make (Args : sig
       if report.rep_type = Event then internal_run ()
       else Lwt.return report
     in
-    let%lwt rep = internal_run () in
+    let%lwt rep =
+      try%lwt internal_run ()
+      with End_of_file -> Lwt.fail Exit
+    in
     report (rep, `No_guide)
 
   let step () =
@@ -84,7 +87,7 @@ module Make (Args : sig
     ) else Lwt.return rep
 
 
-  let configuration_done_command _ = 
+  let configuration_done_command _ =
     if%lwt Lwt.return launch_args.stop_on_entry then (
       Rpc.emit_event rpc (module Stopped_event) {
         reason = "entry";
@@ -95,28 +98,28 @@ module Make (Args : sig
         all_threads_stopped = true;
       }
     ) else (
-      Lwt.async run;
+      Lwt_util.async run;
       Lwt.return_unit
     );%lwt
     Lwt.return_ok ()
 
   let pause_command _ = Lwt.return_error ("Not supported", None)
 
-  let next_command _ = 
-    Lwt.async (fun () ->
+  let next_command _ =
+    Lwt_util.async (fun () ->
       let%lwt rep = next () in
       report rep
     );
     Lwt.return_ok ()
 
-  let continue_command _ = 
-    Lwt.async run;
+  let continue_command _ =
+    Lwt_util.async run;
     Lwt.return_ok Continue_command.Response.Body.({
       all_threads_continued = true;
     })
 
-  let step_in_command _ = 
-    Lwt.async (fun () ->
+  let step_in_command _ =
+    Lwt_util.async (fun () ->
       let%lwt rep = step () in
       report rep
     );
@@ -124,11 +127,11 @@ module Make (Args : sig
 
   let step_in_targets_command _ = Lwt.return_error ("Not supported", None)
 
-  let step_out_command _ = 
+  let step_out_command _ =
     let%lwt frame = get_parent_frame () in
     match frame with
     | Some frame -> (
-        Lwt.async (fun () ->
+        Lwt_util.async (fun () ->
           let%lwt rep = step_out frame in
           report rep
         );

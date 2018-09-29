@@ -47,20 +47,10 @@ module Make (Args : sig
     tbl
 
   let shutdown () =
-    Lwt.pick [
-      Debug_conn.stop conn;
-      (
-        Lwt_unix.sleep 1.0;%lwt
-        let () = match proc with
-          | In_terminal -> ()
-          | Process proc -> proc#terminate
-        in
-        Lwt.return_unit
-      )
-    ];%lwt
-    Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] };%lwt
-    replace_agent (module Agent_disconnected);
-    Lwt.return_unit
+    Lwt.async (fun () ->
+      Debug_conn.stop conn
+    );
+    shutdown ()
 
   module Breakpoints = Breakpoints.Make (struct
       include Args
@@ -80,10 +70,10 @@ module Make (Args : sig
       let get_frames = Inspect.get_frames
     end)
 
+
   let disconnect_command _ =
-    print_endline "disconnect";
     shutdown ();%lwt
-    print_endline "disconnect ok";
+    replace_agent (module Agent_disconnected);
     Lwt.return_ok ()
 
   let set_breakpoints_command = Breakpoints.set_breakpoints_command

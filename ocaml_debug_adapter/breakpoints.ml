@@ -86,7 +86,7 @@ module Make (Args : sig
   let set_function_breakpoints_command _ = Lwt.return_error ("Not supported", None)
 
   let () =
-    Lwt.async (fun () ->
+    Lwt_util.async (fun () ->
       BatHashtbl.keys symbols.event_by_pc
       |> BatEnum.fold (fun wait pc ->
         let%lwt () = wait in

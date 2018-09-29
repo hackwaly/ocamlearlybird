@@ -19,40 +19,24 @@ module Make (Args : sig
   include Args
   include Agent_null
 
-  let loop_read in_chan f =
-    let action da =
-      let open Lwt_io in
-      let break = ref false in
-      while%lwt not !break do
-        if da.da_ptr < da.da_max then begin
-          let content = Lwt_bytes.proxy da.da_buffer da.da_ptr (da.da_max - da.da_ptr) in
-          da.da_ptr <- da.da_max;
-          let content = Lwt_bytes.to_string content in
-          f content
-        end else begin
-          let%lwt size = da.da_perform () in
-          if size = 0 then break := true;
-          Lwt.return_unit
-        end
-      done in
-    Lwt_io.direct_access in_chan action
-
   let redir_output out_chan category () =
-    loop_read out_chan (fun content ->
+    Lwt_util.loop_read out_chan (fun content ->
       Rpc.emit_event rpc (module Output_event) Output_event.Body.(
         make ~category:(Some category) ~output:content ()
       );
     )
 
   let shutdown () =
-    match proc with
-    | In_terminal -> Lwt.return_unit
-    | Process proc -> (
-        proc#terminate;
-        match%lwt proc#status with
-        | exception _ -> Lwt.return_unit
-        | _ -> Lwt.return_unit
-      )
+    let%lwt () = match proc with
+      | In_terminal -> Lwt.return_unit
+      | Process proc -> (
+          proc#terminate;
+          match%lwt proc#status with
+          | exception _ -> Lwt.return_unit
+          | _ -> Lwt.return_unit
+        )
+    in
+    Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
 
   let disconnect_command _ =
     shutdown ();%lwt
@@ -63,6 +47,6 @@ module Make (Args : sig
     match proc with
     | In_terminal -> ()
     | Process proc ->
-      Lwt.async (redir_output proc#stdout "stdout");
-      Lwt.async (redir_output proc#stderr "stderr");
+      Lwt_util.async (redir_output proc#stdout "stdout");
+      Lwt_util.async (redir_output proc#stderr "stderr");
 end

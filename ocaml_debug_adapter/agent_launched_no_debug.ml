@@ -25,7 +25,7 @@ module Make (Args : sig
     match proc with
     | In_terminal -> ()
     | Process proc ->
-      Lwt.async (fun () ->
+      Lwt_util.async (fun () ->
         let%lwt () = match%lwt proc#status with
           | exception _ -> Lwt.return_unit
           | _ -> Lwt.return_unit

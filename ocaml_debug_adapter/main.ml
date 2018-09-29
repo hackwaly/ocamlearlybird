@@ -29,7 +29,10 @@ let start = function
 let command server (port : int) =
   let server = if server then Some port else None in
   Lwt_main.at_exit at_exit;
-  Lwt_main.run (start server)
+  Lwt_main.run (
+    try%lwt start server
+    with Exit -> Lwt.return_unit
+  )
 
 let () =
   Printexc.record_backtrace true;

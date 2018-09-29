@@ -105,7 +105,7 @@ module Make (Args : sig
         Lwt_unix.(bind sock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
         Lwt_unix.listen sock 1;
         let promise, resolver = Lwt.wait () in
-        Lwt.async (fun () ->
+        Lwt_util.async (fun () ->
           let%lwt fd, _ = Lwt_unix.accept sock in
           Lwt_unix.close sock;%lwt
           let in_chan = Lwt_io.(of_fd ~mode:Input fd) in
