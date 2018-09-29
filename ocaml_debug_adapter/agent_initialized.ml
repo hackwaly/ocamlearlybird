@@ -77,7 +77,9 @@ module Make (Args : sig
         |> Array.of_list
       ) in
       let%lwt proc = with_chdir args.cwd (fun () ->
-        Lwt.return (Lwt_process.open_process_full ~env ("", [|"ocamlrun"; args.program|]))
+        Lwt.return (Lwt_process.open_process_full ~env (
+          "", "ocamlrun" :: args.program :: args.arguments |> Array.of_list)
+        )
       ) in
       Lwt.return (Agent_launched.Process proc)
     )

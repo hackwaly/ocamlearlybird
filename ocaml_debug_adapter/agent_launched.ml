@@ -3,7 +3,7 @@ open Debug_protocol
 open Debug_protocol_ex
 open Signatures
 
-type launched_process = 
+type launched_process =
   | In_terminal
   | Process of Lwt_process.process_full
 

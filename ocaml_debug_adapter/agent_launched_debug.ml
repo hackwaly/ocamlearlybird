@@ -17,6 +17,7 @@ module Make (Args : sig
 
   include Agent_null
   include Args
+  include Agent_launched.Make (Args)
 
   let trans_coords kind (line, column) =
     let to_client_line_adjust = if init_args.lines_start_at1 then 0 else -1 in
