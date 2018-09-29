@@ -15,6 +15,7 @@ module Make (Args : sig
     val pid : int
     val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
+    val shutdown : unit -> unit Lwt.t
   end) = struct
 
   open Args
@@ -85,6 +86,7 @@ module Make (Args : sig
       | _ -> false
     in
     if exited then (
+
       Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
     ) else (
       let%lwt frames = get_frames None in

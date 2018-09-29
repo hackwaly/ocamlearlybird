@@ -46,6 +46,22 @@ module Make (Args : sig
     ) (Symbols.module_infos symbols);
     tbl
 
+  let shutdown () =
+    Lwt.pick [
+      Debug_conn.stop conn;
+      (
+        Lwt_unix.sleep 1.0;%lwt
+        let () = match proc with
+          | In_terminal -> ()
+          | Process proc -> proc#terminate
+        in
+        Lwt.return_unit
+      )
+    ];%lwt
+    Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] };%lwt
+    replace_agent (module Agent_disconnected);
+    Lwt.return_unit
+
   module Breakpoints = Breakpoints.Make (struct
       include Args
       let trans_pos = trans_pos
@@ -55,6 +71,7 @@ module Make (Args : sig
       include Args
       let trans_pos = trans_pos
       let source_by_modname = source_by_modname
+      let shutdown = shutdown
     end)
   module Time_travel = Time_travel.Make (struct
       include Args
@@ -63,13 +80,10 @@ module Make (Args : sig
       let get_frames = Inspect.get_frames
     end)
 
-  let shutdown () =
-    Debug_conn.stop conn;%lwt
-    replace_agent (module Agent_disconnected);
-    Lwt.return_unit
-
   let disconnect_command _ =
+    print_endline "disconnect";
     shutdown ();%lwt
+    print_endline "disconnect ok";
     Lwt.return_ok ()
 
   let set_breakpoints_command = Breakpoints.set_breakpoints_command

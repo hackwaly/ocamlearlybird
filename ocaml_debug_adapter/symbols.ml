@@ -1,5 +1,6 @@
 open Instruct
 
+module String_set = BatSet.Make (String)
 module Num_tbl (M : Map.S) = struct
 
   type t = {
@@ -90,19 +91,29 @@ let partition_modules evl =
     [] -> []
   | ev::evl -> let evl,evll = partition_modules' ev evl in evl::evll
 
-let resolve_source_file modname dirs =
-  let derive_filename_from_module mod_name ext =
-    String.uncapitalize_ascii mod_name ^ ext
-  in
-  let rec resolve file dirs =
+let resolve_file file dirs =
+  let dir_set = ref String_set.empty in
+  List.iter (fun dir ->
+    let rec add_dir dir =
+      if not (String_set.mem dir !dir_set) then (
+        dir_set := String_set.add dir !dir_set;
+        let pdir = Filename.dirname dir in
+        if pdir <> "" && pdir <> dir then (
+          add_dir pdir
+        )
+      )
+    in
+    add_dir dir
+  ) dirs;
+  let rec rec_resolve file dirs =
     match dirs with
     | dir :: dirs ->
       let path = (dir ^ "/" ^ file) in
       if%lwt Lwt_unix.file_exists path then Lwt.return_some path
-      else resolve file dirs
+      else rec_resolve file dirs
     | [] -> Lwt.return_none
   in
-  resolve (derive_filename_from_module modname ".ml") dirs
+  rec_resolve file dirs
 
 let pos_of_event (ev : debug_event) : Lexing.position =
   match ev.ev_kind with
@@ -119,7 +130,6 @@ let read_symbols ic toc =
   let%lwt num_eventlists = Lwt_io.BE.read_int ic in
   let module_info_tbl = Hashtbl.create 0 in
   let event_by_pc = Hashtbl.create 0 in
-  let module String_set = BatSet.Make (String) in
   let all_dirs = ref String_set.empty in
   for%lwt i = 1 to num_eventlists do
     let%lwt orig = Lwt_io.BE.read_int ic in
@@ -134,10 +144,17 @@ let read_symbols ic toc =
     let evll = partition_modules evl in
     Lwt_list.iter_s (fun evl ->
       let name = (List.hd evl).ev_module in
-      let%lwt source = resolve_source_file name dirs in
+      (* TODO: Find better way to resolve source. *)
+      let fname = ref None in
       List.iter (fun ev ->
+        let file = ev.ev_loc.loc_start.pos_fname in
+        if file <> "_none_" then (
+          fname := Some file;
+        );
         Hashtbl.add event_by_pc ev.ev_pos ev
       ) evl;
+      let fname = !fname |> BatOption.default_delayed (fun () -> String.uncapitalize_ascii name ^ ".ml") in
+      let%lwt source = resolve_file fname dirs in
       let events = (
         evl
         |> List.filter (fun ev ->
