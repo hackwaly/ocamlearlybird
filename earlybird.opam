@@ -10,6 +10,20 @@ authors: "文宇祥 <hackwaly@qq.com>"
 license: "MIT"
 homepage: "https://github.com/hackwaly/ocamlearlybird"
 bug-reports: "https://github.com/hackwaly/ocamlearlybird/issues"
-dev-repo: "https://github.com/hackwaly/ocamlearlybird.git"
-depends: [ "ocaml" "dune" "batteries" "lwt" "lwt_ppx" "angstrom" "angstrom-lwt-unix" "yojson" "ppx_deriving_yojson" ]
-build: ["dune" "build" "-p" name]
+dev-repo: "git://github.com:hackwaly/ocamlearlybird.git"
+depends: [
+  "ocaml" {>= "4.06" & < "4.07"}
+  "dune"
+  "cmdliner"
+  "batteries"
+  "lwt"
+  "lwt_ppx"
+  "angstrom"
+  "angstrom-lwt-unix"
+  "yojson"
+  "ppx_deriving_yojson"
+]
+build: [
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
+]
