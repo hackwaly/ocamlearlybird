@@ -45,6 +45,7 @@ module Make (Args : sig
       )
     ) (Symbols.module_infos symbols);
     tbl
+  let user_source_by_modname = (Hashtbl.create 0 : (string, Source.t) Hashtbl.t)
 
   let shutdown () =
     Lwt.async (fun () ->
@@ -56,11 +57,13 @@ module Make (Args : sig
       include Args
       let trans_pos = trans_pos
       let source_by_modname = source_by_modname
+      let user_source_by_modname = user_source_by_modname
     end)
   module Inspect = Inspect.Make (struct
       include Args
       let trans_pos = trans_pos
       let source_by_modname = source_by_modname
+      let user_source_by_modname = user_source_by_modname
       let shutdown = shutdown
     end)
   module Time_travel = Time_travel.Make (struct

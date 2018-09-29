@@ -15,6 +15,7 @@ module Make (Args : sig
     val pid : int
     val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
+    val user_source_by_modname : (string, Source.t) Hashtbl.t
     val shutdown : unit -> unit Lwt.t
   end) = struct
 
@@ -145,10 +146,15 @@ module Make (Args : sig
             line, column, Some end_line, Some end_column
           )
         in
+        let source = Hashtbl.find_opt user_source_by_modname ev.ev_module in
+        let source =
+          if BatOption.is_some source then source
+          else Hashtbl.find_opt source_by_modname ev.ev_module
+        in
         Stack_frame.{
           id = i;
           name = "";
-          source = Hashtbl.find_opt source_by_modname ev.ev_module;
+          source;
           line; column; end_line; end_column;
           module_id = None;
           presentation_hint = None;

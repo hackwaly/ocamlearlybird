@@ -15,6 +15,7 @@ module Make (Args : sig
     val pid : int
     val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
+    val user_source_by_modname : (string, Source.t) Hashtbl.t
   end) = struct
 
   include Args
@@ -24,12 +25,32 @@ module Make (Args : sig
       let compare a b = a - b
     end)
 
+  let source_digest_tbl = (Hashtbl.create 0 : (string, Digest.t) Hashtbl.t)
+  let user_source_digest_tbl = (Hashtbl.create 0 : (string, Digest.t) Hashtbl.t)
   let bppcs_by_modname = (Hashtbl.create 0 : (string, Int_set.t) Hashtbl.t)
 
   let has_breakpoint_at (rep : Debug_conn.report) =
     let ev = Symbols.event_at_pc symbols rep.rep_program_pointer in
     let bppcs = try Hashtbl.find bppcs_by_modname ev.ev_module with Not_found -> Int_set.empty in
     Int_set.mem ev.ev_pos bppcs
+
+
+  let digest_of tbl path =
+    try Hashtbl.find tbl path
+    with Not_found -> (
+        let digest = Digest.file path in
+        Hashtbl.replace tbl path digest;
+        digest
+      )
+
+  let is_same_source source1 source2 =
+    match source1, source2 with
+    | {Source.path = Some path1; _}, Some {Source.path = Some path2; _} -> (
+        let digest1 = digest_of source_digest_tbl path1 in
+        let digest2 = digest_of source_digest_tbl path2 in
+        Lwt.return (Digest.equal digest1 digest2)
+      )
+    | _ -> Lwt.return_false
 
   let set_breakpoints_command (args : Set_breakpoints_command.Request.Arguments.t) =
     let path = BatOption.get args.source.path in
@@ -53,32 +74,22 @@ module Make (Args : sig
     Lwt_list.iter_s (fun pc ->
       Debug_conn.set_breakpoint conn pc
     ) Int_set.(diff next_bppcs prev_bppcs |> to_list);%lwt
-    let breakpoints = List.map (function
+    let%lwt breakpoints = Lwt_list.map_s (fun ev ->
+      match ev with
       | Some ev -> (
           let (line, column) = Symbols.line_column_of_event ev |> trans_pos `Adapter_to_client in
-          Breakpoint.({
-            id = Some ev.ev_pos;
-            verified = true;
-            message = None;
-            source = Hashtbl.find_opt source_by_modname modname;
-            line = Some line;
-            column = Some column;
-            end_line = None;
-            end_column = None;
-          })
+          let source = Hashtbl.find_opt source_by_modname modname in
+          let%lwt same = is_same_source args.source source in
+          if same then (
+            Hashtbl.replace user_source_by_modname ev.ev_module args.source;
+          );
+          let source = if same then Some args.source else source in
+          Lwt.return Breakpoint.(
+            make ~id:(Some ev.ev_pos) ~verified:true
+              ~source ~line:(Some line) ~column:(Some column) ()
+          )
         )
-      | None -> (
-          Breakpoint.({
-            id = None;
-            verified = false;
-            message = None;
-            source = None;
-            line = None;
-            column = None;
-            end_line = None;
-            end_column = None;
-          })
-        )
+      | None -> Lwt.return Breakpoint.(make ~verified:false ())
     ) bp_events in
     Lwt.return_ok Set_breakpoints_command.Response.Body.({ breakpoints })
 
