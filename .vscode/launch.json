@@ -16,6 +16,19 @@
         "OCAMLRUNPARAM": "b"
       }
       // "debugServer": 4711
+    },
+    {
+      "name": "Debugger by debugger",
+      "type": "ocaml-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
+      "arguments": ["--server", "--port=4713"],
+      "preLaunchTask": "build",
+      "console": "internalConsole",
+      "env": {
+        "OCAMLRUNPARAM": "b"
+      },
+      "debugServer": 4712
     }
   ]
 }

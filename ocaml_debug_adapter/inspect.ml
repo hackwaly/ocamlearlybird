@@ -116,7 +116,11 @@ module Make (Args : sig
 
   let loaded_sources_command _ =
     Lwt.return_ok Loaded_sources_command.Response.Body.{
-      sources = BatHashtbl.values source_by_modname |> BatList.of_enum
+      sources = (
+        BatHashtbl.values source_by_modname
+        |> BatList.of_enum
+        |> List.filter (fun (source : Source.t) -> BatOption.is_some source.path)
+      )
     }
 
   let source_command _ = assert%lwt false
@@ -153,7 +157,7 @@ module Make (Args : sig
         in
         Stack_frame.{
           id = i;
-          name = ev.ev_module;
+          name = "";
           source;
           line; column; end_line; end_column;
           module_id = None;

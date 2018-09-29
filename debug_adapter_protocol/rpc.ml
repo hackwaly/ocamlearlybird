@@ -34,7 +34,7 @@ let new_seq rpc =
 
 let send_message rpc msg  =
   let msg_str = Yojson.Safe.to_string msg in
-  print_endline ("<<< " ^ msg_str);
+  (* print_endline ("<<< " ^ msg_str); *)
   Lwt_io.write rpc.out_chan (
     "Content-Length: " ^
     string_of_int (String.length msg_str) ^
@@ -133,7 +133,7 @@ let start (rpc : t) : unit Lwt.t =
     Lwt.return_unit
   in
   let dispatch msg =
-    print_endline (">>> " ^ Yojson.Safe.to_string msg);
+    (* print_endline (">>> " ^ Yojson.Safe.to_string msg); *)
     match Protocol_message.of_yojson msg |> get_ok with
     | {type_ = "event"; _} -> dispatch_event msg
     | {type_ = "request"; _} -> dispatch_request msg

@@ -31,18 +31,16 @@ module Make (Args : sig
   let source_by_modname =
     let tbl = Hashtbl.create 0 in
     List.iter (fun (mi : Symbols.debug_module_info) ->
-      if BatOption.is_some mi.source then (
-        Hashtbl.add tbl mi.name Source.({
-          name = Some mi.name;
-          path = mi.source;
-          source_reference = None;
-          presentation_hint = None;
-          origin = None; (* TODO *)
-          sources = [];
-          adapter_data = `Assoc [];
-          checksums = [];
-        })
-      )
+      Hashtbl.add tbl mi.name Source.({
+        name = Some mi.name;
+        path = mi.source;
+        source_reference = None;
+        presentation_hint = None;
+        origin = None; (* TODO *)
+        sources = [];
+        adapter_data = `Assoc [];
+        checksums = [];
+      })
     ) (Symbols.module_infos symbols);
     tbl
   let user_source_by_modname = (Hashtbl.create 0 : (string, Source.t) Hashtbl.t)
@@ -72,7 +70,6 @@ module Make (Args : sig
       let has_breakpoint_at = Breakpoints.has_breakpoint_at
       let get_frames = Inspect.get_frames
     end)
-
 
   let disconnect_command _ =
     shutdown ();%lwt
