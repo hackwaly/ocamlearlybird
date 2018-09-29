@@ -27,7 +27,7 @@ module Global_map = Num_tbl(Ident.Map)
 
 type debug_module_info = {
   name : string;
-  path : string;
+  source : string option;
   events : debug_event array;
 }
 
@@ -98,9 +98,9 @@ let resolve_source_file modname dirs =
     match dirs with
     | dir :: dirs ->
       let path = (dir ^ "/" ^ file) in
-      if%lwt Lwt_unix.file_exists path then Lwt.return path
+      if%lwt Lwt_unix.file_exists path then Lwt.return_some path
       else resolve file dirs
-    | [] -> Lwt.fail Not_found
+    | [] -> Lwt.return_none
   in
   resolve (derive_filename_from_module modname ".ml") dirs
 
@@ -134,7 +134,7 @@ let read_symbols ic toc =
     let evll = partition_modules evl in
     Lwt_list.iter_s (fun evl ->
       let name = (List.hd evl).ev_module in
-      let%lwt path = resolve_source_file name dirs in
+      let%lwt source = resolve_source_file name dirs in
       List.iter (fun ev ->
         Hashtbl.add event_by_pc ev.ev_pos ev
       ) evl;
@@ -154,7 +154,7 @@ let read_symbols ic toc =
           (pos_of_event ev2).pos_cnum
       in
       Array.sort cmp events;
-      let module_info = {name; path; events} in
+      let module_info = {name; source; events} in
       Hashtbl.add module_info_tbl name module_info;
       Lwt.return_unit
     ) evll

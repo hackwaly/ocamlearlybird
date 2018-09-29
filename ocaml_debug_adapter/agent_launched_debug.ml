@@ -33,7 +33,7 @@ module Make (Args : sig
     List.iter (fun (mi : Symbols.debug_module_info) ->
       Hashtbl.add tbl mi.name Source.({
         name = Some mi.name;
-        path = Some mi.path;
+        path = mi.source;
         source_reference = None;
         presentation_hint = None;
         origin = None; (* TODO *)
