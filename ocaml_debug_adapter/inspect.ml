@@ -80,7 +80,11 @@ module Make (Args : sig
     Lwt.return (!frames |> List.rev |> Array.of_list)
 
   let report ((rep : Debug_conn.report), guided) =
-    if guided = `No_guide && rep.rep_type = Exited then (
+    let exited = match rep.rep_type with
+      | Exited | Uncaught_exc -> true
+      | _ -> false
+    in
+    if exited then (
       Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
     ) else (
       let%lwt frames = get_frames None in
