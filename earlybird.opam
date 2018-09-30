@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "earlybird"
-version: "0.1"
+version: "0.1.0"
 synopsis: "OCaml debug adapter"
 description: """
 OCaml debug adapter.
@@ -10,10 +10,11 @@ authors: "文宇祥 <hackwaly@qq.com>"
 license: "MIT"
 homepage: "https://github.com/hackwaly/ocamlearlybird"
 bug-reports: "https://github.com/hackwaly/ocamlearlybird/issues"
-dev-repo: "git://github.com:hackwaly/ocamlearlybird.git"
+dev-repo: "git://git@github.com:hackwaly/ocamlearlybird.git"
+doc: "https://hackwaly.github.io/ocamlearlybird/"
 depends: [
   "ocaml" {>= "4.06" & < "4.07"}
-  "dune"
+  "dune" {build}
   "cmdliner"
   "batteries"
   "lwt"
