@@ -10,6 +10,8 @@
 opam install earlybird
 ```
 
+To use `ocamlearlybird` in VS Code. [Install the extension](https://marketplace.visualstudio.com/items?itemName=hackwaly.ocaml-debugger) 
+
 # Features
 
 ![default](https://user-images.githubusercontent.com/540298/46250923-fbd51c00-c477-11e8-9feb-73e1265df899.gif)
