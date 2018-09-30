@@ -12,6 +12,8 @@ opam install earlybird
 
 # Features
 
+![default](https://user-images.githubusercontent.com/540298/46250923-fbd51c00-c477-11e8-9feb-73e1265df899.gif)
+
 - [x] Auto discover sources heuristically
 - [x] Line breakpoints and column breakpoints
 - [x] Basic `next`, `step in`, `step out` and `continue` commands
