@@ -1,6 +1,6 @@
 # ocamlearlybird: make OCaml debugging less sucks
 
-`ocamlearlybird` is a debug adapter purely written in OCaml. See [debug adapter protocol]("https://microsoft.github.io/debug-adapter-protocol") to get more information.
+`ocamlearlybird` is a debug adapter purely written in OCaml. See [debug adapter protocol](https://microsoft.github.io/debug-adapter-protocol) to get more information.
 
 # Installation
 
