@@ -13,6 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
+    val state : [`At_entry | `Running | `Stopped | `Exited] ref
     val trans_pos : [`Adapter_to_client | `Client_to_adapter] -> int * int -> int * int
     val source_by_modname : (string, Source.t) Hashtbl.t
     val user_source_by_modname : (string, Source.t) Hashtbl.t
@@ -87,9 +88,10 @@ module Make (Args : sig
       | _ -> false
     in
     if exited then (
-
+      state := `Exited;
       Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
     ) else (
+      state := `Stopped;
       let%lwt frames = get_frames None in
       stack := frames;
       Hashtbl.clear scope_vars_by_frame_id;
@@ -231,7 +233,6 @@ module Make (Args : sig
   let make_int64_var = make_plain_var Int64.to_string
   let make_nativeint_var = make_plain_var Nativeint.to_string
   let make_string_var = make_plain_var (fun s -> Printf.sprintf "%S" s)
-  let make_exn_var = make_plain_var Printexc.to_string
 
   let make_bytes_var name _ _ rv =
     Lwt.return (make_var name "<bytes>" (Some (fun () ->
@@ -264,7 +265,6 @@ module Make (Args : sig
       same_path Predef.path_bool, make_bool_var;
       same_path Predef.path_string, make_string_var;
       same_path Predef.path_bytes, make_bytes_var;
-      same_path Predef.path_exn, make_exn_var;
     ]
 
   let find_var_maker env ty =
@@ -383,6 +383,7 @@ module Make (Args : sig
                     Lwt.return (Cstr_constant obj)
                 in
                 let {cd_id; cd_args; cd_res; _} = Datarepr.find_constr_by_tag tag constr_list in
+                let ident = Ident.name cd_id in
                 let type_params =
                   match cd_res with
                   | Some t -> (
@@ -393,19 +394,19 @@ module Make (Args : sig
                   | None -> decl.type_params
                 in (
                   match cd_args with
-                  | Cstr_tuple [] -> Lwt.return (make_var name (Ident.name cd_id) None)
+                  | Cstr_tuple [] -> Lwt.return (make_var name ident None)
                   | Cstr_tuple ty_list -> (
                       let ty_list =
                         List.map (fun ty ->
                           try Ctype.apply env type_params ty ty_args
                           with Ctype.Cannot_apply -> abstract_type) ty_list
                       in
-                      Lwt.return (make_var name (Ident.name cd_id) (Some (fun () ->
+                      Lwt.return (make_var name ident (Some (fun () ->
                         make_tuple_fields_vars env ty_list 0 rv unboxed
                       )))
                     )
                   | Cstr_record lbl_list ->
-                    Lwt.return (make_var name (Ident.name cd_id) (Some (fun () ->
+                    Lwt.return (make_var name ident (Some (fun () ->
                       make_record_fields_vars env path type_params ty_args lbl_list 0 rv unboxed
                     )))
                 )
@@ -423,8 +424,17 @@ module Make (Args : sig
                   in
                   let%lwt ident = Remote_value.field conn slot 0 in
                   let%lwt ident = Remote_value.obj conn ident in
-                  (* let lid = Longident.parse ident in *)
-                  Lwt.return (make_var name ident None)
+                  let lid = Longident.parse ident in
+                  try%lwt
+                    let cstr = Env.lookup_constructor lid env in
+                    (* let path = match cstr.cstr_tag with Cstr_extension (p, _) -> p | _ -> raise Not_found in
+                       let%lwt slot' = eval_path path in
+                       if not (Remote_value.same slot slot') then raise Not_found; *)
+                    Lwt.return (make_var name ident (Some (fun () ->
+                      make_tuple_fields_vars env cstr.cstr_args 1 rv (cstr.cstr_inlined <> None)
+                    )))
+                  with Not_found ->
+                    Lwt.return (make_var name ident None)
                 )
             ) with
             | Not_found ->
@@ -531,7 +541,7 @@ module Make (Args : sig
     let env = Envaux.env_from_summary ev.ev_typenv ev.ev_typsubst in
     make_var "global" "" (Some (fun () ->
       Lwt_list.map_s (fun (mi : Symbols.debug_module_info) ->
-        let var = make_var mi.name "<module>" (Some (fun () ->
+        Lwt.return (make_var mi.name "<module>" (Some (fun () ->
           Env.fold_values (fun name path vd vars ->
             let%lwt vars = vars in
             let%lwt var =
@@ -543,8 +553,7 @@ module Make (Args : sig
             in
             Lwt.return (var :: vars)
           ) (Some (Longident.parse mi.name)) env (Lwt.return_nil)
-        )) in
-        Lwt.return {var with var_eval = true}
+        )))
       ) (Symbols.module_infos symbols)
     ))
 

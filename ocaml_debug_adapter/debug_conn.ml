@@ -169,6 +169,12 @@ module Remote_value = struct
     | Remote of string
     | Local of Obj.t
 
+  let same rv1 rv2 =
+    match rv1, rv2  with
+    | Local obj1, Local obj2 -> obj1 == obj2
+    | Remote rv1, Remote rv2 -> rv1 = rv2
+    | _ -> false
+
   let repr x = Local (Obj.repr x)
 
   let obj conn rv =

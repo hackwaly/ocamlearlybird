@@ -13,6 +13,7 @@ module Make (Args : sig
     val symbols : Symbols.t
     val conn : Debug_conn.t
     val pid : int
+    val state : [`At_entry | `Running | `Stopped | `Exited] ref
     val report : Debug_conn.report * [`Step | `No_guide] -> unit Lwt.t
     val has_breakpoint_at : Debug_conn.report -> bool
     val get_frames : int option -> (int * Instruct.debug_event) array Lwt.t
@@ -32,6 +33,7 @@ module Make (Args : sig
       if report.rep_type = Event then internal_run ()
       else Lwt.return report
     in
+    state := `Running;
     let%lwt rep =
       try%lwt internal_run ()
       with End_of_file -> Lwt.fail Exit
@@ -107,6 +109,7 @@ module Make (Args : sig
 
   let next_command _ =
     Lwt_util.async (fun () ->
+      state := `Running;
       let%lwt rep = next () in
       report rep
     );
@@ -120,6 +123,7 @@ module Make (Args : sig
 
   let step_in_command _ =
     Lwt_util.async (fun () ->
+      state := `Running;
       let%lwt rep = step () in
       report rep
     );
@@ -132,6 +136,7 @@ module Make (Args : sig
     match frame with
     | Some frame -> (
         Lwt_util.async (fun () ->
+          state := `Running;
           let%lwt rep = step_out frame in
           report rep
         );

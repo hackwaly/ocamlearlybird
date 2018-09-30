@@ -19,6 +19,8 @@ module Make (Args : sig
   include Args
   include Agent_launched.Make (Args)
 
+  let state = ref (`At_entry : [`At_entry | `Running | `Stopped | `Exited])
+
   let trans_pos kind (line, column) =
     let to_client_line_adjust = if init_args.lines_start_at1 then 0 else -1 in
     let to_client_column_adjust = if init_args.columns_start_at1 then 0 else -1 in
@@ -46,10 +48,17 @@ module Make (Args : sig
   let user_source_by_modname = (Hashtbl.create 0 : (string, Source.t) Hashtbl.t)
 
   let shutdown () =
-    Lwt.async (fun () ->
-      Debug_conn.stop conn
-    );
-    shutdown ()
+    let%lwt () = match !state with
+      | `At_entry | `Stopped ->
+        Debug_conn.stop conn;
+      | _ ->
+        let () = match proc with
+          | In_terminal -> ()
+          | Process proc -> proc#terminate
+        in
+        Lwt.return_unit
+    in
+    Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
 
   module Breakpoints = Breakpoints.Make (struct
       include Args
@@ -59,6 +68,7 @@ module Make (Args : sig
     end)
   module Inspect = Inspect.Make (struct
       include Args
+      let state = state
       let trans_pos = trans_pos
       let source_by_modname = source_by_modname
       let user_source_by_modname = user_source_by_modname
@@ -66,6 +76,7 @@ module Make (Args : sig
     end)
   module Time_travel = Time_travel.Make (struct
       include Args
+      let state = state
       let report = Inspect.report
       let has_breakpoint_at = Breakpoints.has_breakpoint_at
       let get_frames = Inspect.get_frames

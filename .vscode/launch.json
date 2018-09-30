@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debugger",
+      "name": "Debugger (Server Mode)",
       "type": "ocaml-debugger",
       "request": "launch",
       "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
@@ -14,8 +14,8 @@
       "console": "internalConsole",
       "env": {
         "OCAMLRUNPARAM": "b"
-      }
-      // "debugServer": 4711
+      },
+      "debugServer": 4711
     },
     {
       "name": "Debugger by debugger",
