@@ -300,7 +300,7 @@ module Make (Args : sig
                 | [] -> None in
               match find row.row_fields with
               | Some (l, ty) -> Lwt.return (
-                make_var name l (Some (fun () ->
+                make_var name ("`" ^ l) (Some (fun () ->
                   let%lwt rv = Remote_value.field conn rv 1 in
                   let%lwt var = make_value_var "0" env ty rv in
                   Lwt.return [var]
@@ -316,7 +316,7 @@ module Make (Args : sig
                 | [] -> None in
               Lwt.return (make_var name (
                 match find row.row_fields with
-                | Some l -> l
+                | Some l -> "`" ^ l
                 | None -> "<variant>"
               ) None)
           )
