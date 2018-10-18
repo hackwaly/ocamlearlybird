@@ -525,7 +525,7 @@ module Make (Args : sig
       Ident.fold_name Ident.Map.add tbl Ident.Map.empty
       |> Ident.Map.bindings
       |> Lwt_list.filter_map_s (fun (ident, _) ->
-        let name = ident.Ident.name in
+        let name = Ident.name ident in
         match Env.lookup_value (Longident.Lident name) env with
         | exception Not_found -> Lwt.return_none
         | (_, valdesc) ->
