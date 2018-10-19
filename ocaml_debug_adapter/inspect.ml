@@ -1,3 +1,5 @@
+[@@@warning "-32"]
+
 open Debug_adapter_protocol
 open Debug_protocol
 open Debug_protocol_ex

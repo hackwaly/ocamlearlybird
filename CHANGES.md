@@ -1,3 +1,7 @@
+## 0.1.1 (2018-10-19)
+
+- Support OCaml 4.07
+
 ## 0.1.0 (2018-09-30)
 
 - Auto discover sources heuristically
