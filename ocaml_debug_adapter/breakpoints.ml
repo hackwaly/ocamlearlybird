@@ -78,7 +78,7 @@ module Make (Args : sig
       match ev with
       | Some ev -> (
           let (line, column) = Symbols.line_column_of_event ev |> trans_pos `Adapter_to_client in
-          let source = Hashtbl.find_opt source_by_modname modname in
+          let source = BatHashtbl.find_option source_by_modname modname in
           let%lwt same = is_same_source args.source source in
           if same then (
             Hashtbl.replace user_source_by_modname ev.ev_module args.source;

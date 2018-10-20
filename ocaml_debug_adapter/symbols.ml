@@ -216,7 +216,7 @@ let module_infos (symbols : t) : debug_module_info list =
   BatHashtbl.values symbols.module_info_tbl |> BatList.of_enum
 
 let find_event_opt_near_pos (symbols : t) (modname : string) (pos : (int * int)) : debug_event option =
-  let modinfo = Hashtbl.find_opt symbols.module_info_tbl modname in
+  let modinfo = BatHashtbl.find_option symbols.module_info_tbl modname in
   match modinfo with
   | Some modinfo -> (
       let events = modinfo.events in

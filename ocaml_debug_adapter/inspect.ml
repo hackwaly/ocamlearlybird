@@ -154,10 +154,10 @@ module Make (Args : sig
             line, column, Some end_line, Some end_column
           )
         in
-        let source = Hashtbl.find_opt user_source_by_modname ev.ev_module in
+        let source = BatHashtbl.find_option user_source_by_modname ev.ev_module in
         let source =
           if BatOption.is_some source then source
-          else Hashtbl.find_opt source_by_modname ev.ev_module
+          else BatHashtbl.find_option source_by_modname ev.ev_module
         in
         Stack_frame.{
           id = i;
@@ -270,7 +270,7 @@ module Make (Args : sig
     ]
 
   let find_var_maker env ty =
-    List.find_opt (fun (test, _) -> test env ty) var_makers |> BatOption.map snd
+    BatList.find_opt (fun (test, _) -> test env ty) var_makers |> BatOption.map snd
 
   let abstract_type =
     Ctype.newty (Tconstr (Pident (Ident.create "abstract"), [], ref Types.Mnil))
@@ -560,7 +560,7 @@ module Make (Args : sig
     ))
 
   let get_and_register_scope_vars frame_id =
-    let%lwt scope_vars = match Hashtbl.find_opt scope_vars_by_frame_id frame_id with
+    let%lwt scope_vars = match BatHashtbl.find_option scope_vars_by_frame_id frame_id with
       | Some vars -> Lwt.return vars
       | None ->
         with_frame frame_id (fun (_stack_pos, ev) ->
@@ -584,7 +584,7 @@ module Make (Args : sig
     })
 
   let variables_command (args : Variables_command.Request.Arguments.t) =
-    let var = Hashtbl.find_opt var_by_handle args.variables_reference in
+    let var = BatHashtbl.find_option var_by_handle args.variables_reference in
     let%lwt vars = match var with
       | Some var -> Lazy.force (BatOption.get var.var_vars)
       | None -> Lwt.return_nil
@@ -602,7 +602,7 @@ module Make (Args : sig
     let rec lookup id = function
       | scope_var :: scope_vars -> (
           let%lwt vars = Lazy.force (BatOption.get scope_var.var_vars) in
-          match List.find_opt (fun var -> var.var_name = id) vars with
+          match BatList.find_opt (fun var -> var.var_name = id) vars with
           | Some var -> Lwt.return_some var
           | None -> lookup id scope_vars
         )
