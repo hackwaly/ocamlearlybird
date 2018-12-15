@@ -51,7 +51,7 @@ module Make (Args : sig
       ) args.env in
       (* TODO: *)
       let%lwt _ = Rpc.exec_command rpc (module Run_in_terminal_command) Run_in_terminal_command.Request.Arguments.{
-        kind = Some kind; title = None; cwd; env; args = "ocamlrun" :: args.program :: args.arguments
+        kind = Some kind; title = None; cwd; env; args = args.program :: args.arguments
       } in
       Lwt.return Agent_launched.In_terminal
     ) else (
@@ -78,7 +78,7 @@ module Make (Args : sig
       ) in
       let%lwt proc = with_chdir args.cwd (fun () ->
         Lwt.return (Lwt_process.open_process_full ~env (
-          "", "ocamlrun" :: args.program :: args.arguments |> Array.of_list)
+          "", args.program :: args.arguments |> Array.of_list)
         )
       ) in
       Lwt.return (Agent_launched.Process proc)

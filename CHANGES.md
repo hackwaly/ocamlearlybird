@@ -1,3 +1,7 @@
+## 0.1.3 (2018-12-15)
+
+- Fix can't debug flowtype.
+
 ## 0.1.2 (2018-10-19)
 
 - Support OCaml >= 4.04
