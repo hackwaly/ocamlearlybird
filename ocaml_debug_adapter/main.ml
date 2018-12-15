@@ -39,7 +39,8 @@ let () =
   let open Cmdliner in
   let server = Arg.(value & flag & info ["server"]) in
   let port = Arg.(value & opt int 4711 & info ["port"]) in
+  let doc = "make OCaml debugging less sucks" in
   Term.(exit @@ eval (
     const command $ server $ port,
-    info "ocamlearlybird"
+    info ~version:"%‌%VERSION%%" ~doc "ocamlearlybird"
   ))
