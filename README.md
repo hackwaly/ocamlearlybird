@@ -10,7 +10,7 @@
 opam install earlybird
 ```
 
-To use `ocamlearlybird` in VS Code. [Install the extension](https://marketplace.visualstudio.com/items?itemName=hackwaly.ocaml-debugger) 
+To use `ocamlearlybird` in VS Code. [Install the extension](https://marketplace.visualstudio.com/items?itemName=hackwaly.ocaml-debugger)
 
 # Features
 
@@ -31,4 +31,22 @@ By default `ocamlearlybird` use `stdin` and `stdout` for debug adapter protocol.
 
 ```
 ocamlearlybird --server --port=4711
+```
+
+## Example launch configuration
+
+```
+{
+  "name": "Debug",
+  "type": "ocaml-debugger",
+  "request": "launch",
+  "program": "${workspaceRoot}/_build/default/main.bc",
+  "console": "internalConsole",
+  "dotMerlins": ["${workspaceRoot}/.merlin"],
+  "noDebug": false,
+  "stopOnEntry": false,
+  "env": {
+    "OCAMLRUNPARAM": "b"
+  }
+}
 ```

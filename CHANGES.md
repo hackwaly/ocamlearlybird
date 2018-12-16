@@ -1,3 +1,7 @@
+## 0.1.4 (2018-12-17)
+
+- Add dotMerlins option to launch arguments.
+
 ## 0.1.3 (2018-12-15)
 
 - Fix can't debug flowtype.
