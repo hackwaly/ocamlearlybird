@@ -5,30 +5,29 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debugger (Server Mode)",
+      "name": "Debug",
+      "type": "ocaml-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
+      "arguments": ["--server", "--port=4711"],
+      "preLaunchTask": "build-debug",
+      "console": "internalConsole",
+      "env": {
+        "OCAMLRUNPARAM": "b"
+      }
+    },
+    {
+      "name": "Debug By Debug Server",
       "type": "ocaml-debugger",
       "request": "launch",
       "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
       "arguments": ["--server", "--port=4712"],
-      "preLaunchTask": "build",
+      "preLaunchTask": "build-debug",
       "console": "internalConsole",
       "env": {
         "OCAMLRUNPARAM": "b"
       },
       "debugServer": 4711
-    },
-    {
-      "name": "Debugger by debugger",
-      "type": "ocaml-debugger",
-      "request": "launch",
-      "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
-      "arguments": ["--server", "--port=4713"],
-      "preLaunchTask": "build",
-      "console": "internalConsole",
-      "env": {
-        "OCAMLRUNPARAM": "b"
-      },
-      "debugServer": 4712
     }
   ]
 }

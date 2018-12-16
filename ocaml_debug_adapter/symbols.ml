@@ -1,30 +1,6 @@
 open Instruct
 
 module String_set = BatSet.Make (String)
-module Num_tbl (M : Map.S) = struct
-
-  type t = {
-    cnt: int; (* The next number *)
-    tbl: int M.t ; (* The table of already numbered objects *)
-  }
-
-  let empty = { cnt = 0; tbl = M.empty }
-
-  let find nt key =
-    M.find key nt.tbl
-
-  let enter nt key =
-    let n = !nt.cnt in
-    nt := { cnt = n + 1; tbl = M.add key n !nt.tbl };
-    n
-
-  let incr nt =
-    let n = !nt.cnt in
-    nt := { cnt = n + 1; tbl = !nt.tbl };
-    n
-
-end
-module Global_map = Num_tbl(Ident.Map)
 
 type debug_module_info = {
   name : string;
@@ -33,7 +9,7 @@ type debug_module_info = {
 }
 
 type t = {
-  global_table : Global_map.t;
+  global_table : int Ident.Map.t;
   all_dirs : string list;
   module_info_tbl : (string, debug_module_info) Hashtbl.t;
   event_by_pc : (int, debug_event) Hashtbl.t;
@@ -121,16 +97,46 @@ let pos_of_event (ev : debug_event) : Lexing.position =
   | Event_after _ -> ev.ev_loc.Location.loc_end
   | _ -> ev.ev_loc.Location.loc_start
 
-let read_symbols ic toc =
+let read_global_table ic toc =
   let pos = seek_section toc "SYMB" in
   Lwt_io.set_position ic pos;%lwt
-  let%lwt (global_table : Global_map.t) = Lwt_io.read_value ic in
+  let module T = struct
+    type t = {
+      cnt : int;
+      tbl : int Ident.Map.t;
+    }
+  end in
+  let%lwt (global_table : T.t) = Lwt_io.read_value ic in
+  Lwt.return global_table.tbl
+
+let read_symbols ?(dot_merlins=[]) ic toc =
+  let%lwt global_table = read_global_table ic toc in
   let pos = seek_section toc "DBUG" in
   Lwt_io.set_position ic pos;%lwt
   let%lwt num_eventlists = Lwt_io.BE.read_int ic in
   let module_info_tbl = Hashtbl.create 0 in
   let event_by_pc = Hashtbl.create 0 in
   let all_dirs = ref String_set.empty in
+  Lwt_list.iter_s (fun dot_merlin_path ->
+    let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.Input dot_merlin_path in
+    (
+      try%lwt
+        while%lwt true do
+          let%lwt line = Lwt_io.read_line ic in
+          if%lwt Lwt.return (BatString.starts_with line "B ") then (
+            let path = line |> BatString.lchop ~n:2 |> BatString.trim in
+            let path =
+              if Filename.is_relative path
+              then Filename.concat (Filename.dirname dot_merlin_path) path
+              else path
+            in
+            all_dirs := String_set.add path !all_dirs;
+            Lwt.return_unit
+          )
+        done
+      with End_of_file -> Lwt.return_unit
+    )[%finally Lwt_io.close ic]
+  ) dot_merlins;%lwt
   for%lwt i = 1 to num_eventlists do
     let%lwt orig = Lwt_io.BE.read_int ic in
     let%lwt evl = Lwt_io.read_value ic in
@@ -183,16 +189,18 @@ let read_symbols ic toc =
     module_info_tbl;
   }
 
-let load (ic : Lwt_io.input_channel) : t option Lwt.t =
-  match%lwt
-    let%lwt toc = read_toc ic in
-    read_symbols ic toc
-  with
-  | exception (Bad_magic_number | Not_found) -> Lwt.return_none
-  | result -> Lwt.return_some result
+let load ?(dot_merlins=[]) (filename : string) : t option Lwt.t =
+  let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.Input filename in
+  (
+    try%lwt
+      let%lwt toc = read_toc ic in
+      let%lwt symbols = read_symbols ~dot_merlins ic toc in
+      Lwt.return_some symbols
+    with Bad_magic_number | Not_found -> Lwt.return_none
+  )[%finally Lwt_io.close ic]
 
 let get_global_position symbols id =
-  Global_map.find symbols.global_table id
+  Ident.Map.find id symbols.global_table
 
 let all_dirs (symbols : t) : string list =
   symbols.all_dirs

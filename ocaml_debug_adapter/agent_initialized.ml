@@ -95,9 +95,7 @@ module Make (Args : sig
 
   let launch_debug args =
     let open Launch_command.Request.Arguments in
-    let%lwt file = Lwt_io.open_file ~mode:Lwt_io.Input args.program in
-    let%lwt symbols = Symbols.load file in
-    Lwt_io.close file;%lwt
+    let%lwt symbols = Symbols.load ~dot_merlins:args.dot_merlins args.program in
     match symbols with
     | None -> Lwt.fail_with "No debug symbols."
     | Some symbols -> (

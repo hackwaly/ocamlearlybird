@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build",
+      "label": "build-debug",
       "type": "shell",
-      "command": "dune build ocaml_debug_adapter/main.bc",
+      "command": "dune build ocaml_debug_adapter/main.bc --profile debug",
       "problemMatcher": ["$ocamlc"],
       "group": {
         "kind": "build",
