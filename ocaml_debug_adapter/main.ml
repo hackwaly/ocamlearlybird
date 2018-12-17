@@ -42,5 +42,5 @@ let () =
   let doc = "make OCaml debugging less sucks" in
   Term.(exit @@ eval (
     const command $ server $ port,
-    info ~version:"%‌%VERSION%%" ~doc "ocamlearlybird"
+    info ~version:"%%VERSION%%" ~doc "ocamlearlybird"
   ))
