@@ -27,36 +27,32 @@ module Make (Args : sig
     then Lwt.return_none
     else Lwt.return_some (Array.get frames 1)
 
+  let rec stop_on_event (rep : Debug_conn.report) =
+    match rep.rep_type with
+    | Exited | Uncaught_exc -> Lwt.return (rep, `No_guide)
+    | Breakpoint -> (
+        match Symbols.event_at_pc symbols rep.rep_program_pointer with
+        | exception Not_found ->
+          let%lwt rep = Debug_conn.go conn 1 in
+          stop_on_event rep
+        | _ -> Lwt.return (rep, `No_guide)
+      )
+    | Trap_barrier ->
+      let%lwt rep = Debug_conn.go conn 1 in
+      stop_on_event rep
+    | Event -> Lwt.return (rep, `Step)
+
   let run () =
-    let rec internal_run () =
-      let%lwt report = Debug_conn.go conn max_int in
-      if report.rep_type = Event then internal_run ()
-      else Lwt.return report
-    in
     state := `Running;
-    let%lwt rep =
-      try%lwt internal_run ()
-      with End_of_file -> Lwt.fail Exit
+    let%lwt rep = Debug_conn.go conn max_int in
+    let%lwt rep = match rep.rep_type with
+      | Exited | Uncaught_exc -> Lwt.return (rep, `No_guide)
+      | _ -> stop_on_event rep
     in
-    report (rep, `No_guide)
+    report rep
 
   let step () =
     let%lwt rep = Debug_conn.go conn 1 in
-    let rec stop_on_event (rep : Debug_conn.report) =
-      match rep.rep_type with
-      | Exited | Uncaught_exc -> Lwt.return (rep, `No_guide)
-      | Breakpoint -> (
-          match Symbols.event_at_pc symbols rep.rep_program_pointer with
-          | exception Not_found ->
-            let%lwt rep = Debug_conn.go conn 1 in
-            stop_on_event rep
-          | _ -> Lwt.return (rep, `No_guide)
-        )
-      | Trap_barrier ->
-        let%lwt rep = Debug_conn.go conn 1 in
-        stop_on_event rep
-      | Event -> Lwt.return (rep, `Step)
-    in
     stop_on_event rep
 
   let step_out (stack_pos, (ev : Instruct.debug_event)) =
