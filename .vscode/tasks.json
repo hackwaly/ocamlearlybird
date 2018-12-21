@@ -6,7 +6,7 @@
     {
       "label": "build-debug",
       "type": "shell",
-      "command": "dune build ocaml_debug_adapter/main.bc --profile debug",
+      "command": "dune build --workspace ${workspaceRoot}/dune-workspace.dev ocaml_debug_adapter/main.bc",
       "problemMatcher": ["$ocamlc"],
       "group": {
         "kind": "build",

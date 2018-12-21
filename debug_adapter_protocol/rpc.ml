@@ -92,6 +92,7 @@ let handle_command (rpc : t)
     let args = Command.Request.Arguments.of_yojson req.arguments |> get_ok in
     let%lwt success, message, body =
       match%lwt handler args with
+      | exception e -> Lwt.return (false, Some (Printexc.to_string e), ErrorResponse.Body.({error = None} |> to_yojson))
       | Ok body -> Lwt.return (true, None, Command.Response.Body.to_yojson body)
       | Error (message, error) -> Lwt.return (false, Some message, ErrorResponse.Body.({error} |> to_yojson))
     in

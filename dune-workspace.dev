@@ -1,5 +1,3 @@
 (lang dune 1.3)
-(context (opam (switch 4.04.1)))
-(context (opam (switch 4.05.0)))
-(context (opam (switch 4.06.1)))
-(context (opam (switch 4.07.1)))
+(profile debug)
+(context (opam (switch 4.06.1) (merlin)))
