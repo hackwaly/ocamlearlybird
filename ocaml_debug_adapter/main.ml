@@ -15,7 +15,8 @@ let on_connection in_chan out_chan =
 let at_exit () =
   Lwt_list.iter_p (fun session ->
     Session.shutdown session
-  ) (Session_set.to_list !sessions)
+  ) (Session_set.to_list !sessions);%lwt
+  Lwt.return_unit
 
 let start = function
   | Some port ->
@@ -28,9 +29,18 @@ let start = function
 
 let command server (port : int) =
   let server = if server then Some port else None in
+  let term_waiter, term_wakener = Lwt.wait () in
+  let term_handler = fun signum ->
+    Lwt.wakeup_exn term_wakener (Exit)
+  in
+  Lwt_unix.on_signal Sys.sigint term_handler |> ignore;
+  Lwt_unix.on_signal Sys.sigterm term_handler |> ignore;
   Lwt_main.at_exit at_exit;
+  Lwt.async_exception_hook := (fun exn ->
+    print_endline (Printexc.to_string exn);
+  );
   Lwt_main.run (
-    try%lwt start server
+    try%lwt Lwt.pick [start server; term_waiter]
     with Exit -> Lwt.return_unit
   )
 

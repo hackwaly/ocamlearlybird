@@ -5,29 +5,53 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug",
+      "name": "Debug Server at 4711",
       "type": "ocaml-debugger",
       "request": "launch",
       "program": "${workspaceRoot}/_build/4.06.1/ocaml_debug_adapter/main.bc",
       "arguments": ["--server", "--port=4711"],
       "preLaunchTask": "build-debug",
       "console": "internalConsole",
+      "dotMerlins": [
+        "${workspaceRoot}/ocaml_debug_adapter/.merlin",
+        "${workspaceRoot}/debug_adapter_protocol/.merlin"
+      ],
       "env": {
         "OCAMLRUNPARAM": "b"
       }
     },
     {
-      "name": "Debug By Debug Server",
+      "name": "Debug Server at 4711 by 4712",
       "type": "ocaml-debugger",
       "request": "launch",
-      "program": "${workspaceRoot}/_build/default/ocaml_debug_adapter/main.bc",
-      "arguments": ["--server", "--port=4712"],
+      "program": "${workspaceRoot}/_build/4.06.1/ocaml_debug_adapter/main.bc",
+      "arguments": ["--server", "--port=4711"],
       "preLaunchTask": "build-debug",
       "console": "internalConsole",
+      "dotMerlins": [
+        "${workspaceRoot}/ocaml_debug_adapter/.merlin",
+        "${workspaceRoot}/debug_adapter_protocol/.merlin"
+      ],
       "env": {
         "OCAMLRUNPARAM": "b"
       },
-      "debugServer": 4711
+      "debugServer": 4712
+    },
+    {
+      "name": "Debug Server at 4712",
+      "type": "ocaml-debugger",
+      "request": "launch",
+      "program": "${workspaceRoot}/_build/4.06.1/ocaml_debug_adapter/main.bc",
+      "arguments": ["--server", "--port=4712"],
+      "preLaunchTask": "build-debug",
+      "console": "internalConsole",
+      "dotMerlins": [
+        "${workspaceRoot}/ocaml_debug_adapter/.merlin",
+        "${workspaceRoot}/debug_adapter_protocol/.merlin"
+      ],
+      "env": {
+        "OCAMLRUNPARAM": "b"
+      }
     }
   ]
 }

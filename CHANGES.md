@@ -1,3 +1,7 @@
+## 0.1.5 (2018-12-22)
+
+- Fix process leak often after disconnect debugging session
+
 ## 0.1.4 (2018-12-17)
 
 - Add dotMerlins option to launch arguments.

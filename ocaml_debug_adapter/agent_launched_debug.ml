@@ -47,18 +47,19 @@ module Make (Args : sig
     tbl
   let user_source_by_modname = (Hashtbl.create 0 : (string, Source.t) Hashtbl.t)
 
-  let shutdown () =
+  let  shutdown () =
     let%lwt () = match !state with
-      | `At_entry | `Stopped ->
-        Debug_conn.stop conn;
+      | `At_entry | `Stopped -> Lwt.return_unit
       | _ ->
         let () = match proc with
           | In_terminal -> ()
-          | Process proc -> proc#terminate
+          | Process proc -> proc#kill Sys.sigterm
         in
         Lwt.return_unit
     in
-    Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] }
+    Debug_conn.stop conn;%lwt
+    Lwt.return_unit
+  (* Rpc.emit_event rpc (module Terminated_event) { restart = `Assoc [] } *)
 
   module Breakpoints = Breakpoints.Make (struct
       include Args
@@ -82,10 +83,17 @@ module Make (Args : sig
       let get_frames = Inspect.get_frames
     end)
 
-  let disconnect_command _ =
+  let terminate_command _ =
     shutdown ();%lwt
+    (* replace_agent (module Agent_disconnected); *)
+    (* Lwt.return_ok () *)
+    fst (Lwt.wait ())
+
+  let disconnect_command _ =
+    (* shutdown ();%lwt *)
     replace_agent (module Agent_disconnected);
-    Lwt.return_ok ()
+    (* Lwt.return_ok () *)
+    fst (Lwt.wait ())
 
   let set_breakpoints_command = Breakpoints.set_breakpoints_command
   let set_exception_breakpoints_command = Breakpoints.set_exception_breakpoints_command
