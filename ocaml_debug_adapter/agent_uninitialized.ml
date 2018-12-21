@@ -15,6 +15,7 @@ module Make (Args : sig
         ~supports_configuration_done_request:true
         ~supports_loaded_sources_request:true
         ~supports_evaluate_for_hovers:true
+        ~supports_terminate_request:true
         () in
 
     replace_agent (module Agent_initialized.Make (struct

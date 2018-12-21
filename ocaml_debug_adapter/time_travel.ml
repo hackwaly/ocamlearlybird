@@ -44,7 +44,9 @@ module Make (Args : sig
 
   let run () =
     state := `Running;
-    let%lwt rep = Debug_conn.go conn max_int in
+    let%lwt rep =
+      try%lwt Debug_conn.go conn max_int
+      with End_of_file -> Lwt.fail Exit in
     let%lwt rep = match rep.rep_type with
       | Exited | Uncaught_exc -> Lwt.return (rep, `No_guide)
       | _ -> stop_on_event rep
