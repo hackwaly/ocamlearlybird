@@ -143,7 +143,8 @@ let up_frame conn stack_size =
     Lwt_io.write_char conn.out_chan 'U';%lwt
     Lwt_io.BE.write_int conn.out_chan stack_size;%lwt
     let%lwt stack_pos = Lwt_io.BE.read_int conn.in_chan in
-    if stack_pos = -1 then Lwt.return None
+    (* See https://github.com/hackwaly/ocamlearlybird/issues/14 *)
+    if stack_pos < 0 then Lwt.return None
     else (
       let%lwt pc = Lwt_io.BE.read_int conn.in_chan in
       Lwt.return (Some (stack_pos, pc))
