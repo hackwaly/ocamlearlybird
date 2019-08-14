@@ -30,6 +30,7 @@ module Launch_command = struct
         cwd : string option [@default None];
         env : String_opt_dict.t [@default String_opt_dict.empty];
         program : string;
+        symbols : string option [@default None];
         arguments : string list [@default []];
         console : Console.t [@default Console.Internal_console];
         stop_on_entry : bool [@default false] [@key "stopOnEntry"];
