@@ -30,7 +30,7 @@ let start = function
 let command server (port : int) =
   let server = if server then Some port else None in
   let term_waiter, term_wakener = Lwt.wait () in
-  let term_handler = fun signum ->
+  let term_handler = fun _signum ->
     Lwt.wakeup_exn term_wakener (Exit)
   in
   Lwt_unix.on_signal Sys.sigint term_handler |> ignore;

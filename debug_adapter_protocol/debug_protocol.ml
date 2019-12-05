@@ -3,8 +3,8 @@
 module type YOJSON_TYPE = sig
   type t
 
-  val of_yojson : Yojson.Safe.json -> t Ppx_deriving_yojson_runtime.error_or
-  val to_yojson : t -> Yojson.Safe.json
+  val of_yojson : Yojson.Safe.t -> t Ppx_deriving_yojson_runtime.error_or
+  val to_yojson : t -> Yojson.Safe.t
 end
 
 module type EVENT = sig
@@ -268,7 +268,7 @@ module Source = struct
     presentation_hint : Presentation_hint.t option [@key "presentationHint"] [@default None];
     origin : string option [@default None];
     sources : t list [@default []];
-    adapter_data : Yojson.Safe.json [@key "adapterData"] [@default `Assoc []];
+    adapter_data : Yojson.Safe.t [@key "adapterData"] [@default `Assoc []];
     checksums : Checksum.t list [@default []];
   } [@@deriving make, yojson { strict = false }]
 end
@@ -540,7 +540,7 @@ module Request = struct
     seq : int;
     type_ : string [@key "type"];
     command : string;
-    arguments : Yojson.Safe.json [@default `Assoc []];
+    arguments : Yojson.Safe.t [@default `Assoc []];
   } [@@deriving make, yojson { strict = false }]
 end
 
@@ -549,7 +549,7 @@ module Event = struct
     seq : int;
     type_ : string [@key "type"];
     event : string;
-    body : Yojson.Safe.json [@default `Assoc []];
+    body : Yojson.Safe.t [@default `Assoc []];
   } [@@deriving make, yojson { strict = false }]
 end
 
@@ -561,7 +561,7 @@ module Response = struct
     success : bool;
     command : string;
     message : string option [@default None];
-    body : Yojson.Safe.json [@default `Assoc []];
+    body : Yojson.Safe.t [@default `Assoc []];
   } [@@deriving make, yojson { strict = false }]
 end
 
@@ -579,7 +579,7 @@ module Attach_command = struct
   module Request = struct
     module Arguments = struct
       type t = {
-        __restart : Yojson.Safe.json [@default `Assoc []];
+        __restart : Yojson.Safe.t [@default `Assoc []];
       } [@@deriving make, yojson { strict = false }]
     end
   end
@@ -795,7 +795,7 @@ module Launch_command = struct
     module Arguments = struct
       type t = {
         no_debug : bool [@key "noDebug"] [@default false];
-        __restart : Yojson.Safe.json [@default `Assoc []];
+        __restart : Yojson.Safe.t [@default `Assoc []];
       } [@@deriving make, yojson { strict = false }]
     end
   end
@@ -1372,7 +1372,7 @@ module Terminated_event = struct
 
   module Body = struct
     type t = {
-      restart : Yojson.Safe.json [@default `Assoc []];
+      restart : Yojson.Safe.t [@default `Assoc []];
     } [@@deriving make, yojson { strict = false }]
   end
 end
@@ -1399,7 +1399,7 @@ module Output_event = struct
       source : Source.t option [@default None];
       line : int option [@default None];
       column : int option [@default None];
-      data : Yojson.Safe.json [@default `Assoc []];
+      data : Yojson.Safe.t [@default `Assoc []];
     } [@@deriving make, yojson { strict = false }]
   end
 end
@@ -1510,4 +1510,3 @@ module Capabilities_event = struct
     } [@@deriving make, yojson { strict = false }]
   end
 end
-
