@@ -1,0 +1,7 @@
+(executable
+ (name main)
+ (modes byte)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson))
+ (libraries cmdliner lwt lwt.unix logs logs.cli fmt fmt.cli fmt.tty logs.fmt
+   dap.types dap.rpc_lwt astring compiler-libs.bytecomp compiler-libs.common ppx_deriving_yojson.runtime))
