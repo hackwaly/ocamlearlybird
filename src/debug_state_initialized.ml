@@ -50,9 +50,19 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
     Lwt.async (redir_output proc#stderr Output_event.Payload.Category.Stderr);
     Lwt.return proc
   ) in
-  Lwt.return (fun () ->
-    proc#terminate;
-    Lwt.return_unit
+  Lwt.return (fun force ->
+    if force then (
+      proc#terminate;
+      Lwt.return_unit
+    ) else (
+      if Sys.win32 then (
+        Sys.command (Format.sprintf "taskkill /pid %d" proc#pid) |> ignore;
+      ) else (
+        proc#kill 2;
+      );
+      let%lwt _ = proc#status in
+      Lwt.return_unit
+    )
   )
 
 let launch ~rpc arg =
@@ -70,8 +80,8 @@ let launch ~rpc arg =
   ) else Lwt.return_unit;%lwt
   match symbols with
   | None -> (
-    let%lwt launched = spawn ~rpc ?cwd:arg.cwd arg.program arg.arguments in
-    Lwt.return (No_debug, launched)
+    let%lwt terminate = spawn ~rpc ?cwd:arg.cwd arg.program arg.arguments in
+    Lwt.return (No_debug, terminate)
   )
   | Some symbols -> (
     let sock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
@@ -94,7 +104,7 @@ let launch ~rpc arg =
 let run ~init_args ~caps rpc =
   ignore init_args;
   ignore caps;
-  let (promise, resolve) = Lwt.task () in
+  let (promise, resolver) = Lwt.task () in
   let prevent_reenter () =
     Debug_rpc.remove_command_handler rpc (module Launch_command);
     Debug_rpc.remove_command_handler rpc (module Attach_command);
@@ -102,7 +112,7 @@ let run ~init_args ~caps rpc =
   Debug_rpc.set_command_handler rpc (module Launch_command) (fun arg ->
     prevent_reenter ();
     let%lwt launched = launch ~rpc arg in
-    Lwt.wakeup_later resolve launched;
+    Lwt.wakeup_later resolver launched;
     Lwt.return_unit
   );
   Debug_rpc.set_command_handler rpc (module Attach_command) (fun _ ->
@@ -111,7 +121,7 @@ let run ~init_args ~caps rpc =
   );
   Debug_rpc.set_command_handler rpc (module Disconnect_command) (fun _ ->
     Debug_rpc.remove_command_handler rpc (module Disconnect_command);
-    Lwt.wakeup_later_exn resolve Exit;
+    Lwt.wakeup_later_exn resolver Exit;
     Lwt.return_unit
   );
   promise

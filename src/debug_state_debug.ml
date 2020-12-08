@@ -1,7 +1,7 @@
 open Debug_protocol_ex
 
 let run ~terminate ~(symbols : Debug_symbols.t) ~com rpc =
-  let (promise, resolve) = Lwt.task () in
+  let (promise, resolver) = Lwt.task () in
   Debug_rpc.set_command_handler rpc (module Set_breakpoints_command) (fun arg ->
     let breakpoints = arg.breakpoints |> Option.to_list |> List.map (fun _ ->
       Breakpoint.make ~verified:false ()
@@ -15,10 +15,18 @@ let run ~terminate ~(symbols : Debug_symbols.t) ~com rpc =
     let main_thread = Thread.make ~id:0 ~name:"main" in
     Lwt.return (Threads_command.Result.make ~threads:[main_thread] ())
   );
+  Debug_rpc.set_command_handler rpc (module Terminate_command) (fun _ ->
+    Debug_rpc.remove_command_handler rpc (module Terminate_command);
+    Lwt.async (fun () ->
+      terminate false;%lwt
+      Debug_rpc.send_event rpc (module Terminated_event) Terminated_event.Payload.(make ())
+    );
+    Lwt.return_unit
+  );
   Debug_rpc.set_command_handler rpc (module Disconnect_command) (fun _ ->
     Debug_rpc.remove_command_handler rpc (module Disconnect_command);
-    terminate ();%lwt
-    Lwt.wakeup_later_exn resolve Exit;
+    terminate true;%lwt
+    Lwt.wakeup_later_exn resolver Exit;
     Lwt.return_unit
   );
   Lwt.async (fun () ->
