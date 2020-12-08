@@ -1,6 +1,6 @@
 let on_connection in_ out =
   let rpc = Debug_rpc.create ~in_ ~out () in
-  Debug_session.start rpc;%lwt
+  Session.start rpc;%lwt
   Logs_lwt.debug (fun m -> m "close");%lwt
   Lwt_io.close out
 

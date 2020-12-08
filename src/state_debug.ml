@@ -1,6 +1,6 @@
 open Debug_protocol_ex
 
-let run ~terminate ~(symbols : Debug_symbols.t) ~com rpc =
+let run ~terminate ~(symbols : Symbols.t) ~com rpc =
   let (promise, resolver) = Lwt.task () in
   Debug_rpc.set_command_handler rpc (module Set_breakpoints_command) (fun arg ->
     let breakpoints = arg.breakpoints |> Option.to_list |> List.map (fun _ ->

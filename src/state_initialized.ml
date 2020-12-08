@@ -3,7 +3,7 @@ open Debug_protocol_ex
 
 type debug =
   | Debug of {
-    symbols : Debug_symbols.t;
+    symbols : Symbols.t;
     com : Debug_com.t;
   }
   | No_debug
@@ -72,7 +72,7 @@ let launch ~rpc arg =
       Lwt.return_none
     else (
       let symbols_file = Option.value ~default:arg.program arg.symbols in
-      Debug_symbols.load ~dot_merlins:arg.dot_merlins symbols_file
+      Symbols.load ~dot_merlins:arg.dot_merlins symbols_file
     )
   in
   if Option.is_none symbols && not arg.no_debug then (
