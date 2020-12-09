@@ -9,11 +9,16 @@ type debug_module_info = {
   events : debug_event array;
 }
 
+type pc = {
+  frag : int;
+  pos : int;
+}
+
 type t = {
   global_table : int Ident.Map.t;
   all_dirs : string list;
   module_info_tbl : (string, debug_module_info) Hashtbl.t;
-  event_by_pc : (int, debug_event) Hashtbl.t;
+  event_by_pc : (pc, debug_event) Hashtbl.t;
 }
 
 exception Bad_magic_number
@@ -158,7 +163,7 @@ let read_symbols ?(dot_merlins=[]) ic toc =
         if file <> "_none_" then (
           fname := Some file;
         );
-        Hashtbl.add event_by_pc ev.ev_pos ev
+        Hashtbl.add event_by_pc {frag = 0; pos = ev.ev_pos} ev
       ) evl;
       let fname = !fname |> Option.value ~default:(String.Ascii.uncapitalize name ^ ".ml") in
       let%lwt source = resolve_file fname dirs in
@@ -215,7 +220,7 @@ let path_to_modname (path : string) : string =
 let get_module_info (symbols : t) (modname : string) : debug_module_info =
   Hashtbl.find symbols.module_info_tbl modname
 
-let event_at_pc (symbols : t) (pc : int) : debug_event =
+let event_at_pc (symbols : t) (pc : pc) : debug_event =
   Hashtbl.find symbols.event_by_pc pc
 
 let module_infos (symbols : t) : debug_module_info list =

@@ -1,4 +1,5 @@
 [@@@warning "-27"]
+module Symbols = Symbols_411
 
 let src = Logs.Src.create "earlybird.Debug_conn_411"
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
@@ -18,7 +19,7 @@ type execution_summary =
   | Code_loaded of int
   | Code_unloaded of int
 
-type pc = {
+type pc = Symbols.pc = {
   frag : int;
   pos : int;
 }
@@ -75,27 +76,30 @@ let set_follow_fork_mode conn mode =
     Lwt_io.BE.write_int conn.out_chan v
   )
 
-let set_event conn pos =
+let set_event conn {frag; pos} =
   guard conn (fun conn ->
     Lwt_io.write_char conn.out_chan 'e';%lwt
+    Lwt_io.BE.write_int conn.out_chan frag;%lwt
     Lwt_io.BE.write_int conn.out_chan pos
   )
 
-let set_breakpoint conn pos =
+let set_breakpoint conn {frag; pos} =
   guard conn (fun conn ->
     Lwt_io.write_char conn.out_chan 'B';%lwt
+    Lwt_io.BE.write_int conn.out_chan frag;%lwt
+    Lwt_io.BE.write_int conn.out_chan pos
+  )
+
+let reset_instruction conn {frag; pos} =
+  guard conn (fun conn ->
+    Lwt_io.write_char conn.out_chan 'i';%lwt
+    Lwt_io.BE.write_int conn.out_chan frag;%lwt
     Lwt_io.BE.write_int conn.out_chan pos
   )
 
 let set_trap_barrier conn pos =
   guard conn (fun conn ->
     Lwt_io.write_char conn.out_chan 'b';%lwt
-    Lwt_io.BE.write_int conn.out_chan pos
-  )
-
-let reset_instruction conn pos =
-  guard conn (fun conn ->
-    Lwt_io.write_char conn.out_chan 'i';%lwt
     Lwt_io.BE.write_int conn.out_chan pos
   )
 

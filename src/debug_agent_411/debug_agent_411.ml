@@ -41,14 +41,14 @@ let create ~symbols  ~sock ?(time_slice=1024) () =
 let load agent =
   let%lwt pid = Debug_conn.initial agent.conn in
   Log.info (fun m -> m "Debuggee pid: %d" pid);%lwt
-  (* let setup_events () =
+  let setup_events () =
     Hashtbl.to_seq_keys agent.symbols.event_by_pc
     |> Seq.fold_left (fun wait pc ->
       let%lwt () = wait in
       Debug_conn.set_event agent.conn pc
     ) Lwt.return_unit
   in
-  setup_events ();%lwt *)
+  setup_events ();%lwt
   Lwt.return_unit
 
 let start agent =
