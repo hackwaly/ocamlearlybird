@@ -2,6 +2,17 @@ open Debug_protocol_ex
 
 let run ~terminate ~(symbols : Symbols.t) ~com rpc =
   let (promise, resolver) = Lwt.task () in
+  Debug_rpc.set_command_handler rpc (module Loaded_sources_command) (fun _ ->
+    let sources = (
+      symbols.module_info_tbl
+      |> Hashtbl.to_seq_values
+      |> Seq.filter_map (fun mi ->
+        Some (Source.make ~path:(mi.Symbols.source) ())
+      )
+      |> List.of_seq
+    ) in
+    Lwt.return Loaded_sources_command.Result.(make ~sources ())
+  );
   Debug_rpc.set_command_handler rpc (module Set_breakpoints_command) (fun arg ->
     let breakpoints = arg.breakpoints |> Option.to_list |> List.map (fun _ ->
       Breakpoint.make ~verified:false ()

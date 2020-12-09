@@ -9,7 +9,9 @@ let run rpc =
     prevent_reenter ();
     let caps = Capabilities.(
       make
-        ~supports_terminate_request:(Some true) ()
+        ~supports_terminate_request:(Some true)
+        ~supports_loaded_sources_request:(Some true)
+        ()
     ) in
     Lwt.wakeup_later resolver (arg, caps);
     Lwt.return caps

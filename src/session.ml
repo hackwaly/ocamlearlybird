@@ -1,5 +1,5 @@
 let start rpc =
-  let loop = Debug_rpc.start rpc in
+  let cancel = ref (fun () -> ()) in
   Lwt.async (fun () ->
     (try%lwt
       Logs_lwt.debug (fun m -> m "state_uninitialized");%lwt
@@ -18,8 +18,10 @@ let start rpc =
       fst (Lwt.task ())
     with Exit -> Lwt.return_unit);%lwt
     Logs_lwt.debug (fun m -> m "state_end");%lwt
-    Lwt.cancel loop;
+    !cancel ();
     Lwt.return_unit
   );
+  let loop = Debug_rpc.start rpc in
+  cancel := (fun () -> Lwt.cancel loop);
   (try%lwt loop with Lwt.Canceled -> Lwt.return_unit);%lwt
   Logs_lwt.debug (fun m -> m "loop end")
