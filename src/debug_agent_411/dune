@@ -1,0 +1,5 @@
+(library
+ (name debug_agent_411)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson ppx_deriving.show))
+ (libraries lwt lwt_react lwt.unix logs logs.lwt compiler-libs.bytecomp astring compiler-libs.common))

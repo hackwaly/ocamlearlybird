@@ -6,7 +6,9 @@ module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 let run ~terminate ~agent rpc =
   let (promise, resolver) = Lwt.task () in
   Debug_rpc.set_command_handler rpc (module Loaded_sources_command) (fun _ ->
-    let sources = Debug_agent.loaded_sources agent in
+    let sources = Debug_agent.loaded_sources agent
+      |> List.map (fun it -> Source.make ~path:it ())
+    in
     Lwt.return Loaded_sources_command.Result.(make ~sources ())
   );
   Debug_rpc.set_command_handler rpc (module Threads_command) (fun _ ->

@@ -77,38 +77,24 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
 
 let launch ~rpc arg =
   let open Launch_command.Arguments in
-  let%lwt symbols =
-    if arg.no_debug then
-      Lwt.return_none
-    else (
-      let symbols_file = Option.value ~default:arg.program arg.symbols in
-      Symbols.load ~dot_merlins:arg.dot_merlins symbols_file
-    )
-  in
-  if Option.is_none symbols && not arg.no_debug then (
-    Log.warn (fun m -> m "Symbols not found")
-  ) else Lwt.return_unit;%lwt
-  match symbols with
-  | None -> (
+  if arg.no_debug then (
     let%lwt terminate = spawn ~rpc ?cwd:arg.cwd arg.program arg.arguments in
     Lwt.return (No_debug, terminate)
-  )
-  | Some symbols -> (
-    let sock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
-    Lwt_unix.(bind sock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
-    Lwt_unix.listen sock 1;
+  ) else (
+    let symbols = Option.value ~default:arg.program arg.symbols in
+    let lsock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
+    Lwt_unix.(bind lsock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
+    Lwt_unix.listen lsock 1;
     let promise, resolver = Lwt.wait () in
     Lwt.async (fun () ->
-      let%lwt fd, _ = Lwt_unix.accept sock in
-      Lwt_unix.close sock;%lwt
-      let in_chan = Lwt_io.(of_fd ~mode:Input fd) in
-      let out_chan = Lwt_io.(of_fd ~mode:Output fd) in
-      Lwt.wakeup resolver (Debug_conn.create in_chan out_chan);
+      let%lwt fd, _ = Lwt_unix.accept lsock in
+      Lwt_unix.close lsock;%lwt
+      Lwt.wakeup resolver fd;
       Lwt.return_unit
     );
-    let%lwt terminate = spawn ~rpc ~debug_sock:sock ?cwd:arg.cwd arg.program arg.arguments in
-    let%lwt conn = promise in
-    let agent = Debug_agent.create ~symbols ~conn () in
+    let%lwt terminate = spawn ~rpc ~debug_sock:lsock ?cwd:arg.cwd arg.program arg.arguments in
+    let%lwt sock = promise in
+    let%lwt agent = Debug_agent.create ~symbols ~sock () in
     Lwt.return (Debug agent, terminate)
   )
 

@@ -1,7 +1,7 @@
 (executable
  (name main)
  (modes byte)
-	(modules main)
+ (modules main)
  (preprocess
   (pps lwt_ppx ppx_deriving_yojson ppx_deriving.show))
  (libraries main))
@@ -10,9 +10,10 @@
  (name main)
  (modes byte)
  (wrapped false)
-	(modules (:standard \ main))
+ (modules
+  (:standard \ main))
  (preprocess
   (pps lwt_ppx ppx_deriving_yojson ppx_deriving.show))
  (libraries cmdliner lwt lwt.unix logs logs.cli fmt fmt.cli fmt.tty logs.fmt
-   dap.types dap.rpc_lwt astring compiler-libs.bytecomp compiler-libs.common
-   ppx_deriving_yojson.runtime react lwt_react))
+   dap.types dap.rpc_lwt astring
+   ppx_deriving_yojson.runtime react lwt_react debug_agent_411))

@@ -190,14 +190,11 @@ let read_symbols ?(dot_merlins=[]) ic toc =
     module_info_tbl;
   }
 
-let load ?(dot_merlins=[]) (filename : string) : t option Lwt.t =
+let load ?(dot_merlins=[]) (filename : string) : t Lwt.t =
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.Input filename in
   (
-    try%lwt
-      let%lwt toc = read_toc ic in
-      let%lwt symbols = read_symbols ~dot_merlins ic toc in
-      Lwt.return_some symbols
-    with Bad_magic_number | Not_found -> Lwt.return_none
+    let%lwt toc = read_toc ic in
+    read_symbols ~dot_merlins ic toc
   )[%finally Lwt_io.close ic]
 
 let get_global_position symbols id =
