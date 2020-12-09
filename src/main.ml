@@ -42,4 +42,12 @@ let default_cmd =
   Term.info "ocamlearybird"
 
 let () =
+  (* I don't know why:
+   * Without this hook handler, there will be an fatal error after terminated event sent.
+   * But after added this, It disappears.
+   * `Fatal error: exception Lwt_io.Channel_closed("output")` *)
+  Lwt.async_exception_hook := (fun exn -> (
+    Format.printf "Async exception: %s" (Printexc.to_string exn);
+    Printexc.print_backtrace stderr;
+  ));
   Term.(exit @@ eval_choice default_cmd [serve_command])

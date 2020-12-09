@@ -6,6 +6,7 @@ module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 type follow_fork_mode =
   | Fork_parent
   | Fork_child
+[@@deriving show]
 
 type execution_summary =
   | Event
@@ -55,9 +56,9 @@ let stop conn =
     with Sys_error _ | End_of_file -> Lwt.return_unit
   )
 
-let set_follow_fork_mode conn m =
+let set_follow_fork_mode conn mode =
   guard conn (fun conn ->
-    let v = match m with Fork_parent -> 1 | Fork_child -> 0 in
+    let v = match mode with Fork_parent -> 1 | Fork_child -> 0 in
     Lwt_io.write_char conn.out_chan 'K';%lwt
     Lwt_io.BE.write_int conn.out_chan v
   )
@@ -81,7 +82,6 @@ let set_trap_barrier conn pos =
   )
 
 let reset_instruction conn pos =
-  Log.debug (fun m -> m "reset_instruction");%lwt
   guard conn (fun conn ->
     Lwt_io.write_char conn.out_chan 'i';%lwt
     Lwt_io.BE.write_int conn.out_chan pos
@@ -120,7 +120,6 @@ let go conn n =
       rep_stack_pointer = stack_pos;
       rep_program_pointer = pc;
     } in
-    Log.debug (fun m -> m "Stop report: %s" (show_report report));%lwt
     Lwt.return report
   )
 

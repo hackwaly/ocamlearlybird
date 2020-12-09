@@ -34,16 +34,15 @@ let create ~symbols  ~conn ?(time_slice=1024) () =
 let load agent =
   let%lwt pid = Debug_conn.initial agent.conn in
   Log.info (fun m -> m "Debuggee pid: %d" pid);%lwt
-  (* let%lwt report = Debug_conn.go agent.conn 0 in
-  agent.emit_stopped report; *)
-  let setup_events () =
+  (* let setup_events () =
     Hashtbl.to_seq_keys agent.symbols.event_by_pc
     |> Seq.fold_left (fun wait pc ->
       let%lwt () = wait in
       Debug_conn.set_event agent.conn pc
     ) Lwt.return_unit
   in
-  setup_events ()
+  setup_events ();%lwt *)
+  Lwt.return_unit
 
 let start agent =
   let break = ref false in
@@ -56,10 +55,16 @@ let start agent =
   in
   let rec next () =
     let%lwt report = Debug_conn.go agent.conn agent.time_slice in
-    if React.S.value agent.pause_flag_s then (
-      Lwt.return report
-    ) else (
-      next ()
+    match report.rep_type with
+    | Exited -> (
+      Lwt.return report;
+    )
+    | _ -> (
+      if React.S.value agent.pause_flag_s then (
+        Lwt.return report
+      ) else (
+        next ()
+      )
     )
   in
   while%lwt not !break do
@@ -92,7 +97,8 @@ let start agent =
       Lwt.return_unit
     ) else Lwt.return_unit;%lwt
     Lwt.return_unit
-  done
+  done;%lwt
+  Lwt.return_unit
 
 let stopped_event agent =
   agent.stopped_e

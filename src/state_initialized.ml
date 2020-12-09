@@ -48,6 +48,16 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
     let proc = Lwt_process.open_process_full ~env cmd in
     Lwt.async (redir_output proc#stdout Output_event.Payload.Category.Stdout);
     Lwt.async (redir_output proc#stderr Output_event.Payload.Category.Stderr);
+    Lwt.async (fun () ->
+      let%lwt status = proc#status in
+      match status with
+      | WEXITED code
+      | WSIGNALED code
+      | WSTOPPED code -> (
+        Debug_rpc.send_event rpc (module Terminated_event) Terminated_event.Payload.(make ());%lwt
+        Debug_rpc.send_event rpc (module Exited_event) Exited_event.Payload.(make ~exit_code:code)
+      )
+    );
     Lwt.return proc
   ) in
   Lwt.return (fun force ->
