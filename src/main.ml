@@ -47,7 +47,9 @@ let () =
    * But after added this, It disappears.
    * `Fatal error: exception Lwt_io.Channel_closed("output")` *)
   Lwt.async_exception_hook := (fun exn -> (
-    Format.printf "Async exception: %s" (Printexc.to_string exn);
-    Printexc.print_backtrace stderr;
+    if exn <> Exit then (
+      Printf.fprintf stderr "Async exception: %s\n" (Printexc.to_string exn);
+      Printexc.print_backtrace stderr;
+    )
   ));
   Term.(exit @@ eval_choice default_cmd [serve_command])
