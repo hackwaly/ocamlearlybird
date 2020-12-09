@@ -1,11 +1,11 @@
 open Astring
 open Debug_protocol_ex
 
+let src = Logs.Src.create "earlybird.State_initialized"
+module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
+
 type debug =
-  | Debug of {
-    symbols : Symbols.t;
-    com : Debug_com.t;
-  }
+  | Debug of Debug_agent.t
   | No_debug
 
 let spawn ~rpc ?debug_sock ?env ?cwd prog args =
@@ -18,7 +18,7 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
     |> List.fold_left (fun dict (key, value) -> String_dict.add key value dict) String_dict.empty
   ) in
   if curr_env |> String_dict.mem "" then (
-    Logs_lwt.warn (fun m -> m "CAML_DEBUG_SOCKET already in env")
+    Log.warn (fun m -> m "CAML_DEBUG_SOCKET already in env")
   ) else Lwt.return_unit;%lwt
   let curr_env = match debug_sock with
     | None -> curr_env
@@ -76,7 +76,7 @@ let launch ~rpc arg =
     )
   in
   if Option.is_none symbols && not arg.no_debug then (
-    Logs_lwt.warn (fun m -> m "Symbols not found")
+    Log.warn (fun m -> m "Symbols not found")
   ) else Lwt.return_unit;%lwt
   match symbols with
   | None -> (
@@ -93,12 +93,13 @@ let launch ~rpc arg =
       Lwt_unix.close sock;%lwt
       let in_chan = Lwt_io.(of_fd ~mode:Input fd) in
       let out_chan = Lwt_io.(of_fd ~mode:Output fd) in
-      Lwt.wakeup resolver (Debug_com.create in_chan out_chan);
+      Lwt.wakeup resolver (Debug_conn.create in_chan out_chan);
       Lwt.return_unit
     );
-    let%lwt terminator = spawn ~rpc ~debug_sock:sock ?cwd:arg.cwd arg.program arg.arguments in
-    let%lwt com = promise in
-    Lwt.return (Debug {symbols; com}, terminator)
+    let%lwt terminate = spawn ~rpc ~debug_sock:sock ?cwd:arg.cwd arg.program arg.arguments in
+    let%lwt conn = promise in
+    let agent = Debug_agent.create ~symbols ~conn () in
+    Lwt.return (Debug agent, terminate)
   )
 
 let run ~init_args ~caps rpc =

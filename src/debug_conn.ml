@@ -1,5 +1,8 @@
 [@@@warning "-27"]
 
+let src = Logs.Src.create "earlybird.Debug_conn"
+module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
+
 type follow_fork_mode =
   | Fork_parent
   | Fork_child
@@ -10,6 +13,7 @@ type execution_summary =
   | Exited
   | Trap_barrier
   | Uncaught_exc
+[@@deriving show]
 
 type report = {
   rep_type : execution_summary;
@@ -17,6 +21,7 @@ type report = {
   rep_stack_pointer : int;
   rep_program_pointer : int;
 }
+[@@deriving show]
 
 type t = {
   in_chan : Lwt_io.input_channel;
@@ -76,6 +81,7 @@ let set_trap_barrier conn pos =
   )
 
 let reset_instruction conn pos =
+  Log.debug (fun m -> m "reset_instruction");%lwt
   guard conn (fun conn ->
     Lwt_io.write_char conn.out_chan 'i';%lwt
     Lwt_io.BE.write_int conn.out_chan pos
@@ -108,12 +114,14 @@ let go conn n =
     let%lwt event_counter = Lwt_io.BE.read_int conn.in_chan in
     let%lwt stack_pos = Lwt_io.BE.read_int conn.in_chan in
     let%lwt pc = Lwt_io.BE.read_int conn.in_chan in
-    Lwt.return {
+    let report = {
       rep_type = summary;
       rep_event_count = event_counter;
       rep_stack_pointer = stack_pos;
       rep_program_pointer = pc;
-    }
+    } in
+    Log.debug (fun m -> m "Stop report: %s" (show_report report));%lwt
+    Lwt.return report
   )
 
 let get_frame conn =

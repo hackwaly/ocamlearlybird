@@ -1,7 +1,12 @@
+let connection_counter = ref 0
+
 let on_connection in_ out =
+  let conn_num = !connection_counter in
+  incr connection_counter;
+  Logs_lwt.app (fun m -> m "Connection #%d established" conn_num);%lwt
   let rpc = Debug_rpc.create ~in_ ~out () in
   Session.start rpc;%lwt
-  Logs_lwt.debug (fun m -> m "close");%lwt
+  Logs_lwt.app (fun m -> m "Connection #%d closed" conn_num);%lwt
   Lwt_io.close out
 
 let serve port =
@@ -9,7 +14,7 @@ let serve port =
   let%lwt _ = Lwt_io.establish_server_with_client_address addr (
     fun _ (in_chan, out_chan) -> on_connection in_chan out_chan
   ) in
-  Logs.app (fun m -> m "Debug adapter server listening at port %d" port);
+  Logs_lwt.app (fun m -> m "Debug adapter server listening at port %d" port);%lwt
   fst (Lwt.wait ())
 
 let setup_log style_renderer level =
