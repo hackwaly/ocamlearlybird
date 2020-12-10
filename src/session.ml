@@ -8,15 +8,15 @@ let start rpc =
       Log.debug (fun m -> m "state_uninitialized");%lwt
       let%lwt init_args, caps = State_uninitialized.run rpc in
       Log.debug (fun m -> m "state_initialized");%lwt
-      let%lwt (debug, terminate) = State_initialized.run ~init_args ~caps rpc in
+      let%lwt (launch_args, debug, terminate) = State_initialized.run ~init_args ~caps rpc in
       (match debug with
         | No_debug -> (
           Log.debug (fun m -> m "state_no_debug");%lwt
-          State_no_debug.run ~terminate rpc
+          State_no_debug.run ~launch_args ~terminate rpc
         )
         | Debug agent ->
           Log.debug (fun m -> m "state_debug");%lwt
-          State_debug.run ~terminate ~agent rpc
+          State_debug.run ~launch_args ~terminate ~agent rpc
       );%lwt
       fst (Lwt.task ())
     with Exit -> Lwt.return_unit);%lwt

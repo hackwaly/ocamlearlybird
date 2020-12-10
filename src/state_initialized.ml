@@ -79,7 +79,7 @@ let launch ~rpc arg =
   let open Launch_command.Arguments in
   if arg.no_debug then (
     let%lwt terminate = spawn ~rpc ?cwd:arg.cwd arg.program arg.arguments in
-    Lwt.return (No_debug, terminate)
+    Lwt.return (arg, No_debug, terminate)
   ) else (
     let symbols = Option.value ~default:arg.program arg.symbols in
     let lsock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
@@ -95,7 +95,7 @@ let launch ~rpc arg =
     let%lwt terminate = spawn ~rpc ~debug_sock:lsock ?cwd:arg.cwd arg.program arg.arguments in
     let%lwt sock = promise in
     let%lwt agent = Debug_agent.create ~symbols ~sock () in
-    Lwt.return (Debug agent, terminate)
+    Lwt.return (arg, Debug agent, terminate)
   )
 
 let run ~init_args ~caps rpc =

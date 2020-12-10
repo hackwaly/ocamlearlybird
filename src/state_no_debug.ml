@@ -1,6 +1,7 @@
 open Debug_protocol_ex
 
-let run ~terminate rpc =
+let run ~launch_args ~terminate rpc =
+  ignore launch_args;
   let (promise, resolver) = Lwt.task () in
   Debug_rpc.set_command_handler rpc (module Terminate_command) (fun _ ->
     Debug_rpc.remove_command_handler rpc (module Terminate_command);

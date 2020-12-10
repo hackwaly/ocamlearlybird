@@ -1,7 +1,7 @@
 module Symbols = Symbols_411
 module Debug_conn = Debug_conn_411
 
-let src = Logs.Src.create "earlybird.Debug_agent"
+let src = Logs.Src.create "earlybird.Debug_agent_411"
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 
 type t = {
@@ -19,7 +19,7 @@ type t = {
 
 let create ~symbols  ~sock ?(time_slice=1024) () =
   let (stopped_e, emit_stopped) = React.E.create () in
-  let (pause_flag_s, set_pause_flag) = React.S.create false in
+  let (pause_flag_s, set_pause_flag) = React.S.create true in
   let (wakeup_e, emit_wakeup) = React.E.create () in
   let%lwt symbols = Symbols.load symbols in
   let in_chan = Lwt_io.of_fd ~mode:Lwt_io.input sock in
@@ -88,7 +88,6 @@ let start agent =
             agent.wakeup_e |> React.E.map (fun () -> true);
           ]
         ) in
-        Log.debug (fun m -> m "is_wakeup: %b" is_wakeup);%lwt
         Lwt.return is_wakeup
       ) else (
         Lwt.return_false
@@ -120,7 +119,10 @@ let push_pending agent p =
   agent.pendings <- p :: agent.pendings;
   agent.emit_wakeup ()
 
-let debug_set_breakpoint agent =
+let debug_set_breakpoint agent src ~line ?column () =
+  ignore src;
+  ignore line;
+  ignore column;
   push_pending agent (fun () ->
     Lwt.return_unit
   )

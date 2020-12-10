@@ -3,7 +3,7 @@ open Debug_protocol_ex
 let src = Logs.Src.create "earlybird.State_debug"
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 
-let run ~terminate ~agent rpc =
+let run ~launch_args ~terminate ~agent rpc =
   let (promise, resolver) = Lwt.task () in
   Debug_rpc.set_command_handler rpc (module Loaded_sources_command) (fun _ ->
     let sources = Debug_agent.loaded_sources agent
@@ -23,6 +23,22 @@ let run ~terminate ~agent rpc =
   );
   Debug_rpc.set_command_handler rpc (module Set_exception_breakpoints_command) (fun _ ->
     Lwt.return_unit
+  );
+  Debug_rpc.set_command_handler rpc (module Configuration_done_command) (fun _ ->
+    let open Launch_command.Arguments in
+    if launch_args.stop_on_entry then (
+      Debug_rpc.send_event rpc (module Stopped_event) Stopped_event.Payload.(
+        make ~reason:Reason.Entry ~all_threads_stopped:(Some true) ()
+      );
+    ) else (
+      Debug_agent.debug_run agent;
+      Lwt.return_unit
+    );%lwt
+    Lwt.return_unit
+  );
+  Debug_rpc.set_command_handler rpc (module Continue_command) (fun _ ->
+    Debug_agent.debug_run agent;
+    Lwt.return Continue_command.Result.(make ~all_threads_continued:(Some true) ())
   );
   Debug_rpc.set_command_handler rpc (module Terminate_command) (fun _ ->
     Debug_rpc.remove_command_handler rpc (module Terminate_command);
