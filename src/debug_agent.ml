@@ -1,1 +1,2 @@
+include Debug_agent_types
 include Debug_agent_411

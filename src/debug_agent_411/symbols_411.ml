@@ -9,7 +9,7 @@ type debug_module_info = {
   events : Instruct.debug_event array;
 }
 
-type pc = {
+type pc = Debug_agent_types.pc = {
   frag : int;
   pos : int;
 }

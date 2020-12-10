@@ -4,12 +4,12 @@ module Symbols = Symbols_411
 let src = Logs.Src.create "earlybird.Debug_conn_411"
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 
-type follow_fork_mode =
+type follow_fork_mode = Debug_agent_types.follow_fork_mode =
   | Fork_parent
   | Fork_child
 [@@deriving show]
 
-type execution_summary =
+type execution_summary = Debug_agent_types.execution_summary =
   | Event
   | Breakpoint
   | Exited
@@ -19,12 +19,12 @@ type execution_summary =
   | Code_loaded of int
   | Code_unloaded of int
 
-type pc = Symbols.pc = {
+type pc = Debug_agent_types.pc = {
   frag : int;
   pos : int;
 }
 
-type report = {
+type report = Debug_agent_types.report = {
   rep_type : execution_summary;
   rep_event_count : int64;
   rep_stack_pointer : int;
