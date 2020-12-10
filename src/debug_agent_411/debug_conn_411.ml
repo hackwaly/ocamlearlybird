@@ -26,7 +26,7 @@ type pc = Symbols.pc = {
 
 type report = {
   rep_type : execution_summary;
-  rep_event_count : int;
+  rep_event_count : int64;
   rep_stack_pointer : int;
   rep_program_pointer : pc;
 }
@@ -159,7 +159,7 @@ let go conn n =
     let%lwt pos = Lwt_io.BE.read_int conn.in_chan in
     let report = {
       rep_type = summary;
-      rep_event_count = event_counter;
+      rep_event_count = Int64.of_int event_counter;
       rep_stack_pointer = stack_pos;
       rep_program_pointer = {frag; pos};
     } in

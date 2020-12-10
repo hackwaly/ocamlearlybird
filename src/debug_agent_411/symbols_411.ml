@@ -1,12 +1,12 @@
 open Astring
-open Instruct
 
 module String_set = Set.Make (String)
 
 type debug_module_info = {
+  frag : int;
   name : string;
   source : string option;
-  events : debug_event array;
+  events : Instruct.debug_event array;
 }
 
 type pc = {
@@ -18,7 +18,7 @@ type t = {
   global_table : int Ident.Map.t;
   all_dirs : string list;
   module_info_tbl : (string, debug_module_info) Hashtbl.t;
-  event_by_pc : (pc, debug_event) Hashtbl.t;
+  event_by_pc : (pc, Instruct.debug_event) Hashtbl.t;
 }
 
 exception Bad_magic_number
@@ -56,7 +56,7 @@ let seek_section (pos, section_table) name =
   in seek_sec pos section_table
 
 let relocate_event orig ev =
-  ev.ev_pos <- orig + ev.ev_pos;
+  ev.Instruct.ev_pos <- orig + ev.Instruct.ev_pos;
   match ev.ev_repr with
   | Event_parent repr -> repr := ev.ev_pos
   | _ -> ()
@@ -67,7 +67,7 @@ let partition_modules evl =
       [] -> [ev],[]
     | ev'::evl ->
       let evl,evll = partition_modules' ev' evl in
-      if ev.ev_module = ev'.ev_module then ev::evl,evll else [ev],evl::evll
+      if ev.Instruct.ev_module = ev'.ev_module then ev::evl,evll else [ev],evl::evll
   in
   match evl with
     [] -> []
@@ -97,7 +97,7 @@ let resolve_file file dirs =
   in
   rec_resolve file dirs
 
-let pos_of_event (ev : debug_event) : Lexing.position =
+let pos_of_event (ev : Instruct.debug_event) : Lexing.position =
   match ev.ev_kind with
   | Event_before -> ev.ev_loc.Location.loc_start
   | Event_after _ -> ev.ev_loc.Location.loc_end
@@ -115,7 +115,7 @@ let read_global_table ic toc =
   let%lwt (global_table : T.t) = Lwt_io.read_value ic in
   Lwt.return global_table.tbl
 
-let read_symbols ?(dot_merlins=[]) ic toc =
+let read_symbols ?(dot_merlins=[]) ~frag ic toc =
   let%lwt global_table = read_global_table ic toc in
   let pos = seek_section toc "DBUG" in
   Lwt_io.set_position ic pos;%lwt
@@ -155,22 +155,22 @@ let read_symbols ?(dot_merlins=[]) ic toc =
     ) dirs;
     let evll = partition_modules evl in
     Lwt_list.iter_s (fun evl ->
-      let name = (List.hd evl).ev_module in
+      let name = (List.hd evl).Instruct.ev_module in
       (* TODO: Find better way to resolve source. *)
       let fname = ref None in
       List.iter (fun ev ->
-        let file = ev.ev_loc.loc_start.pos_fname in
+        let file = ev.Instruct.ev_loc.loc_start.pos_fname in
         if file <> "_none_" then (
           fname := Some file;
         );
-        Hashtbl.add event_by_pc {frag = 0; pos = ev.ev_pos} ev
+        Hashtbl.add event_by_pc {frag; pos = ev.ev_pos} ev
       ) evl;
       let fname = !fname |> Option.value ~default:(String.Ascii.uncapitalize name ^ ".ml") in
       let%lwt source = resolve_file fname dirs in
       let events = (
         evl
         |> List.filter (fun ev ->
-          match ev.ev_kind with
+          match ev.Instruct.ev_kind with
           | Event_pseudo -> false
           | _ -> true
         )
@@ -183,7 +183,7 @@ let read_symbols ?(dot_merlins=[]) ic toc =
           (pos_of_event ev2).pos_cnum
       in
       Array.sort cmp events;
-      let module_info = {name; source; events} in
+      let module_info = {frag; name; source; events} in
       Hashtbl.add module_info_tbl name module_info;
       Lwt.return_unit
     ) evll
@@ -199,7 +199,7 @@ let load ?(dot_merlins=[]) (filename : string) : t Lwt.t =
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.Input filename in
   (
     let%lwt toc = read_toc ic in
-    read_symbols ~dot_merlins ic toc
+    read_symbols ~frag:0 ~dot_merlins ic toc
   )[%finally Lwt_io.close ic]
 
 let get_global_position symbols id =
@@ -211,7 +211,7 @@ let all_dirs (symbols : t) : string list =
 let line_column_of_pos (pos : Lexing.position) : int * int =
   Lexing.(pos.pos_lnum, pos.pos_cnum - pos.pos_bol + 1)
 
-let line_column_of_event (ev : debug_event) : int * int =
+let line_column_of_event (ev : Instruct.debug_event) : int * int =
   line_column_of_pos (pos_of_event ev)
 
 let path_to_modname (path : string) : string =
@@ -220,66 +220,60 @@ let path_to_modname (path : string) : string =
 let get_module_info (symbols : t) (modname : string) : debug_module_info =
   Hashtbl.find symbols.module_info_tbl modname
 
-let event_at_pc (symbols : t) (pc : pc) : debug_event =
+let event_at_pc (symbols : t) (pc : pc) : Instruct.debug_event =
   Hashtbl.find symbols.event_by_pc pc
 
 let module_infos (symbols : t) : debug_module_info list =
   Hashtbl.to_seq_values symbols.module_info_tbl |> List.of_seq
 
-let find_event_opt_near_pos (symbols : t) (modname : string) (pos : (int * int)) : debug_event option =
-  let modinfo = Hashtbl.find_opt symbols.module_info_tbl modname in
-  match modinfo with
-  | Some modinfo -> (
-      let events = modinfo.events in
-      let (line1, col1) = pos in
-      let cmp ev =
-        let (line2, col2) = line_column_of_event ev in
-        if line1 = line2 then col1 - col2 else line1 - line2
-      in
-      let rec bsearch lo hi =
-        if lo >= hi then hi
-        else begin
-          let pivot = (lo + hi) / 2 in
-          let ev = events.(pivot) in
-          let r = cmp ev in
-          if r > 0 then bsearch (pivot + 1) hi
-          else bsearch lo pivot
-        end
-      in
-      let i = bsearch 0 (Array.length events) in
-      let j = i -1 in
-      if i >= Array.length events || j < 0 then
-        let ev = events.(if j < 0 then i else j) in
-        let cr = cmp ev in
-        match ev.ev_kind with
-        | Event_before when cr <= 0 -> Some ev
-        | Event_after _ when cr >= 0 -> Some ev
-        | _ -> None
-      else
-        let ev1 = events.(j) in
-        let ev2 = events.(i) in
-        let cr1 = cmp ev1 in
-        let cr2 = cmp ev2 in
-        match ev1.ev_kind, ev2.ev_kind with
-        | _, Event_after _ when cr2 >= 0 -> Some ev2
-        | Event_before, _ when cr1 <= 0 -> Some ev1
-        | Event_after _, Event_before when cr1 >= 0 && cr2 <= 0 ->
-          let p1 = pos_of_event ev1 in
-          let p2 = pos_of_event ev2 in
-          let l, c = line1, col1 in
-          let l1, c1 = line_column_of_pos p1 in
-          let l2, c2 = line_column_of_pos p2 in
-          Some (
-            if l1 = l2 then (
-              if abs (c1 - c) < (c2 - c) then ev1 else ev2
-            )
-            else (
-              if abs (l1 - l) < (l2 - l) then ev1 else ev2
-            )
-          )
-        | Event_after _, _ when cr1 >= 0 -> Some ev1
-        | _, Event_before when cr2 <= 0 -> Some ev2
-        | _ -> None
-    )
-  | None ->
-    None
+(* TODO: Check whitespace and line end *)
+let find_event_opt_near_pos (events : Instruct.debug_event array) (pos : (int * int)) : Instruct.debug_event option =
+  let (line1, col1) = pos in
+  let cmp ev =
+    let (line2, col2) = line_column_of_event ev in
+    if line1 = line2 then col1 - col2 else line1 - line2
+  in
+  let rec bsearch lo hi =
+    if lo >= hi then hi
+    else begin
+      let pivot = (lo + hi) / 2 in
+      let ev = events.(pivot) in
+      let r = cmp ev in
+      if r > 0 then bsearch (pivot + 1) hi
+      else bsearch lo pivot
+    end
+  in
+  let i = bsearch 0 (Array.length events) in
+  let j = i -1 in
+  if i >= Array.length events || j < 0 then
+    let ev = events.(if j < 0 then i else j) in
+    let cr = cmp ev in
+    match ev.ev_kind with
+    | Event_before when cr <= 0 -> Some ev
+    | Event_after _ when cr >= 0 -> Some ev
+    | _ -> None
+  else
+    let ev1 = events.(j) in
+    let ev2 = events.(i) in
+    let cr1 = cmp ev1 in
+    let cr2 = cmp ev2 in
+    match ev1.ev_kind, ev2.ev_kind with
+    | _, Event_after _ when cr2 >= 0 -> Some ev2
+    | Event_before, _ when cr1 <= 0 -> Some ev1
+    | Event_after _, Event_before when cr1 >= 0 && cr2 <= 0 ->
+      let p1 = pos_of_event ev1 in
+      let p2 = pos_of_event ev2 in
+      let l, c = line1, col1 in
+      let l1, c1 = line_column_of_pos p1 in
+      let l2, c2 = line_column_of_pos p2 in
+      Some (
+        if l1 = l2 then (
+          if abs (c1 - c) < (c2 - c) then ev1 else ev2
+        )
+        else (
+          if abs (l1 - l) < (l2 - l) then ev1 else ev2
+        )
+      )
+    | Event_after _, _ when cr1 >= 0 -> Some ev1
+    | _, Event_before when cr2 <= 0 -> Some ev2
+    | _ -> None

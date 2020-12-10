@@ -1,10 +1,15 @@
 module Symbols = Symbols_411
 module Debug_conn = Debug_conn_411
 
+open Debug_protocol_ex
+
 let src = Logs.Src.create "earlybird.Debug_agent_411"
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 
 type t = {
+  init_args : Initialize_command.Arguments.t;
+  launch_args : Launch_command.Arguments.t;
+  capabilities : Capabilities.t;
   symbols : Symbols.t;
   conn : Debug_conn.t;
   time_slice : int;
@@ -17,7 +22,7 @@ type t = {
   mutable pendings : (unit -> unit Lwt.t) list;
 }
 
-let create ~symbols  ~sock ?(time_slice=1024) () =
+let create ~init_args ~launch_args ~capabilities ~symbols  ~sock ?(time_slice=1024) () =
   let (stopped_e, emit_stopped) = React.E.create () in
   let (pause_flag_s, set_pause_flag) = React.S.create true in
   let (wakeup_e, emit_wakeup) = React.E.create () in
@@ -26,6 +31,9 @@ let create ~symbols  ~sock ?(time_slice=1024) () =
   let out_chan = Lwt_io.of_fd ~mode:Lwt_io.output sock in
   let conn = Debug_conn.create in_chan out_chan in
   Lwt.return {
+    init_args;
+    launch_args;
+    capabilities;
     symbols;
     conn;
     time_slice;
@@ -109,26 +117,58 @@ let start agent =
 let stopped_event agent =
   agent.stopped_e
 
-let loaded_sources agent =
-  agent.symbols.module_info_tbl
-  |> Hashtbl.to_seq_values
-  |> Seq.filter_map (fun mi -> Some mi.Symbols.source)
-  |> List.of_seq
-
 let push_pending agent p =
   agent.pendings <- p :: agent.pendings;
   agent.emit_wakeup ()
 
-let debug_set_breakpoint agent src ~line ?column () =
-  ignore src;
-  ignore line;
-  ignore column;
-  push_pending agent (fun () ->
-    Lwt.return_unit
-  )
+let find_module_info_by_source agent src =
+  Symbols.module_infos agent
+  |> List.find (fun mi -> match mi.Symbols.source with Some s when s = src -> true | _ -> false)
 
-let debug_run agent =
+let resolve_source agent src =
+  ignore agent;
+  Lwt.return src
+
+let resolve_breakpoint agent src line ?column () =
+  let mi = find_module_info_by_source agent.symbols src in
+  let ev = Symbols.find_event_opt_near_pos mi.events (line, column |> Option.value ~default:0) in
+  ev |> Option.map (fun ev -> Debug_conn.{frag = mi.frag; pos = ev.Instruct.ev_pos})
+
+let loaded_sources agent =
+  let sources = (
+    agent.symbols.module_info_tbl
+    |> Hashtbl.to_seq_values
+    |> Seq.filter_map (fun mi -> Some mi.Symbols.source)
+    |> Seq.map (fun it -> Source.make ~path:it ())
+    |> List.of_seq
+  ) in
+  Lwt.return sources
+
+let threads agent =
+  ignore agent;
+  let main_thread = Thread.make ~id:0 ~name:"main" in
+  Lwt.return [main_thread]
+
+let continue_main_thread agent =
   agent.set_pause_flag false
 
-let debug_pause agent =
+let pause_main_thread agent =
   agent.set_pause_flag true
+
+let set_breakpoint agent pc =
+  let (promise, resolver) = Lwt.task () in
+  push_pending agent (fun () ->
+    Debug_conn.set_breakpoint agent.conn pc;%lwt
+    Lwt.wakeup_later resolver ();
+    Lwt.return_unit
+  );
+  promise
+
+let remove_breakpoint agent pc =
+  let (promise, resolver) = Lwt.task () in
+  push_pending agent (fun () ->
+    Debug_conn.reset_instruction agent.conn pc;%lwt
+    Lwt.wakeup_later resolver ();
+    Lwt.return_unit
+  );
+  promise

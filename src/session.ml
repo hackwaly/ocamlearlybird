@@ -6,9 +6,9 @@ let start rpc =
   Lwt.async (fun () ->
     (try%lwt
       Log.debug (fun m -> m "state_uninitialized");%lwt
-      let%lwt init_args, caps = State_uninitialized.run rpc in
+      let%lwt init_args, capabilities = State_uninitialized.run rpc in
       Log.debug (fun m -> m "state_initialized");%lwt
-      let%lwt (launch_args, debug, terminate) = State_initialized.run ~init_args ~caps rpc in
+      let%lwt (launch_args, debug, terminate) = State_initialized.run ~init_args ~capabilities rpc in
       (match debug with
         | No_debug -> (
           Log.debug (fun m -> m "state_no_debug");%lwt

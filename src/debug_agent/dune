@@ -1,3 +1,0 @@
-(library
- (name debug_agent)
- (libraries debug_agent_411))

@@ -75,13 +75,13 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
     )
   )
 
-let launch ~rpc arg =
+let launch ~rpc ~init_args ~capabilities ~launch_args =
   let open Launch_command.Arguments in
-  if arg.no_debug then (
-    let%lwt terminate = spawn ~rpc ?cwd:arg.cwd arg.program arg.arguments in
-    Lwt.return (arg, No_debug, terminate)
+  if launch_args.no_debug then (
+    let%lwt terminate = spawn ~rpc ?cwd:launch_args.cwd launch_args.program launch_args.arguments in
+    Lwt.return (launch_args, No_debug, terminate)
   ) else (
-    let symbols = Option.value ~default:arg.program arg.symbols in
+    let symbols = Option.value ~default:launch_args.program launch_args.symbols in
     let lsock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
     Lwt_unix.(bind lsock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
     Lwt_unix.listen lsock 1;
@@ -92,23 +92,21 @@ let launch ~rpc arg =
       Lwt.wakeup resolver fd;
       Lwt.return_unit
     );
-    let%lwt terminate = spawn ~rpc ~debug_sock:lsock ?cwd:arg.cwd arg.program arg.arguments in
+    let%lwt terminate = spawn ~rpc ~debug_sock:lsock ?cwd:launch_args.cwd launch_args.program launch_args.arguments in
     let%lwt sock = promise in
-    let%lwt agent = Debug_agent.create ~symbols ~sock () in
-    Lwt.return (arg, Debug agent, terminate)
+    let%lwt agent = Debug_agent.create ~init_args ~launch_args ~capabilities ~symbols ~sock () in
+    Lwt.return (launch_args, Debug agent, terminate)
   )
 
-let run ~init_args ~caps rpc =
-  ignore init_args;
-  ignore caps;
+let run ~init_args ~capabilities rpc =
   let (promise, resolver) = Lwt.task () in
   let prevent_reenter () =
     Debug_rpc.remove_command_handler rpc (module Launch_command);
     Debug_rpc.remove_command_handler rpc (module Attach_command);
   in
-  Debug_rpc.set_command_handler rpc (module Launch_command) (fun arg ->
+  Debug_rpc.set_command_handler rpc (module Launch_command) (fun launch_args ->
     prevent_reenter ();
-    let%lwt launched = launch ~rpc arg in
+    let%lwt launched = launch ~rpc ~init_args ~capabilities ~launch_args in
     Lwt.wakeup_later resolver launched;
     Lwt.return_unit
   );
