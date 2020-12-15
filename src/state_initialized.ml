@@ -19,11 +19,10 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
   in
   if curr_env |> String_dict.mem "" then
     Log.warn (fun m -> m "CAML_DEBUG_SOCKET already in env")
-  else Lwt.return_unit ;%lwt
+  else Lwt.return_unit;%lwt
   let curr_env =
     match debug_sock with
-    | None ->
-        curr_env
+    | None -> curr_env
     | Some sock ->
         String_dict.add "CAML_DEBUG_SOCKET"
           (Lwt_util.getstringsockname sock)
@@ -33,10 +32,8 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
     List.fold_left
       (fun curr_env (k, v) ->
         match v with
-        | None ->
-            String_dict.remove k curr_env
-        | Some v ->
-            String_dict.add k v curr_env)
+        | None -> String_dict.remove k curr_env
+        | Some v -> String_dict.add k v curr_env)
       curr_env
       ( env
       |> Option.value ~default:String_opt_dict.empty
@@ -58,33 +55,35 @@ let spawn ~rpc ?debug_sock ?env ?cwd prog args =
         in
         let proc = Lwt_process.open_process_full ~env cmd in
         Lwt.async
-          (redir_output proc#stdout Output_event.Payload.Category.Stdout) ;
+          (redir_output proc#stdout Output_event.Payload.Category.Stdout);
         Lwt.async
-          (redir_output proc#stderr Output_event.Payload.Category.Stderr) ;
+          (redir_output proc#stderr Output_event.Payload.Category.Stderr);
         Lwt.async (fun () ->
             let%lwt status = proc#status in
             match status with
             | WEXITED code | WSIGNALED code | WSTOPPED code ->
                 Debug_rpc.send_event rpc
                   (module Terminated_event)
-                  Terminated_event.Payload.(make ()) ;%lwt
+                  Terminated_event.Payload.(make ());%lwt
                 Debug_rpc.send_event rpc
                   (module Exited_event)
-                  Exited_event.Payload.(make ~exit_code:code)) ;
+                  Exited_event.Payload.(make ~exit_code:code));
         Lwt.return proc)
   in
   Lwt.return (fun force ->
-      if force then (proc#terminate ; Lwt.return_unit)
+      if force then (
+        proc#terminate;
+        Lwt.return_unit )
       else (
         if Sys.win32 then
           Sys.command (Format.sprintf "taskkill /pid %d" proc#pid) |> ignore
-        else proc#kill 2 ;
+        else proc#kill 2;
         let%lwt _ = proc#status in
         Lwt.return_unit ))
 
 let launch ~rpc ~init_args ~capabilities ~launch_args =
-  ignore init_args ;
-  ignore capabilities ;
+  ignore init_args;
+  ignore capabilities;
   let open Launch_command.Arguments in
   if launch_args.no_debug then
     let%lwt terminate =
@@ -93,12 +92,14 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
     Lwt.return (launch_args, No_debug, terminate)
   else
     let lsock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
-    Lwt_unix.(bind lsock Unix.(ADDR_INET (inet_addr_loopback, 0))) ;%lwt
-    Lwt_unix.listen lsock 1 ;
+    Lwt_unix.(bind lsock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
+    Lwt_unix.listen lsock 1;
     let promise, resolver = Lwt.wait () in
     Lwt.async (fun () ->
         let%lwt fd, _ = Lwt_unix.accept lsock in
-        Lwt_unix.close lsock ;%lwt Lwt.wakeup resolver fd ; Lwt.return_unit) ;
+        Lwt_unix.close lsock;%lwt
+        Lwt.wakeup resolver fd;
+        Lwt.return_unit);
     let%lwt terminate =
       spawn ~rpc ~debug_sock:lsock ?cwd:launch_args.cwd launch_args.program
         launch_args.arguments
@@ -107,13 +108,16 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
     let%lwt agent =
       Ocaml_debug_agent.(
         start
-          { remote_debugger_version= OCaml_410
-          ; debug_connnection=
-              { in_= Lwt_io.of_fd ~mode:Lwt_io.input sock
-              ; out= Lwt_io.of_fd ~mode:Lwt_io.output sock }
-          ; time_slice= 1024
-          ; symbols_file=
-              launch_args.symbols |> Option.value ~default:launch_args.program
+          {
+            remote_debugger_version = OCaml_410;
+            debug_connnection =
+              {
+                in_ = Lwt_io.of_fd ~mode:Lwt_io.input sock;
+                out = Lwt_io.of_fd ~mode:Lwt_io.output sock;
+              };
+            time_slice = 1024;
+            symbols_file =
+              launch_args.symbols |> Option.value ~default:launch_args.program;
           })
     in
     Lwt.return (launch_args, Debug agent, terminate)
@@ -121,25 +125,25 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
 let run ~init_args ~capabilities rpc =
   let promise, resolver = Lwt.task () in
   let prevent_reenter () =
-    Debug_rpc.remove_command_handler rpc (module Launch_command) ;
+    Debug_rpc.remove_command_handler rpc (module Launch_command);
     Debug_rpc.remove_command_handler rpc (module Attach_command)
   in
   Debug_rpc.set_command_handler rpc
     (module Launch_command)
     (fun launch_args ->
-      prevent_reenter () ;
+      prevent_reenter ();
       let%lwt launched = launch ~rpc ~init_args ~capabilities ~launch_args in
-      Lwt.wakeup_later resolver launched ;
-      Lwt.return_unit) ;
+      Lwt.wakeup_later resolver launched;
+      Lwt.return_unit);
   Debug_rpc.set_command_handler rpc
     (module Attach_command)
     (fun _ ->
-      prevent_reenter () ;
-      Lwt.fail_with "Unsupported") ;
+      prevent_reenter ();
+      Lwt.fail_with "Unsupported");
   Debug_rpc.set_command_handler rpc
     (module Disconnect_command)
     (fun _ ->
-      Debug_rpc.remove_command_handler rpc (module Disconnect_command) ;
-      Lwt.wakeup_later_exn resolver Exit ;
-      Lwt.return_unit) ;
+      Debug_rpc.remove_command_handler rpc (module Disconnect_command);
+      Lwt.wakeup_later_exn resolver Exit;
+      Lwt.return_unit);
   promise
