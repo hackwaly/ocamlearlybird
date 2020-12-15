@@ -40,11 +40,15 @@ let run ~launch_args ~terminate ~agent rpc =
           while%lwt Option.is_none !resolved do
             match%lwt Ocaml_debug_agent.resolve agent src_pos with
             | Some resolved' ->
-              Log.debug (fun m -> m "resolve success src_pos: %s" (Ocaml_debug_agent.show_src_pos src_pos));%lwt
+                Log.debug (fun m ->
+                    m "resolve success src_pos: %s"
+                      (Ocaml_debug_agent.show_src_pos src_pos));%lwt
                 resolved := Some resolved';
                 Lwt.return ()
             | None ->
-                Log.debug (fun m -> m "resolve failed src_pos: %s" (Ocaml_debug_agent.show_src_pos src_pos));%lwt
+                Log.debug (fun m ->
+                    m "resolve failed src_pos: %s"
+                      (Ocaml_debug_agent.show_src_pos src_pos));%lwt
                 Lwt_react.E.next (Ocaml_debug_agent.symbols_change_event agent);%lwt
                 Lwt.pause ()
           done;%lwt
@@ -141,37 +145,34 @@ let run ~launch_args ~terminate ~agent rpc =
       Lwt.wakeup_later_exn resolver Exit;
       Lwt.return_unit);
   Lwt.async (fun () ->
-      let status_signal = Ocaml_debug_agent.status_signal agent in
-      while%lwt true do
-        let status = Lwt_react.S.value status_signal in
-        let%lwt () =
-          match status with
-          | Exited ->
-              Debug_rpc.send_event rpc
-                (module Terminated_event)
-                Terminated_event.Payload.(make ())
-          | Entrypoint ->
-              Debug_rpc.send_event rpc
-                (module Stopped_event)
-                Stopped_event.Payload.(
-                  make ~reason:Entry ~all_threads_stopped:(Some true) ())
-          | Breakpoint ->
-              Debug_rpc.send_event rpc
-                (module Stopped_event)
-                Stopped_event.Payload.(
-                  make ~reason:Breakpoint ~all_threads_stopped:(Some true) ())
-          | Uncaught_exc ->
-              Debug_rpc.send_event rpc
-                (module Stopped_event)
-                Stopped_event.Payload.(
-                  make ~reason:Exception ~all_threads_stopped:(Some true) ())
-          | Running -> Lwt.return ()
-        in
-        Lwt_react.E.next
-          ( status_signal |> Lwt_react.S.changes
-          |> Lwt_react.E.fmap (function
-               | Ocaml_debug_agent.Running -> None
-               | _ -> Some ()) )
-      done);
+      let%lwt signal =
+        Ocaml_debug_agent.status_signal agent
+        |> Lwt_react.S.map_s (fun status ->
+               match status with
+               | Ocaml_debug_agent.Exited ->
+                   Debug_rpc.send_event rpc
+                     (module Terminated_event)
+                     Terminated_event.Payload.(make ())
+               | Entrypoint ->
+                   Debug_rpc.send_event rpc
+                     (module Stopped_event)
+                     Stopped_event.Payload.(
+                       make ~reason:Entry ~all_threads_stopped:(Some true) ())
+               | Breakpoint ->
+                   Debug_rpc.send_event rpc
+                     (module Stopped_event)
+                     Stopped_event.Payload.(
+                       make ~reason:Breakpoint ~all_threads_stopped:(Some true)
+                         ())
+               | Uncaught_exc ->
+                   Debug_rpc.send_event rpc
+                     (module Stopped_event)
+                     Stopped_event.Payload.(
+                       make ~reason:Exception ~all_threads_stopped:(Some true)
+                         ())
+               | Running -> Lwt.return ())
+      in
+      Lwt_react.S.keep signal;
+      Lwt.return ());
   Lwt.async (fun () -> Debug_rpc.send_event rpc (module Initialized_event) ());
   promise
