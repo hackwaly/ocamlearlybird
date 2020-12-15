@@ -67,7 +67,7 @@ let run ~launch_args ~terminate ~agent rpc =
                           make ~id:(Some id) ~verified:true
                             ~source:
                               (Some Source.(make ~path:(Some src_pos.source) ()))
-                            ~line:(Some (src_pos.line + 1))
+                            ~line:(Some src_pos.line)
                             ~column:
                               ( if src_pos.column = 0 then None
                               else Some src_pos.column )
@@ -78,14 +78,14 @@ let run ~launch_args ~terminate ~agent rpc =
                   Breakpoint_event.Payload.(
                     make ~reason:Changed
                       ~breakpoint:
-                        (Breakpoint.make ~id:(Some id) ~verified:true ()))
+                        (Breakpoint.make ~id:(Some id) ~verified:false ()))
               else
                 Debug_rpc.send_event rpc
                   (module Breakpoint_event)
                   Breakpoint_event.Payload.(
                     make ~reason:Removed
                       ~breakpoint:
-                        (Breakpoint.make ~id:(Some id) ~verified:true ()));%lwt
+                        (Breakpoint.make ~id:(Some id) ~verified:false ()));%lwt
               let%lwt _ =
                 Lwt_react.E.next (active_signal |> Lwt_react.S.changes)
               in
