@@ -111,7 +111,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
           ; debug_connnection=
               { in_= Lwt_io.of_fd ~mode:Lwt_io.input sock
               ; out= Lwt_io.of_fd ~mode:Lwt_io.output sock }
-          ; time_slice= 256
+          ; time_slice= 1024
           ; symbols_file=
               launch_args.symbols |> Option.value ~default:launch_args.program
           })
