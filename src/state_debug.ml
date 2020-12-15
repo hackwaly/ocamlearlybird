@@ -40,9 +40,11 @@ let run ~launch_args ~terminate ~agent rpc =
           while%lwt Option.is_none !resolved do
             match%lwt Ocaml_debug_agent.resolve agent src_pos with
             | Some resolved' ->
+              Log.debug (fun m -> m "resolve success src_pos: %s" (Ocaml_debug_agent.show_src_pos src_pos));%lwt
                 resolved := Some resolved';
                 Lwt.return ()
             | None ->
+                Log.debug (fun m -> m "resolve failed src_pos: %s" (Ocaml_debug_agent.show_src_pos src_pos));%lwt
                 Lwt_react.E.next (Ocaml_debug_agent.symbols_change_event agent);%lwt
                 Lwt.pause ()
           done;%lwt
@@ -65,7 +67,7 @@ let run ~launch_args ~terminate ~agent rpc =
                           make ~id:(Some id) ~verified:true
                             ~source:
                               (Some Source.(make ~path:(Some src_pos.source) ()))
-                            ~line:(Some src_pos.line)
+                            ~line:(Some (src_pos.line + 1))
                             ~column:
                               ( if src_pos.column = 0 then None
                               else Some src_pos.column )
