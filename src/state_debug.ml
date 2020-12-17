@@ -4,10 +4,22 @@ let src = Logs.Src.create "earlybird.State_debug"
 
 module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
 
+module StringToMultiIntMap = CCMultiMap.Make (CCString) (CCInt)
+
+type breakpoint_desc = {
+  id : int;
+  src_pos : Ocaml_debug_agent.src_pos;
+  is_line_brekpoint : bool;
+  loop_promise : unit Lwt.t option ref;
+  resolved :
+    (Ocaml_debug_agent.src_pos * Ocaml_debug_agent.Breakpoint.t) option ref;
+}
+
 let run ~launch_args ~terminate ~agent rpc =
   let promise, resolver = Lwt.task () in
   let alloc_breakpoint_id = Unique_id.make_alloc () in
   let breakpoint_tbl = Hashtbl.create 0 in
+  let module_breakpoints_map = ref StringToMultiIntMap.empty in
   Debug_rpc.set_command_handler rpc
     (module Loaded_sources_command)
     (fun () ->
@@ -24,26 +36,38 @@ let run ~launch_args ~terminate ~agent rpc =
   Debug_rpc.set_command_handler rpc
     (module Set_breakpoints_command)
     (fun args ->
-      let set_breakpoint bp =
+      let source_path = args.source.path |> Option.get in
+      let make_desc src_bp =
+        let id = alloc_breakpoint_id () in
         let src_pos =
           Ocaml_debug_agent.
             {
-              source = args.source.path |> Option.get;
-              line = bp.Source_breakpoint.line;
-              column = bp.Source_breakpoint.column |> Option.value ~default:0;
+              source = source_path;
+              line = src_bp.Source_breakpoint.line;
+              column =
+                src_bp.Source_breakpoint.column |> Option.value ~default:0;
             }
         in
-        let id = alloc_breakpoint_id () in
-        let watch_loop () =
+        let is_line_brekpoint =
+          src_bp.Source_breakpoint.column |> Option.is_none
+        in
+        let resolved = ref None in
+        { id; src_pos; is_line_brekpoint; loop_promise = ref None; resolved }
+      in
+      let set_breakpoint desc =
+        let src_pos = desc.src_pos in
+        let id = desc.id in
+        let resolved = desc.resolved in
+        let loop () =
           Lwt.pause ();%lwt
-          let resolved = ref None in
           while%lwt Option.is_none !resolved do
             match%lwt Ocaml_debug_agent.resolve agent src_pos with
-            | Some resolved' ->
+            | Some (pc, src_pos') ->
                 Log.debug (fun m ->
                     m "resolve success src_pos: %s"
                       (Ocaml_debug_agent.show_src_pos src_pos));%lwt
-                resolved := Some resolved';
+                let breakpoint = Ocaml_debug_agent.Breakpoint.make ~id ~pc () in
+                resolved := Some (src_pos', breakpoint);
                 Lwt.return ()
             | None ->
                 Log.debug (fun m ->
@@ -52,60 +76,78 @@ let run ~launch_args ~terminate ~agent rpc =
                 Lwt_react.E.next (Ocaml_debug_agent.symbols_change_event agent);%lwt
                 Lwt.pause ()
           done;%lwt
-          let pc, src_pos = !resolved |> Option.get in
-          let breakpoint = Ocaml_debug_agent.Breakpoint.make ~pc () in
+          let resolved_src_pos, breakpoint = !resolved |> Option.get in
           Ocaml_debug_agent.set_breakpoint agent breakpoint;%lwt
-          try%lwt
-            while%lwt true do
-              let active_signal =
-                Ocaml_debug_agent.Breakpoint.active_signal breakpoint
-              in
-              let active = Lwt_react.S.value active_signal in
-              if active then
-                Debug_rpc.send_event rpc
-                  (module Breakpoint_event)
-                  Breakpoint_event.Payload.(
-                    make ~reason:Changed
-                      ~breakpoint:
-                        Breakpoint.(
-                          make ~id:(Some id) ~verified:true
-                            ~source:
-                              (Some Source.(make ~path:(Some src_pos.source) ()))
-                            ~line:(Some src_pos.line)
-                            ~column:
-                              ( if src_pos.column = 0 then None
-                              else Some src_pos.column )
-                            ()))
-              else if Hashtbl.mem breakpoint_tbl id then
-                Debug_rpc.send_event rpc
-                  (module Breakpoint_event)
-                  Breakpoint_event.Payload.(
-                    make ~reason:Changed
-                      ~breakpoint:
-                        (Breakpoint.make ~id:(Some id) ~verified:false ()))
-              else
-                Debug_rpc.send_event rpc
-                  (module Breakpoint_event)
-                  Breakpoint_event.Payload.(
-                    make ~reason:Removed
-                      ~breakpoint:
-                        (Breakpoint.make ~id:(Some id) ~verified:false ()));%lwt
-              let%lwt _ =
-                Lwt_react.E.next (active_signal |> Lwt_react.S.changes)
-              in
-              Lwt.return ()
-            done
-          with Lwt.Canceled ->
-            Ocaml_debug_agent.remove_breakpoint agent breakpoint
+          while%lwt true do
+            let active_signal =
+              Ocaml_debug_agent.Breakpoint.active_signal breakpoint
+            in
+            let active = Lwt_react.S.value active_signal in
+            if active then
+              Debug_rpc.send_event rpc
+                (module Breakpoint_event)
+                Breakpoint_event.Payload.(
+                  make ~reason:Changed
+                    ~breakpoint:
+                      Breakpoint.(
+                        make ~id:(Some id) ~verified:true
+                          ~source:
+                            (Some
+                               Source.(
+                                 make ~path:(Some resolved_src_pos.source) ()))
+                          ~line:
+                            (Some
+                               ( if desc.is_line_brekpoint then src_pos.line
+                               else resolved_src_pos.line ))
+                          ~column:
+                            ( if desc.is_line_brekpoint then None
+                            else if resolved_src_pos.column = 0 then None
+                            else Some resolved_src_pos.column )
+                          ()))
+            else
+              Debug_rpc.send_event rpc
+                (module Breakpoint_event)
+                Breakpoint_event.Payload.(
+                  make ~reason:Changed
+                    ~breakpoint:
+                      (Breakpoint.make ~id:(Some id) ~verified:false ()));%lwt
+            let%lwt _ =
+              Lwt_react.E.next (active_signal |> Lwt_react.S.changes)
+            in
+            Lwt.return ()
+          done
         in
-        let watch_promise = watch_loop () in
-        Lwt.async (fun () -> watch_promise);
-        Hashtbl.replace breakpoint_tbl id watch_promise;
+        let loop_promise = loop () in
+        desc.loop_promise := Some loop_promise;
+        Lwt.async (fun () ->
+            try%lwt loop_promise with Lwt.Canceled -> Lwt.return ());
+        Hashtbl.replace breakpoint_tbl id desc;
+        module_breakpoints_map :=
+          StringToMultiIntMap.add !module_breakpoints_map source_path id;
         Breakpoint.make ~id:(Some id) ~verified:false ()
       in
-      let breakpoints =
-        args.breakpoints |> Option.value ~default:[] |> List.map set_breakpoint
+      let prev =
+        StringToMultiIntMap.find !module_breakpoints_map source_path
+        |> List.map (fun id -> Hashtbl.find breakpoint_tbl id)
       in
+      Lwt_list.iter_s
+        (fun desc ->
+          Hashtbl.remove breakpoint_tbl desc.id;
+          if%lwt Lwt.return (Option.is_some desc.resolved.contents) then (
+            let _, bp = desc.resolved.contents |> Option.get in
+            Ocaml_debug_agent.remove_breakpoint agent bp;%lwt
+            desc.resolved := None;
+            Lwt.return () );%lwt
+          if Option.is_some desc.loop_promise.contents then
+            Lwt.cancel (desc.loop_promise.contents |> Option.get);
+          Lwt.return ())
+        prev;%lwt
+      module_breakpoints_map :=
+        StringToMultiIntMap.remove_all !module_breakpoints_map source_path;
+      let next =
+        args.breakpoints |> Option.value ~default:[] |> List.map make_desc
+      in
+      let breakpoints = next |> List.map set_breakpoint in
       Lwt.return Set_breakpoints_command.Result.(make ~breakpoints ()));
   Debug_rpc.set_command_handler rpc
     (module Set_exception_breakpoints_command)

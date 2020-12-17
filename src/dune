@@ -18,4 +18,5 @@
   (pps lwt_ppx ppx_deriving_yojson ppx_deriving.show))
  (libraries cmdliner lwt lwt.unix logs logs.cli fmt fmt.cli fmt.tty logs.fmt
    dap.types dap.rpc_lwt astring compiler-libs.common compiler-libs.bytecomp
-   ppx_deriving_yojson.runtime react lwt_react ocaml_debug_agent))
+   ppx_deriving_yojson.runtime react lwt_react ocaml_debug_agent
+   containers containers-data))
