@@ -23,9 +23,12 @@ let run ~launch_args ~terminate ~agent rpc =
   Debug_rpc.set_command_handler rpc
     (module Loaded_sources_command)
     (fun () ->
-      let%lwt sources = Ocaml_debug_agent.sources agent in
+      let%lwt module_infos = Ocaml_debug_agent.module_info_list agent in
       let sources =
-        sources |> List.map (fun source -> Source.make ~path:(Some source) ())
+        let open Ocaml_debug_agent in
+        module_infos
+        |> List.filter (fun mi -> mi.resolved_source |> Option.is_some)
+        |> List.map (fun mi -> Source.make ~path:mi.resolved_source ())
       in
       Loaded_sources_command.Result.make ~sources () |> Lwt.return);
   Debug_rpc.set_command_handler rpc
@@ -33,6 +36,35 @@ let run ~launch_args ~terminate ~agent rpc =
     (fun () ->
       let main_thread = Thread.make ~id:0 ~name:"main" in
       Lwt.return (Threads_command.Result.make ~threads:[ main_thread ] ()));
+  Debug_rpc.set_command_handler rpc
+    (module Stack_trace_command)
+    (fun _ ->
+      let%lwt frames = Ocaml_debug_agent.stack_trace agent in
+      let%lwt stack_frames =
+        frames
+        |> Lwt_list.map_s (fun fr ->
+               let open Ocaml_debug_agent in
+               let open Instruct in
+               let lexing_pos =
+                 Ocaml_debug_agent.lexing_pos_of_debug_event fr.debug_event
+               in
+               let%lwt module_info =
+                 Ocaml_debug_agent.find_module_info_by_id agent
+                   fr.debug_event.ev_module
+               in
+               let source =
+                 Source.(make ~path:module_info.resolved_source ())
+               in
+               let frame =
+                 Stack_frame.(
+                   make ~id:fr.index ~name:fr.debug_event.ev_defname
+                     ~source:(Some source) ~line:lexing_pos.pos_lnum
+                     ~column:(lexing_pos.pos_cnum - lexing_pos.pos_bol)
+                     ())
+               in
+               Lwt.return frame)
+      in
+      Lwt.return Stack_trace_command.Result.(make ~stack_frames ()));
   Debug_rpc.set_command_handler rpc
     (module Set_breakpoints_command)
     (fun args ->
