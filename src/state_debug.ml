@@ -45,9 +45,6 @@ let run ~launch_args ~terminate ~agent rpc =
         |> Lwt_list.map_s (fun fr ->
                let open Ocaml_debug_agent in
                let open Instruct in
-               let lexing_pos =
-                 Ocaml_debug_agent.lexing_pos_of_debug_event fr.debug_event
-               in
                let%lwt module_info =
                  Ocaml_debug_agent.find_module_info_by_id agent
                    fr.debug_event.ev_module
@@ -56,15 +53,35 @@ let run ~launch_args ~terminate ~agent rpc =
                  Source.(make ~path:module_info.resolved_source ())
                in
                let frame =
-                 Stack_frame.(
-                   make ~id:fr.index ~name:fr.debug_event.ev_defname
-                     ~source:(Some source) ~line:lexing_pos.pos_lnum
-                     ~column:(lexing_pos.pos_cnum - lexing_pos.pos_bol)
-                     ())
+                 if fr.index = 0 then
+                   let lexing_pos =
+                     Ocaml_debug_agent.lexing_pos_of_debug_event fr.debug_event
+                   in
+                   Stack_frame.(
+                     make ~id:fr.index ~name:fr.debug_event.ev_defname
+                       ~source:(Some source) ~line:lexing_pos.pos_lnum
+                       ~column:(lexing_pos.pos_cnum - lexing_pos.pos_bol + 1)
+                       ())
+                 else
+                   let start_pos = fr.debug_event.ev_loc.loc_start in
+                   let end_pos = fr.debug_event.ev_loc.loc_end in
+                   Stack_frame.(
+                     make ~id:fr.index ~name:fr.debug_event.ev_defname
+                       ~source:(Some source) ~line:start_pos.pos_lnum
+                       ~column:(start_pos.pos_cnum - start_pos.pos_bol + 1)
+                       ~end_line:(Some end_pos.pos_lnum)
+                       ~end_column:
+                         (Some (end_pos.pos_cnum - end_pos.pos_bol + 1))
+                       ())
                in
                Lwt.return frame)
       in
-      Lwt.return Stack_trace_command.Result.(make ~stack_frames ()));
+      Lwt.return
+        Stack_trace_command.Result.(
+          make ~stack_frames ~total_frames:(Some (List.length frames)) ()));
+  Debug_rpc.set_command_handler rpc
+    (module Scopes_command)
+    (fun _ -> Lwt.return Scopes_command.Result.(make ()));
   Debug_rpc.set_command_handler rpc
     (module Set_breakpoints_command)
     (fun args ->
