@@ -1,4 +1,6 @@
 open Debug_protocol_ex
+open Ocaml_debug_agent
+module Dap_breakpoint = Debug_protocol_ex.Breakpoint
 
 let src = Logs.Src.create "earlybird.State_debug"
 
@@ -8,11 +10,10 @@ module StringToMultiIntMap = CCMultiMap.Make (CCString) (CCInt)
 
 type breakpoint_desc = {
   id : int;
-  src_pos : Ocaml_debug_agent.src_pos;
+  src_pos : src_pos;
   is_line_brekpoint : bool;
   loop_promise : unit Lwt.t option ref;
-  resolved :
-    (Ocaml_debug_agent.src_pos * Ocaml_debug_agent.Breakpoint.t) option ref;
+  resolved : (src_pos * Breakpoint.t) option ref;
 }
 
 let run ~launch_args ~terminate ~agent rpc =
@@ -89,13 +90,11 @@ let run ~launch_args ~terminate ~agent rpc =
       let make_desc src_bp =
         let id = alloc_breakpoint_id () in
         let src_pos =
-          Ocaml_debug_agent.
-            {
-              source = source_path;
-              line = src_bp.Source_breakpoint.line;
-              column =
-                src_bp.Source_breakpoint.column |> Option.value ~default:0;
-            }
+          {
+            source = source_path;
+            line = src_bp.Source_breakpoint.line;
+            column = src_bp.Source_breakpoint.column |> Option.value ~default:0;
+          }
         in
         let is_line_brekpoint =
           src_bp.Source_breakpoint.column |> Option.is_none
@@ -138,7 +137,7 @@ let run ~launch_args ~terminate ~agent rpc =
                 Breakpoint_event.Payload.(
                   make ~reason:Changed
                     ~breakpoint:
-                      Breakpoint.(
+                      Dap_breakpoint.(
                         make ~id:(Some id) ~verified:true
                           ~source:
                             (Some
@@ -159,7 +158,7 @@ let run ~launch_args ~terminate ~agent rpc =
                 Breakpoint_event.Payload.(
                   make ~reason:Changed
                     ~breakpoint:
-                      (Breakpoint.make ~id:(Some id) ~verified:false ()));%lwt
+                      (Dap_breakpoint.make ~id:(Some id) ~verified:false ()));%lwt
             let%lwt _ =
               Lwt_react.E.next (active_signal |> Lwt_react.S.changes)
             in
@@ -173,7 +172,7 @@ let run ~launch_args ~terminate ~agent rpc =
         Hashtbl.replace breakpoint_tbl id desc;
         module_breakpoints_map :=
           StringToMultiIntMap.add !module_breakpoints_map source_path id;
-        Breakpoint.make ~id:(Some id) ~verified:false ()
+        Dap_breakpoint.make ~id:(Some id) ~verified:false ()
       in
       let prev =
         StringToMultiIntMap.find !module_breakpoints_map source_path
@@ -219,6 +218,11 @@ let run ~launch_args ~terminate ~agent rpc =
       Ocaml_debug_agent.pause agent;%lwt
       Lwt.return ());
   Debug_rpc.set_command_handler rpc
+    (module Step_in_command)
+    (fun _ ->
+      Ocaml_debug_agent.step_in agent;%lwt
+      Lwt.return ());
+  Debug_rpc.set_command_handler rpc
     (module Terminate_command)
     (fun _ ->
       Debug_rpc.remove_command_handler rpc (module Terminate_command);
@@ -240,27 +244,22 @@ let run ~launch_args ~terminate ~agent rpc =
         Ocaml_debug_agent.status_signal agent
         |> Lwt_react.S.map_s (fun status ->
                match status with
-               | Ocaml_debug_agent.Exited ->
+               | Exited ->
                    Debug_rpc.send_event rpc
                      (module Terminated_event)
                      Terminated_event.Payload.(make ())
-               | Entrypoint ->
+               | Stopped reason ->
                    Debug_rpc.send_event rpc
                      (module Stopped_event)
                      Stopped_event.Payload.(
-                       make ~reason:Entry ~all_threads_stopped:(Some true) ())
-               | Breakpoint ->
-                   Debug_rpc.send_event rpc
-                     (module Stopped_event)
-                     Stopped_event.Payload.(
-                       make ~reason:Breakpoint ~all_threads_stopped:(Some true)
-                         ())
-               | Uncaught_exc ->
-                   Debug_rpc.send_event rpc
-                     (module Stopped_event)
-                     Stopped_event.Payload.(
-                       make ~reason:Exception ~all_threads_stopped:(Some true)
-                         ())
+                       make ~reason:(
+                         match reason with
+                         | Entry -> Entry
+                         | Step -> Step
+                         | Pause -> Pause
+                         | Breakpoint -> Breakpoint
+                         | Exception -> Exception
+                       ) ~all_threads_stopped:(Some true) ())
                | Running -> Lwt.return ())
       in
       Lwt_react.S.keep signal;
