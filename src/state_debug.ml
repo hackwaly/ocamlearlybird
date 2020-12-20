@@ -244,6 +244,11 @@ let run ~launch_args ~terminate ~agent rpc =
         Ocaml_debug_agent.status_signal agent
         |> Lwt_react.S.map_s (fun status ->
                match status with
+               | Entry ->
+                   Debug_rpc.send_event rpc
+                     (module Stopped_event)
+                     Stopped_event.Payload.(
+                       make ~reason:Entry ~all_threads_stopped:(Some true) ())
                | Exited ->
                    Debug_rpc.send_event rpc
                      (module Terminated_event)
@@ -252,14 +257,14 @@ let run ~launch_args ~terminate ~agent rpc =
                    Debug_rpc.send_event rpc
                      (module Stopped_event)
                      Stopped_event.Payload.(
-                       make ~reason:(
-                         match reason with
-                         | Entry -> Entry
-                         | Step -> Step
-                         | Pause -> Pause
-                         | Breakpoint -> Breakpoint
-                         | Exception -> Exception
-                       ) ~all_threads_stopped:(Some true) ())
+                       make
+                         ~reason:
+                           ( match reason with
+                           | Step -> Step
+                           | Pause -> Pause
+                           | Breakpoint -> Breakpoint
+                           | Exception -> Exception )
+                         ~all_threads_stopped:(Some true) ())
                | Running -> Lwt.return ())
       in
       Lwt_react.S.keep signal;
