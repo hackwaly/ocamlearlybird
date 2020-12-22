@@ -15,7 +15,7 @@ let run ~launch_args ~terminate ~agent rpc =
             Debug_rpc.send_event rpc
               (module Stopped_event)
               Stopped_event.Payload.(
-                make ~reason:Entry ~all_threads_stopped:(Some true) ())
+                make ~reason:Entry ~thread_id:(Some 0) ())
           else Lwt.return ()
       | Exited _ ->
           Debug_rpc.send_event rpc
@@ -27,7 +27,7 @@ let run ~launch_args ~terminate ~agent rpc =
             Stopped_event.Payload.(
               make
                 ~reason:(if breakpoint then Breakpoint else Step)
-                ~all_threads_stopped:(Some true) ())
+                ~thread_id:(Some 0) ())
       | Running -> Lwt.return ()
     in
     process (Ocaml_debug_agent.status_signal agent |> Lwt_react.S.value);%lwt
@@ -51,7 +51,8 @@ let run ~launch_args ~terminate ~agent rpc =
       Lwt.return (Threads_command.Result.make ~threads:[ main_thread ] ()));
   Debug_rpc.set_command_handler rpc
     (module Stack_trace_command)
-    (fun _ ->
+    (fun arg ->
+      assert (arg.thread_id = 0);
       let%lwt frames = Ocaml_debug_agent.stack_trace agent in
       let%lwt stack_frames =
         frames

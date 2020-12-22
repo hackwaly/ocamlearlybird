@@ -11,7 +11,7 @@ let run ~launch_args ~terminate ~agent rpc =
     (fun _ ->
       Ocaml_debug_agent.run agent;
       Lwt.return
-        Continue_command.Result.(make ~all_threads_continued:(Some true) ()));
+        Continue_command.Result.(make ()));
   Debug_rpc.set_command_handler rpc
     (module Pause_command)
     (fun _ ->

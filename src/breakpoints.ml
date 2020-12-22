@@ -51,7 +51,6 @@ let run ~launch_args ~terminate ~agent rpc =
     else Dap_breakpoint.make ~id:(Some desc.id) ~verified:false ()
   in
   let resolve_breakpoint desc =
-    Log.debug (fun m -> m "resolve breakpoint 111");%lwt
     try%lwt
       let%lwt module_ =
         Ocaml_debug_agent.find_module_by_source agent
@@ -61,21 +60,15 @@ let run ~launch_args ~terminate ~agent rpc =
         Module.find_event module_ desc.src_bp.line
           (desc.src_bp.column |> Option.value ~default:0)
       in
-      Log.debug (fun m -> m "resolve breakpoint success");%lwt
       desc.resolved <- Some (module_, event);
       Ocaml_debug_agent.set_breakpoint agent
         { frag = module_.frag; pos = event.ev_pos };
-      Log.debug (fun m -> m "resolve breakpoint success 2");%lwt
       Lwt.return ()
     with
     | Not_found ->
-        Log.debug (fun m -> m "resolve breakpoint fail");%lwt
         unresolved_breakpoints :=
           !unresolved_breakpoints |> Breakpoint_desc_set.add desc;
         Lwt.return ()
-    | _ as ex ->
-        Log.debug (fun m ->
-            m "resolve breakpoint fail %s" (Printexc.to_string ex))
   in
   let resolve_breakpoints () =
     let symbols_updated_stream =
@@ -87,15 +80,12 @@ let run ~launch_args ~terminate ~agent rpc =
             (Breakpoint_desc_set.cardinal !unresolved_breakpoints));%lwt
       !unresolved_breakpoints |> Breakpoint_desc_set.to_seq
       |> Lwt_util.iter_seq_s resolve_breakpoint;%lwt
-      Log.debug (fun m -> m "2222");%lwt
       let resolved_breakpoints =
         !unresolved_breakpoints
         |> Breakpoint_desc_set.filter (fun desc ->
                desc.resolved |> Option.is_some)
       in
-      Log.debug (fun m -> m "3333");%lwt
       let send_breakpoint_event desc =
-        Log.debug (fun m -> m "send_breakpoint_event");%lwt
         Debug_rpc.send_event rpc
           (module Breakpoint_event)
           Breakpoint_event.Payload.(
