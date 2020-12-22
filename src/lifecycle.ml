@@ -34,5 +34,6 @@ let run ~launch_args ~terminate ~agent rpc =
       Lwt.return_unit);
   Lwt.join [
     send_initialize_event ();
+    Ocaml_debug_agent.start agent;
     promise
   ]

@@ -21,6 +21,7 @@ let serve port =
 let setup_log style_renderer level =
   Fmt_tty.setup_std_outputs ?style_renderer ();
   Logs.set_level level;
+  (* Logs.Src.set_level Ocaml_debug_agent.Log.src (Some Info); *)
   Logs.set_reporter (Logs_fmt.reporter ());
   ()
 

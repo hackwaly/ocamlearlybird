@@ -1,10 +1,6 @@
 open Astring
 open Debug_protocol_ex
 
-let src = Logs.Src.create "earlybird.State_initialized"
-
-module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
-
 type debug = Debug of Ocaml_debug_agent.t | No_debug
 
 let spawn ~rpc ?debug_sock ?env ?cwd prog args =
@@ -94,21 +90,14 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
     let lsock = Lwt_unix.(socket PF_INET SOCK_STREAM 0) in
     Lwt_unix.(bind lsock Unix.(ADDR_INET (inet_addr_loopback, 0)));%lwt
     Lwt_unix.listen lsock 1;
-    let promise, resolver = Lwt.wait () in
-    Lwt.async (fun () ->
-        let%lwt fd, _ = Lwt_unix.accept lsock in
-        Lwt_unix.close lsock;%lwt
-        Lwt.wakeup resolver fd;
-        Lwt.return_unit);
     let%lwt terminate =
       spawn ~rpc ~debug_sock:lsock ?cwd:launch_args.cwd launch_args.program
         launch_args.arguments
     in
-    let%lwt sock = promise in
     let agent =
       Ocaml_debug_agent.(
         create
-          (make_options ~debug_socket:sock
+          (make_options ~debug_socket:lsock
              ~symbols_file:
                (launch_args.symbols |> Option.value ~default:launch_args.program)
              ()))

@@ -1,7 +1,3 @@
-let src = Logs.Src.create "earlybird.Session"
-
-module Log = (val Logs_lwt.src_log src : Logs_lwt.LOG)
-
 let start rpc =
   let cancel = ref (fun () -> ()) in
   Lwt.async (fun () ->

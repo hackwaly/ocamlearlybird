@@ -11,10 +11,12 @@ let run ~launch_args ~terminate ~agent rpc =
     let process status =
       match status with
       | Entry ->
-          Debug_rpc.send_event rpc
-            (module Stopped_event)
-            Stopped_event.Payload.(
-              make ~reason:Entry ~all_threads_stopped:(Some true) ())
+          if launch_args.Launch_command.Arguments.stop_on_entry then
+            Debug_rpc.send_event rpc
+              (module Stopped_event)
+              Stopped_event.Payload.(
+                make ~reason:Entry ~all_threads_stopped:(Some true) ())
+          else Lwt.return ()
       | Exited _ ->
           Debug_rpc.send_event rpc
             (module Terminated_event)
