@@ -27,4 +27,9 @@ let run ~launch_args ~terminate ~agent rpc =
     (fun _ ->
       Ocaml_debug_agent.step_out agent;
       Lwt.return ());
+  Debug_rpc.set_command_handler rpc
+    (module Next_command)
+    (fun _ ->
+      Ocaml_debug_agent.step_over agent;
+      Lwt.return ());
   Lwt.return ()
