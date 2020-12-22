@@ -20,7 +20,7 @@ let run ~launch_args ~terminate ~agent rpc =
     (fun _ ->
       Debug_rpc.remove_command_handler rpc (module Terminate_command);
       Lwt.async (fun () ->
-          terminate false;%lwt
+          Ocaml_debug_agent.stop agent;
           Debug_rpc.send_event rpc
             (module Terminated_event)
             Terminated_event.Payload.(make ()));
