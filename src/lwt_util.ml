@@ -1,3 +1,9 @@
+let iter_seq_s f seq =
+  Seq.fold_left (fun prev_promise elt ->
+    let%lwt () = prev_promise in
+    f elt
+  ) (Lwt.return ()) seq
+
 let chdir_lock = Lwt_mutex.create ()
 
 let with_chdir ~cwd fn =

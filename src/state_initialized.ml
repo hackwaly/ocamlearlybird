@@ -105,20 +105,13 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
         launch_args.arguments
     in
     let%lwt sock = promise in
-    let%lwt agent =
+    let agent =
       Ocaml_debug_agent.(
-        start
-          {
-            remote_debugger_version = OCaml_410;
-            debug_connnection =
-              {
-                in_ = Lwt_io.of_fd ~mode:Lwt_io.input sock;
-                out = Lwt_io.of_fd ~mode:Lwt_io.output sock;
-              };
-            time_slice = 1024;
-            symbols_file =
-              launch_args.symbols |> Option.value ~default:launch_args.program;
-          })
+        create
+          (make_options ~debug_socket:sock
+             ~symbols_file:
+               (launch_args.symbols |> Option.value ~default:launch_args.program)
+             ()))
     in
     Lwt.return (launch_args, Debug agent, terminate)
 
