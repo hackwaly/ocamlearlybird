@@ -131,6 +131,22 @@ let find_obj agent id =
   | None -> raise Not_found
   | Some scene -> Hashtbl.find scene.obj_tbl id
 
+let exec_with_frame agent conn index f =
+  Log.debug (fun m -> m "exec_with_frame");%lwt
+  assert (index >= 0);
+  let rec walk cur (stack_pos, pc) =
+    Log.debug (fun m -> m "exec_with_frame cur:%d" cur);%lwt
+    let ev = Symbols.find_event agent.symbols pc in
+    if cur = index then Lwt.return (Some (stack_pos, pc, ev))
+    else
+      match%lwt Debugcom.up_frame conn ev.Instruct.ev_stacksize with
+      | None -> Lwt.return None
+      | Some (stack_pos, pc) -> walk (cur + 1) (stack_pos, pc)
+  in
+  let%lwt stack_pos, pc = Debugcom.initial_frame conn in
+  let%lwt frame = walk 0 (stack_pos, pc) in
+  (f frame) [%finally Debugcom.set_frame conn stack_pos]
+
 let rec make_obj agent ~name ~value ?(structured = false) () =
   match agent.scene with
   | Some scene ->
@@ -149,11 +165,44 @@ let rec make_obj agent ~name ~value ?(structured = false) () =
   | None -> assert false
 
 and list_obj agent obj_id () =
-  let list_scope_obj obj =
-    Log.debug (fun m -> m "list_scope_obj 1");%lwt
+  let list_scope_obj scene obj =
+    let[@warning "-8"] (Scope { index; kind; _ }) =
+      (obj.value [@warning "+8"])
+    in
     exec_in_loop agent (fun conn ->
-        Log.debug (fun m -> m "list_scope_obj 2");%lwt
-        Lwt.return [])
+        let frame = scene.frames.(index) in
+        let event = frame.event in
+        match Lazy.force frame.env with
+        | exception _ ->
+          Log.debug (fun m -> m "no env");%lwt
+          Lwt.return []
+        | env ->
+            Log.debug (fun m -> m "has env");%lwt
+            let ident_tbl =
+              match kind with
+              | `Stack -> event.ev_compenv.ce_stack
+              | `Heap -> event.ev_compenv.ce_heap
+              | `Rec -> event.ev_compenv.ce_rec
+              | `Global -> assert false
+            in
+            let iter_bindings f = Ident.iter (fun id index -> f (id, index)) ident_tbl in
+            let find_ty env path =
+              let val_desc = env |> Env.find_value path in
+              let ty = Ctype.correct_levels val_desc.Types.val_type in
+              ty
+            in
+            let to_obj (ident, pos) =
+              Log.debug (fun m -> m "local_to_obj: %s" (Ident.name ident));%lwt
+              match find_ty env (Path.Pident ident) with
+              | exception Not_found -> Lwt.return None
+              | ty ->
+                let%lwt rv =  Debugcom.get_local conn pos in
+                let obj = make_obj agent ~name:(Ident.name ident) ~value:Unknown () in
+                Lwt.return (Some obj)
+            in
+            let%lwt objs = iter_bindings |> Iter.to_list |> Lwt_list.filter_map_s to_obj in
+            Log.debug (fun m -> m "list_scope_obj 2");%lwt
+            Lwt.return objs)
   in
   match agent.scene with
   | None -> Lwt.return []
@@ -162,7 +211,7 @@ and list_obj agent obj_id () =
       | None -> Lwt.return []
       | Some obj -> (
           match obj.value with
-          | Scope _ -> list_scope_obj obj
+          | Scope { kind = #frame_scope_kind; _ } -> list_scope_obj scene obj
           | _ -> Lwt.return [] ) )
 
 let start agent =
@@ -198,10 +247,10 @@ let start agent =
     let%lwt action =
       agent.action_e
       |> Lwt_react.E.fmap (fun action ->
-            match action with
-            | `Pause -> None
-            | #stopped_action as x -> Some (Some x)
-            | `Wakeup -> Some None)
+             match action with
+             | `Pause -> None
+             | #stopped_action as x -> Some (Some x)
+             | `Wakeup -> Some None)
       |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
     in
     Log.debug (fun m -> m "wait_action 2");%lwt
@@ -209,11 +258,6 @@ let start agent =
   in
   let clear_scene agent = agent.scene <- None in
   let update_scene agent report =
-    if Symbols.version agent.symbols <> agent.env_symbols_version then (
-      let source_dirs = Symbols.source_dirs agent.symbols in
-      Load_path.init source_dirs;
-      Envaux.reset_cache ();
-      agent.env_symbols_version <- Symbols.version agent.symbols );
     let obj_tbl = Hashtbl.create 0 in
     let%lwt frames =
       match report.rep_type with
@@ -222,7 +266,25 @@ let start agent =
           let make_frame index sp (pc : pc) =
             let event = Symbols.find_event agent.symbols pc in
             let module_ = Symbols.find_module agent.symbols event.ev_module in
-            { Stack_frame.index; stack_pos = sp; module_; event; scopes = [] }
+            let env =
+              Lazy.from_fun (fun () ->
+                  (* TODO: Move to rpc call *)
+                  if Symbols.version agent.symbols <> agent.env_symbols_version
+                  then (
+                    let source_dirs = Symbols.source_dirs agent.symbols in
+                    Load_path.init source_dirs;
+                    Envaux.reset_cache ();
+                    agent.env_symbols_version <- Symbols.version agent.symbols );
+                  Envaux.env_from_summary event.ev_typenv event.ev_typsubst)
+            in
+            {
+              Stack_frame.index;
+              stack_pos = sp;
+              module_;
+              event;
+              scopes = [];
+              env;
+            }
           in
           let rec walk_up index stacksize frames =
             let index = index + 1 in
@@ -322,22 +384,6 @@ let start agent =
         Debugcom.set_breakpoint conn pc;%lwt
         (f ()) [%finally cleanup ()]
     in
-    let exec_with_frame index f =
-      Log.debug (fun m -> m "exec_with_frame");%lwt
-      assert (index >= 0);
-      let rec walk cur (stack_pos, pc) =
-        Log.debug (fun m -> m "exec_with_frame cur:%d" cur);%lwt
-        let ev = Symbols.find_event agent.symbols pc in
-        if cur = index then Lwt.return (Some (stack_pos, pc, ev))
-        else
-          match%lwt Debugcom.up_frame conn ev.Instruct.ev_stacksize with
-          | None -> Lwt.return None
-          | Some (stack_pos, pc) -> walk (cur + 1) (stack_pos, pc)
-      in
-      let%lwt stack_pos, pc = Debugcom.initial_frame conn in
-      let%lwt frame = walk 0 (stack_pos, pc) in
-      (f frame) [%finally Debugcom.set_frame conn stack_pos]
-    in
     let wrap_run f () =
       agent.set_status Running;
       clear_scene agent;
@@ -370,7 +416,7 @@ let start agent =
     let step_in = wrap_run internal_step_in in
     let internal_step_out () =
       let promise, resolver = Lwt.task () in
-      exec_with_frame 1 (fun frame ->
+      exec_with_frame agent conn 1 (fun frame ->
           Lwt.wakeup_later resolver frame;
           Lwt.return ());%lwt
       let%lwt frame = promise in

@@ -181,6 +181,7 @@ let load t ~frag path =
    let%lwt eventlists = read_eventlists toc ic in
    eventlists
    |> Lwt_list.iter_s (fun { evl; dirs } ->
+          source_dirs := !source_dirs |> String_set.add_seq (dirs |> List.to_seq);
           partition_modules evl
           |> Lwt_list.iter_s (fun evl ->
                  let id = (List.hd evl).Instruct.ev_module in

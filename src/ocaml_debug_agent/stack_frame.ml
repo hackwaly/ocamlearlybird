@@ -7,6 +7,7 @@ type t = {
   module_ : Symbols.Module.t;
   event : Instruct.debug_event;
   mutable scopes : obj list;
+  env : Env.t Lazy.t;
 }
 
 let stacksize t = t.event.ev_stacksize
