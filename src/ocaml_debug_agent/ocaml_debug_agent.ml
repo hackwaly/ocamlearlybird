@@ -201,7 +201,7 @@ and list_obj agent obj_id () =
                   | `Heap | `Rec -> Debugcom.get_environment conn pos
                   | `Global -> assert%lwt false
                 in
-                let%lwt value = Inspect.get_value env rv ty (Debugcom.marshal_obj conn) in
+                let%lwt value = Inspect.get_value agent.symbols conn env rv ty in
                 let obj = make_obj agent ~name:(Ident.name ident) ~value () in
                 Lwt.return (Some obj)
             in

@@ -9,6 +9,7 @@ type value =
   | Char of char
   | String of string
   | Scope of { scene_id : int64; index : int; kind : scope_kind }
+  | Function of { location : Location.t }
   | Unknown
 
 type obj = {

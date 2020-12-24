@@ -201,7 +201,7 @@ let marshal_obj conn rv =
 
 let get_closure_code conn rv =
   Log.debug (fun m -> m "get_closure_code rv:%s" (show_remote_value rv));%lwt
-  Lwt_io.write_char conn.io_out 'M';%lwt
+  Lwt_io.write_char conn.io_out 'C';%lwt
   Lwt_util.write_nativeint_be conn.io_out rv;%lwt
   let%lwt frag = Lwt_io.BE.read_int conn.io_in in
   let%lwt pos = Lwt_io.BE.read_int conn.io_in in

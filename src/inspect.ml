@@ -86,7 +86,7 @@ let run ~launch_args ~terminate ~agent rpc =
         frame.scopes
         |> List.map (fun obj ->
                Scope.make ~name:obj.name ~variables_reference:obj.id
-                 ~expensive:true ())
+                 ~expensive:false ())
       in
       Lwt.return Scopes_command.Result.(make ~scopes ()));
   Debug_rpc.set_command_handler rpc
@@ -96,7 +96,16 @@ let run ~launch_args ~terminate ~agent rpc =
       let obj = Ocaml_debug_agent.find_obj agent obj_id in
       let%lwt objs = Lazy.force obj.members in
       let value_to_string v =
-        match v with Int n -> string_of_int n | _ -> "Not supported"
+        match v with
+        | Int v -> string_of_int v
+        | Double v -> string_of_float v
+        | Bool v -> string_of_bool v
+        | Char v -> Char.escaped v
+        | String v -> String.escaped v
+        | Function { location } ->
+            let file, line, column = Location.get_pos_info location.loc_start in
+            Format.sprintf "<fun> %@ %s:%d:%d" file line column
+        | _ -> "Not supported"
       in
       let variables =
         objs
