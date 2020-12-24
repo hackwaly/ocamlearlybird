@@ -177,6 +177,14 @@ and list_obj agent obj_id () =
           Log.debug (fun m -> m "no env");%lwt
           Lwt.return []
         | env ->
+            let rv_to_value rv ty =
+              if Ctype.matches env Predef.type_int ty then (
+                let%lwt mv = Debugcom.marshal_obj conn rv in
+                Lwt.return (Int (Obj.magic mv))
+              ) else (
+                Lwt.return Unknown
+              )
+            in
             Log.debug (fun m -> m "has env");%lwt
             let ident_tbl =
               match kind with
@@ -196,8 +204,13 @@ and list_obj agent obj_id () =
               match find_ty env (Path.Pident ident) with
               | exception Not_found -> Lwt.return None
               | ty ->
-                let%lwt rv =  Debugcom.get_local conn pos in
-                let obj = make_obj agent ~name:(Ident.name ident) ~value:Unknown () in
+                let%lwt rv =  match kind with
+                  | `Stack -> Debugcom.get_local conn (event.ev_stacksize - pos)
+                  | `Heap | `Rec -> Debugcom.get_environment conn pos
+                  | `Global -> assert%lwt false
+                in
+                let%lwt value = rv_to_value rv ty in
+                let obj = make_obj agent ~name:(Ident.name ident) ~value () in
                 Lwt.return (Some obj)
             in
             let%lwt objs = iter_bindings |> Iter.to_list |> Lwt_list.filter_map_s to_obj in
