@@ -1,4 +1,5 @@
 open Debugcom
+open Inspect_types
 module Log = Log
 
 type pc = Debugcom.pc = { frag : int; pos : int }
@@ -24,6 +25,12 @@ type stopped_action =
 
 type action = [ stopped_action | `Pause ]
 
+type scene = {
+  report : report;
+  frames : Stack_frame.t array;
+  obj_tbl : (int, obj) Hashtbl.t;
+}
+
 type t = {
   options : options;
   status_s : status Lwt_react.S.t;
@@ -35,6 +42,9 @@ type t = {
   emit_symbols_updated : unit -> unit;
   breakpoints : Breakpoints.t;
   mutable pendings : (conn -> unit Lwt.t) list;
+  alloc_obj_id : unit -> int;
+  mutable scene : scene option;
+  mutable env_symbols_version : int;
 }
 
 module Module = Symbols.Module
@@ -57,6 +67,9 @@ let create options =
     emit_symbols_updated;
     breakpoints;
     pendings = [];
+    alloc_obj_id = Unique_id.make_alloc ();
+    scene = None;
+    env_symbols_version = 0;
   }
 
 let symbols_updated_event agent = agent.symbols_updated_e
@@ -93,42 +106,8 @@ let pause agent = agent.emit_action `Pause
 
 let stop agent = agent.emit_action `Stop
 
-let push_pending agent f =
-  agent.pendings <- f :: agent.pendings;
-  agent.emit_action `Wake_up
-
-let stack_trace agent =
-  match agent.status_s |> React.S.value with
-  | Running -> [%lwt assert false]
-  | Exited _ -> Lwt.return []
-  | Entry -> Lwt.return []
-  | Stopped _ ->
-      let promise, resolver = Lwt.task () in
-      push_pending agent (fun conn ->
-          let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
-          let make_frame index sp (pc : pc) =
-            let event = Symbols.find_event agent.symbols pc in
-            let module_ = Symbols.find_module agent.symbols event.ev_module in
-            { Stack_frame.index; stack_pos = sp; module_; event }
-          in
-          let rec walk_up index stacksize frames =
-            let index = index + 1 in
-            match%lwt Debugcom.up_frame conn stacksize with
-            | Some (sp, pc) ->
-                let frame = make_frame index sp pc in
-                walk_up index (Stack_frame.stacksize frame) (frame :: frames)
-            | None -> Lwt.return frames
-          in
-          (let%lwt sp, pc = Debugcom.initial_frame conn in
-           let intial_frame = make_frame 0 sp pc in
-           let%lwt frames =
-             walk_up 0 (Stack_frame.stacksize intial_frame) [ intial_frame ]
-           in
-           let frames = List.rev frames in
-           Lwt.wakeup_later resolver frames;
-           Lwt.return ())
-            [%finally Debugcom.set_frame conn curr_fr_sp]);
-      promise
+let stack_frames agent =
+  Lwt.return (match agent.scene with None -> [||] | Some scene -> scene.frames)
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
@@ -164,6 +143,46 @@ let start agent =
            match action with `Pause -> None | #stopped_action as x -> Some x)
     |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
   in
+  let clear_scene agent = agent.scene <- None in
+  let update_scene agent report =
+    if Symbols.version agent.symbols <> agent.env_symbols_version then (
+      let source_dirs = Symbols.source_dirs agent.symbols in
+      Load_path.init source_dirs;
+      Envaux.reset_cache ();
+      agent.env_symbols_version <- Symbols.version agent.symbols );
+    let obj_tbl = Hashtbl.create 0 in
+    let%lwt frames =
+      match report.rep_type with
+      | Event | Breakpoint ->
+          let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
+          let make_frame index sp (pc : pc) =
+            let event = Symbols.find_event agent.symbols pc in
+            let module_ = Symbols.find_module agent.symbols event.ev_module in
+            let scopes = Lazy.from_fun (fun () -> assert false) in
+            { Stack_frame.index; stack_pos = sp; module_; event; scopes }
+          in
+          let rec walk_up index stacksize frames =
+            let index = index + 1 in
+            match%lwt Debugcom.up_frame conn stacksize with
+            | Some (sp, pc) ->
+                let frame = make_frame index sp pc in
+                walk_up index (Stack_frame.stacksize frame) (frame :: frames)
+            | None -> Lwt.return frames
+          in
+          (let%lwt sp, pc = Debugcom.initial_frame conn in
+           let intial_frame = make_frame 0 sp pc in
+           let%lwt frames =
+             walk_up 0 (Stack_frame.stacksize intial_frame) [ intial_frame ]
+           in
+           let frames = List.rev frames |> Array.of_list in
+           Lwt.return frames)
+            [%finally Debugcom.set_frame conn curr_fr_sp]
+      | _ -> Lwt.return [||]
+    in
+    let scene = { report; frames; obj_tbl } in
+    agent.scene <- Some scene;
+    Lwt.return ()
+  in
   let execute =
     let temporary_trap_barrier_and_breakpoint = ref None in
     let check_met_temporary_trap_barrier_and_breakpoint report =
@@ -182,14 +201,15 @@ let start agent =
             check_met_temporary_trap_barrier_and_breakpoint report
           in
           if met_temporary_trap_barrier_and_breakpoint then
-            Lwt.return (Some (Stopped { breakpoint = false }))
+            Lwt.return (Some (report, Stopped { breakpoint = false }))
           else
             if%lwt
               Breakpoints.check agent.breakpoints report.rep_program_pointer
-            then Lwt.return (Some (Stopped { breakpoint = true }))
+            then Lwt.return (Some (report, Stopped { breakpoint = true }))
             else Lwt.return None
-      | Uncaught_exc -> Lwt.return (Some (Exited { uncaught_exc = true }))
-      | Exited -> Lwt.return (Some (Exited { uncaught_exc = false }))
+      | Uncaught_exc ->
+          Lwt.return (Some (report, Exited { uncaught_exc = true }))
+      | Exited -> Lwt.return (Some (report, Exited { uncaught_exc = false }))
       | Trap -> (
           match temporary_trap_barrier_and_breakpoint.contents with
           | None -> [%lwt assert false]
@@ -198,7 +218,7 @@ let start agent =
                 check_met_temporary_trap_barrier_and_breakpoint report
               in
               if met_temporary_trap_barrier_and_breakpoint then
-                Lwt.return (Some (Stopped { breakpoint = false }))
+                Lwt.return (Some (report, Stopped { breakpoint = false }))
               else Lwt.return None )
       | _ -> Lwt.return None
     in
@@ -235,7 +255,9 @@ let start agent =
     in
     let wrap_run f () =
       agent.set_status Running;
-      let%lwt status = f () in
+      clear_scene agent;
+      let%lwt report, status = f () in
+      update_scene agent report;%lwt
       agent.set_status status;
       Lwt.return ()
     in
@@ -252,12 +274,13 @@ let start agent =
     let internal_step_in () =
       let%lwt report = Debugcom.go conn 1 in
       Lwt.return
-        ( match report.rep_type with
-        | Breakpoint -> Stopped { breakpoint = true }
-        | Event -> Stopped { breakpoint = false }
-        | Uncaught_exc -> Exited { uncaught_exc = true }
-        | Exited -> Exited { uncaught_exc = false }
-        | _ -> assert false )
+        ( report,
+          match report.rep_type with
+          | Breakpoint -> Stopped { breakpoint = true }
+          | Event -> Stopped { breakpoint = false }
+          | Uncaught_exc -> Exited { uncaught_exc = true }
+          | Exited -> Exited { uncaught_exc = false }
+          | _ -> assert false )
     in
     let step_in = wrap_run internal_step_in in
     let internal_step_out () =

@@ -83,7 +83,7 @@ end
 type conn =
   | Conn : { basic : (module BASIC with type conn = 'a); conn : 'a } -> conn
 
-let create_conn (type conn) (module Basic : BASIC with type conn = conn) conn  =
+let create_conn (type conn) (module Basic : BASIC with type conn = conn) conn =
   Conn { basic = (module Basic); conn }
 
 [@@@ocamlformat "disable"]

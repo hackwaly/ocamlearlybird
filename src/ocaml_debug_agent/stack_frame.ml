@@ -1,10 +1,12 @@
 open Debugcom
+open Inspect_types
 
 type t = {
   index : int;
   stack_pos : int;
   module_ : Symbols.Module.t;
   event : Instruct.debug_event;
+  scopes : obj list Lwt.t Lazy.t;
 }
 
 let stacksize t = t.event.ev_stacksize

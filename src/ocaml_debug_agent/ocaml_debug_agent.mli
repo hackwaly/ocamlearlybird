@@ -51,6 +51,6 @@ val pause : t -> unit
 
 val stop : t -> unit
 
-val stack_trace : t -> Stack_frame.t list Lwt.t
+val stack_frames : t -> Stack_frame.t array Lwt.t
 
 val start : t -> unit Lwt.t

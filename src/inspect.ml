@@ -53,9 +53,10 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Stack_trace_command)
     (fun arg ->
       assert (arg.thread_id = 0);
-      let%lwt frames = Ocaml_debug_agent.stack_trace agent in
+      let%lwt frames = Ocaml_debug_agent.stack_frames agent in
       let%lwt stack_frames =
         frames
+        |> Array.to_list
         |> Lwt_list.map_s (fun fr ->
                let module_ = Stack_frame.module_ fr in
                let source =
@@ -76,7 +77,7 @@ let run ~launch_args ~terminate ~agent rpc =
       in
       Lwt.return
         Stack_trace_command.Result.(
-          make ~stack_frames ~total_frames:(Some (List.length frames)) ()));
+          make ~stack_frames ~total_frames:(Some (Array.length frames)) ()));
   Debug_rpc.set_command_handler rpc
     (module Scopes_command)
     (fun _ -> Lwt.return Scopes_command.Result.(make ()));
