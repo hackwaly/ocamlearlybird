@@ -293,18 +293,16 @@ let start agent =
       let%lwt stack_pos2, pc2 = Rdbg.get_frame conn in
       let ev1 = Symbols.find_event agent.symbols pc1 in
       let ev2 = Symbols.find_event agent.symbols pc2 in
-      let%lwt r3 = Rdbg.up_frame conn ev2.ev_stacksize in
       (* tailcallopt case *)
       let is_tco () =
-        if r3 |> Option.is_some then
-          let stack_pos3, pc3 = r3 |> Option.get in
-          not (stack_pos3 = stack_pos1 && pc3 = pc1)
-        else true
+        if stack_pos2 - ev2.ev_stacksize = stack_pos1 - ev1.ev_stacksize then
+          ev2.ev_info = Event_function
+        else false
       in
       let is_entered () =
         stack_pos2 - ev2.ev_stacksize > stack_pos1 - ev1.ev_stacksize
       in
-      if is_tco () || is_entered () then internal_step_out ()
+      if is_entered () || is_tco () then internal_step_out ()
       else Lwt.return step_in_status
     in
     let step_over = wrap_run internal_step_over in
