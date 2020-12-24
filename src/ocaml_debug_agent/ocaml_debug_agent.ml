@@ -1,5 +1,5 @@
 open Debugcom
-open Inspect_types
+include Inspect_types
 module Log = Log
 
 type pc = Debugcom.pc = { frag : int; pos : int }
@@ -20,8 +20,7 @@ type status =
   | Stopped of { breakpoint : bool }
   | Exited of { uncaught_exc : bool }
 
-type stopped_action =
-  [ `Wake_up | `Run | `Step_in | `Step_out | `Step_over | `Stop ]
+type stopped_action = [ `Run | `Step_in | `Step_out | `Step_over | `Stop ]
 
 type action = [ stopped_action | `Pause ]
 
@@ -42,6 +41,7 @@ type t = {
   emit_symbols_updated : unit -> unit;
   breakpoints : Breakpoints.t;
   mutable pendings : (conn -> unit Lwt.t) list;
+  wake_up : unit Lwt_mvar.t;
   alloc_obj_id : unit -> int;
   mutable scene : scene option;
   mutable env_symbols_version : int;
@@ -67,6 +67,7 @@ let create options =
     emit_symbols_updated;
     breakpoints;
     pendings = [];
+    wake_up = Lwt_mvar.create ();
     alloc_obj_id = Unique_id.make_alloc ();
     scene = None;
     env_symbols_version = 0;
@@ -88,11 +89,11 @@ let status_signal agent = agent.status_s
 
 let set_breakpoint agent pc =
   Breakpoints.set agent.breakpoints pc;
-  agent.emit_action `Wake_up
+  Lwt_mvar.take_available agent.wake_up |> ignore
 
 let remove_breakpoint agent pc =
   Breakpoints.remove agent.breakpoints pc;
-  agent.emit_action `Wake_up
+  Lwt_mvar.take_available agent.wake_up |> ignore
 
 let run agent = agent.emit_action `Run
 
@@ -138,10 +139,34 @@ let start agent =
     flush_pendings ()
   in
   let wait_action () =
-    agent.action_e
-    |> Lwt_react.E.fmap (fun action ->
-           match action with `Pause -> None | #stopped_action as x -> Some x)
-    |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
+    Lwt.choose
+      [
+        (let%lwt action =
+           agent.action_e
+           |> Lwt_react.E.fmap (fun action ->
+                  match action with
+                  | `Pause -> None
+                  | #stopped_action as x -> Some x)
+           |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
+         in
+         Lwt.return (Some action));
+        (let%lwt () = Lwt_mvar.put agent.wake_up () in
+         Lwt.return None);
+      ]
+  in
+  let make_obj ~name ~value ?(list_members=fun () -> Lwt.return_nil) () =
+    match agent.scene with
+    | Some scene -> (
+      let obj =
+        { id = agent.alloc_obj_id ();
+          name;
+          value;
+          members = Lazy.from_fun list_members }
+      in
+      Hashtbl.replace scene.obj_tbl obj.id obj;
+      obj
+    )
+    | None -> assert false
   in
   let clear_scene agent = agent.scene <- None in
   let update_scene agent report =
@@ -158,8 +183,7 @@ let start agent =
           let make_frame index sp (pc : pc) =
             let event = Symbols.find_event agent.symbols pc in
             let module_ = Symbols.find_module agent.symbols event.ev_module in
-            let scopes = Lazy.from_fun (fun () -> assert false) in
-            { Stack_frame.index; stack_pos = sp; module_; event; scopes }
+            { Stack_frame.index; stack_pos = sp; module_; event; scopes = [] }
           in
           let rec walk_up index stacksize frames =
             let index = index + 1 in
@@ -181,6 +205,22 @@ let start agent =
     in
     let scene = { report; frames; obj_tbl } in
     agent.scene <- Some scene;
+    (* We delay set Stack_frame's `scopes` field. Because make_obj need agent's `scene` field to be set *)
+    scene.frames |> Array.iter (fun (frame : Stack_frame.t) ->
+      let make_scope_obj name kind =
+        make_obj ~name ~value:(Scope {
+          scene_id = report.rep_event_count;
+          index = frame.index;
+          kind;
+        }) ()
+      in
+      let scopes = [
+        make_scope_obj "stack" `Stack;
+        make_scope_obj "heap" `Heap;
+        make_scope_obj "rec" `Rec;
+      ] in
+      frame.scopes <- scopes;
+    );
     Lwt.return ()
   in
   let execute =
@@ -340,20 +380,21 @@ let start agent =
     | `Step_out -> step_out ()
     | `Step_over -> step_over ()
     | `Stop -> stop ()
-    | `Wake_up -> Lwt.return ()
   in
   Symbols.load agent.symbols ~frag:0 agent.options.symbols_file;%lwt
   agent.emit_symbols_updated ();
   try%lwt
     while%lwt true do
       sync ();%lwt
-      let%lwt action = wait_action () in
-      execute action;%lwt
-      if%lwt
-        Lwt.return
-          ( match agent.status_s |> Lwt_react.S.value with
-          | Exited _ -> true
-          | _ -> false )
-      then Lwt.fail Exit
+      match%lwt wait_action () with
+      | Some action ->
+          execute action;%lwt
+          if%lwt
+            Lwt.return
+              ( match agent.status_s |> Lwt_react.S.value with
+              | Exited _ -> true
+              | _ -> false )
+          then Lwt.fail Exit
+      | None -> Lwt.return ()
     done
   with Exit -> Lwt.return ()

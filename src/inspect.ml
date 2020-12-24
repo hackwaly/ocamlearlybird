@@ -80,5 +80,12 @@ let run ~launch_args ~terminate ~agent rpc =
           make ~stack_frames ~total_frames:(Some (Array.length frames)) ()));
   Debug_rpc.set_command_handler rpc
     (module Scopes_command)
-    (fun _ -> Lwt.return Scopes_command.Result.(make ()));
+    (fun arg ->
+      let frame_index = arg.frame_id in
+      let%lwt frames = Ocaml_debug_agent.stack_frames agent in
+      let frame = frames.(frame_index) in
+      let scopes = frame.scopes |> List.map (fun obj ->
+        Scope.make ~name:obj.name ~variables_reference:obj.id ~expensive:true ()
+      ) in
+      Lwt.return Scopes_command.Result.(make ~scopes ()));
   Lwt.join [ process_status_changes () ]

@@ -1,5 +1,7 @@
 module Log = Log
 
+include module type of Inspect_types
+
 type pc = Debugcom.pc = { frag : int; pos : int }
 
 type remote_debugger_version = OCaml_400 | OCaml_410
