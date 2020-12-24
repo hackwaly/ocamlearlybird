@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 type breakpoint_desc = { pc : pc }
 
@@ -32,7 +32,7 @@ let is_commited t pc =
 let check t pc =
   Lwt.return (Hashtbl.mem t.bp_by_pc pc)
 
-let commit t (module Rdbg : Remote_debugger.S) conn =
+let commit t (module Rdbg : Debugcom.S) conn =
   let commit_one pc =
     let removed = not (Hashtbl.mem t.bp_by_pc pc) in
     let committed = Hashtbl.mem t.committed pc in

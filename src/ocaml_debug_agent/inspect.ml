@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 type scope = Local | Heap | Rec | Global
 
@@ -28,20 +28,20 @@ type scene = {
 type t = {
   symbols : Symbols.t;
   mutable symbol_version : int;
-  remote_debugger : (module Remote_debugger.S);
+  debugcom : (module Debugcom.S);
   conn : conn;
   mutable scene : scene option;
 }
 
 (*TODO: Use lwt.detach*)
 
-let create ~symbols ~remote_debugger ~conn () =
+let create ~symbols ~debugcom ~conn () =
   let source_dirs = Symbols.source_dirs symbols in
   Load_path.init source_dirs;
   Envaux.reset_cache ();
   {
     symbols;
-    remote_debugger;
+    debugcom;
     conn;
     symbol_version = Symbols.version symbols;
     scene = None;
@@ -71,7 +71,7 @@ let find_ty env path =
   ty
 
 let make_value t =
-  let (module Rdbg) = t.remote_debugger in
+  let (module Rdbg) = t.debugcom in
   let conn = t.conn in
   let scene = t.scene |> Option.get in
   fun rv ty ->
@@ -84,7 +84,7 @@ let make_value t =
     else Lwt.return Unknown
 
 let list_local t =
-  let (module Rdbg) = t.remote_debugger in
+  let (module Rdbg) = t.debugcom in
   let conn = t.conn in
   let scene = t.scene |> Option.get in
   let ce_stack = scene.event.ev_compenv.ce_stack in

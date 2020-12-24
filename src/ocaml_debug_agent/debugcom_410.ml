@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 let get_pid conn =
   Log.debug (fun m -> m "get_pid");%lwt

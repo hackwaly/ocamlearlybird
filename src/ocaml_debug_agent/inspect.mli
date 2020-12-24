@@ -20,14 +20,14 @@ type expr = Lookup of ident | Field of expr * ident | Component of expr * int
 
 val create :
   symbols:Symbols.t ->
-  remote_debugger:(module Remote_debugger.S) ->
-  conn:Remote_debugger.conn ->
+  debugcom:(module Debugcom.S) ->
+  conn:Debugcom.conn ->
   unit ->
   t
 
 val is_valid : t -> obj -> bool
 
-val update_scene : t -> Remote_debugger.report -> unit
+val update_scene : t -> Debugcom.report -> unit
 
 val scope_obj : t -> scope -> obj Lwt.t
 

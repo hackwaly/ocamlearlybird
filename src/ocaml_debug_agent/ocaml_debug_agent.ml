@@ -1,7 +1,7 @@
-open Remote_debugger
+open Debugcom
 module Log = Log
 
-type pc = Remote_debugger.pc = { frag : int; pos : int }
+type pc = Debugcom.pc = { frag : int; pos : int }
 
 type remote_debugger_version = OCaml_400 | OCaml_410
 
@@ -26,7 +26,7 @@ type action = [ stopped_action | `Pause ]
 
 type t = {
   options : options;
-  remote_debugger : (module Remote_debugger.S);
+  debugcom : (module Debugcom.S);
   status_s : status Lwt_react.S.t;
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
@@ -48,10 +48,10 @@ let create options =
   let symbols = Symbols.create () in
   let breakpoints = Breakpoints.create () in
   {
-    remote_debugger =
+    debugcom =
       ( match options.remote_debugger_version with
       | OCaml_400 -> failwith "Not yet implemented"
-      | OCaml_410 -> (module Remote_debugger_410 : Remote_debugger.S) );
+      | OCaml_410 -> (module Debugcom_410 : Debugcom.S) );
     options;
     status_s;
     set_status;
@@ -110,7 +110,7 @@ let stack_trace agent =
   | Stopped _ ->
       let promise, resolver = Lwt.task () in
       push_pending agent (fun conn ->
-          let (module Rdbg) = agent.remote_debugger in
+          let (module Rdbg) = agent.debugcom in
           let%lwt curr_fr_sp, _ = Rdbg.get_frame conn in
           let make_frame index sp (pc : pc) =
             let event = Symbols.find_event agent.symbols pc in
@@ -137,7 +137,7 @@ let stack_trace agent =
       promise
 
 let start agent =
-  let (module Rdbg) = agent.remote_debugger in
+  let (module Rdbg) = agent.debugcom in
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
   let conn =
     {

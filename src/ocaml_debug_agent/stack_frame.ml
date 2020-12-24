@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 type t = {
   index : int;

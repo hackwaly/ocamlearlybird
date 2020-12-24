@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 module Module = struct
   type t = {
@@ -93,7 +93,7 @@ let to_seq_modules t = t.module_by_id |> Hashtbl.to_seq_values
 
 let to_seq_events t = t.event_by_pc |> Hashtbl.to_seq_values
 
-let commit t (module Rdbg : Remote_debugger.S) conn =
+let commit t (module Rdbg : Debugcom.S) conn =
   let commit_one pc =
     let committed = Hashtbl.mem t.committed pc in
     if%lwt Lwt.return (not committed) then (

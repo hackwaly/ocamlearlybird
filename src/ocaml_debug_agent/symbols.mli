@@ -1,4 +1,4 @@
-open Remote_debugger
+open Debugcom
 
 module Module : sig
   type t = {
@@ -19,7 +19,7 @@ val version : t -> int
 
 val source_dirs : t -> string list
 
-val commit : t -> (module Remote_debugger.S) -> conn -> unit Lwt.t
+val commit : t -> (module Debugcom.S) -> conn -> unit Lwt.t
 
 val load : t -> frag:int -> string -> unit Lwt.t
 
