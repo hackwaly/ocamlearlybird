@@ -22,7 +22,7 @@ type status =
 
 type stopped_action = [ `Run | `Step_in | `Step_out | `Step_over | `Stop ]
 
-type action = [ stopped_action | `Pause ]
+type action = [ stopped_action | `Pause | `Wakeup ]
 
 type scene = {
   report : report;
@@ -41,7 +41,6 @@ type t = {
   emit_symbols_updated : unit -> unit;
   breakpoints : Breakpoints.t;
   mutable pendings : (conn -> unit Lwt.t) list;
-  wake_up : unit Lwt_mvar.t;
   alloc_obj_id : unit -> int;
   mutable scene : scene option;
   mutable env_symbols_version : int;
@@ -67,7 +66,6 @@ let create options =
     emit_symbols_updated;
     breakpoints;
     pendings = [];
-    wake_up = Lwt_mvar.create ();
     alloc_obj_id = Unique_id.make_alloc ();
     scene = None;
     env_symbols_version = 0;
@@ -89,11 +87,11 @@ let status_signal agent = agent.status_s
 
 let set_breakpoint agent pc =
   Breakpoints.set agent.breakpoints pc;
-  Lwt_mvar.take_available agent.wake_up |> ignore
+  agent.emit_action `Wakeup
 
 let remove_breakpoint agent pc =
   Breakpoints.remove agent.breakpoints pc;
-  Lwt_mvar.take_available agent.wake_up |> ignore
+  agent.emit_action `Wakeup
 
 let run agent = agent.emit_action `Run
 
@@ -109,6 +107,63 @@ let stop agent = agent.emit_action `Stop
 
 let stack_frames agent =
   Lwt.return (match agent.scene with None -> [||] | Some scene -> scene.frames)
+
+let exec_in_loop agent f =
+  Log.debug (fun m -> m "exec_in_loop 1");%lwt
+  let promise, resolver = Lwt.task () in
+  agent.pendings <-
+    (fun conn ->
+      Log.debug (fun m -> m "exec_in_loop 2");%lwt
+      match%lwt f conn with
+      | result ->
+          Lwt.wakeup_later resolver result;
+          Lwt.return ()
+      | exception exc ->
+          Lwt.wakeup_later_exn resolver exc;
+          Lwt.return ())
+    :: agent.pendings;
+  agent.emit_action `Wakeup;
+  Log.debug (fun m -> m "exec_in_loop 3");%lwt
+  promise
+
+let find_obj agent id =
+  match agent.scene with
+  | None -> raise Not_found
+  | Some scene -> Hashtbl.find scene.obj_tbl id
+
+let rec make_obj agent ~name ~value ?(structured = false) () =
+  match agent.scene with
+  | Some scene ->
+      let id = agent.alloc_obj_id () in
+      let obj =
+        {
+          id;
+          name;
+          value;
+          structured;
+          members = Lazy.from_fun (list_obj agent id);
+        }
+      in
+      Hashtbl.replace scene.obj_tbl id obj;
+      obj
+  | None -> assert false
+
+and list_obj agent obj_id () =
+  let list_scope_obj obj =
+    Log.debug (fun m -> m "list_scope_obj 1");%lwt
+    exec_in_loop agent (fun conn ->
+        Log.debug (fun m -> m "list_scope_obj 2");%lwt
+        Lwt.return [])
+  in
+  match agent.scene with
+  | None -> Lwt.return []
+  | Some scene -> (
+      match Hashtbl.find_opt scene.obj_tbl obj_id with
+      | None -> Lwt.return []
+      | Some obj -> (
+          match obj.value with
+          | Scope _ -> list_scope_obj obj
+          | _ -> Lwt.return [] ) )
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
@@ -139,34 +194,18 @@ let start agent =
     flush_pendings ()
   in
   let wait_action () =
-    Lwt.choose
-      [
-        (let%lwt action =
-           agent.action_e
-           |> Lwt_react.E.fmap (fun action ->
-                  match action with
-                  | `Pause -> None
-                  | #stopped_action as x -> Some x)
-           |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
-         in
-         Lwt.return (Some action));
-        (let%lwt () = Lwt_mvar.put agent.wake_up () in
-         Lwt.return None);
-      ]
-  in
-  let make_obj ~name ~value ?(list_members=fun () -> Lwt.return_nil) () =
-    match agent.scene with
-    | Some scene -> (
-      let obj =
-        { id = agent.alloc_obj_id ();
-          name;
-          value;
-          members = Lazy.from_fun list_members }
-      in
-      Hashtbl.replace scene.obj_tbl obj.id obj;
-      obj
-    )
-    | None -> assert false
+    Log.debug (fun m -> m "wait_action 1");%lwt
+    let%lwt action =
+      agent.action_e
+      |> Lwt_react.E.fmap (fun action ->
+            match action with
+            | `Pause -> None
+            | #stopped_action as x -> Some (Some x)
+            | `Wakeup -> Some None)
+      |> Lwt_react.E.once |> Lwt_react.E.to_stream |> Lwt_stream.next
+    in
+    Log.debug (fun m -> m "wait_action 2");%lwt
+    Lwt.return action
   in
   let clear_scene agent = agent.scene <- None in
   let update_scene agent report =
@@ -206,21 +245,27 @@ let start agent =
     let scene = { report; frames; obj_tbl } in
     agent.scene <- Some scene;
     (* We delay set Stack_frame's `scopes` field. Because make_obj need agent's `scene` field to be set *)
-    scene.frames |> Array.iter (fun (frame : Stack_frame.t) ->
-      let make_scope_obj name kind =
-        make_obj ~name ~value:(Scope {
-          scene_id = report.rep_event_count;
-          index = frame.index;
-          kind;
-        }) ()
-      in
-      let scopes = [
-        make_scope_obj "stack" `Stack;
-        make_scope_obj "heap" `Heap;
-        make_scope_obj "rec" `Rec;
-      ] in
-      frame.scopes <- scopes;
-    );
+    scene.frames
+    |> Array.iter (fun (frame : Stack_frame.t) ->
+           let make_scope_obj name kind =
+             make_obj agent ~name
+               ~value:
+                 (Scope
+                    {
+                      scene_id = report.rep_event_count;
+                      index = frame.index;
+                      kind;
+                    })
+               ~structured:true ()
+           in
+           let scopes =
+             [
+               make_scope_obj "stack" `Stack;
+               make_scope_obj "heap" `Heap;
+               make_scope_obj "rec" `Rec;
+             ]
+           in
+           frame.scopes <- scopes);
     Lwt.return ()
   in
   let execute =

@@ -15,6 +15,7 @@ type obj = {
   id : int;
   name : string;
   value : value;
+  structured : bool;
   members : obj list Lwt.t Lazy.t;
 }
 

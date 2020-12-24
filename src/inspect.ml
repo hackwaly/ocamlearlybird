@@ -14,8 +14,7 @@ let run ~launch_args ~terminate ~agent rpc =
           if launch_args.Launch_command.Arguments.stop_on_entry then
             Debug_rpc.send_event rpc
               (module Stopped_event)
-              Stopped_event.Payload.(
-                make ~reason:Entry ~thread_id:(Some 0) ())
+              Stopped_event.Payload.(make ~reason:Entry ~thread_id:(Some 0) ())
           else Lwt.return ()
       | Exited _ ->
           Debug_rpc.send_event rpc
@@ -55,8 +54,7 @@ let run ~launch_args ~terminate ~agent rpc =
       assert (arg.thread_id = 0);
       let%lwt frames = Ocaml_debug_agent.stack_frames agent in
       let%lwt stack_frames =
-        frames
-        |> Array.to_list
+        frames |> Array.to_list
         |> Lwt_list.map_s (fun fr ->
                let module_ = Stack_frame.module_ fr in
                let source =
@@ -84,8 +82,29 @@ let run ~launch_args ~terminate ~agent rpc =
       let frame_index = arg.frame_id in
       let%lwt frames = Ocaml_debug_agent.stack_frames agent in
       let frame = frames.(frame_index) in
-      let scopes = frame.scopes |> List.map (fun obj ->
-        Scope.make ~name:obj.name ~variables_reference:obj.id ~expensive:true ()
-      ) in
+      let scopes =
+        frame.scopes
+        |> List.map (fun obj ->
+               Scope.make ~name:obj.name ~variables_reference:obj.id
+                 ~expensive:true ())
+      in
       Lwt.return Scopes_command.Result.(make ~scopes ()));
+  Debug_rpc.set_command_handler rpc
+    (module Variables_command)
+    (fun arg ->
+      let obj_id = arg.variables_reference in
+      let obj = Ocaml_debug_agent.find_obj agent obj_id in
+      let%lwt objs = Lazy.force obj.members in
+      let value_to_string v =
+        match v with Int n -> string_of_int n | _ -> "Not supported"
+      in
+      let variables =
+        objs
+        |> List.map (fun obj ->
+               Variable.make ~name:obj.name
+                 ~value:(value_to_string obj.value)
+                 ~variables_reference:(if obj.structured then obj.id else 0)
+                 ())
+      in
+      Lwt.return Variables_command.Result.(make ~variables ()));
   Lwt.join [ process_status_changes () ]

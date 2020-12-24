@@ -55,4 +55,6 @@ val stop : t -> unit
 
 val stack_frames : t -> Stack_frame.t array Lwt.t
 
+val find_obj : t -> int -> obj
+
 val start : t -> unit Lwt.t

@@ -1,3 +1,5 @@
+type conn = { io_in : Lwt_io.input_channel; io_out : Lwt_io.output_channel }
+
 let iter_seq_s f seq =
   Seq.fold_left (fun prev_promise elt ->
     let%lwt () = prev_promise in
@@ -124,3 +126,10 @@ let file_content_and_bols =
 let digest_file =
   memo ~weight:String.length ~cap:(64 * 1024) (fun _rec path ->
       Lwt_preemptive.detach (fun path -> Digest.file path) path)
+
+(* This function is needed while Lwt_mvar.take_available may results mvar is still full *)
+let take_mvar_nonblocking var =
+  if not (Lwt_mvar.is_empty var) then
+    Lwt_mvar.take var
+  else
+    Lwt.return ()

@@ -1,8 +1,8 @@
 type t = int
 
 let make_alloc () =
-  let counter = ref 0 in
+  let next_id = ref 1 in
   fun () ->
-    let id = !counter in
-    incr counter;
+    let id = !next_id in
+    incr next_id;
     id
