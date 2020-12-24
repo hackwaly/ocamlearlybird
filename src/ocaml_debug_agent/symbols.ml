@@ -93,12 +93,12 @@ let to_seq_modules t = t.module_by_id |> Hashtbl.to_seq_values
 
 let to_seq_events t = t.event_by_pc |> Hashtbl.to_seq_values
 
-let commit t (module Rdbg : Debugcom.S) conn =
+let commit t conn =
   let commit_one pc =
     let committed = Hashtbl.mem t.committed pc in
     if%lwt Lwt.return (not committed) then (
       Hashtbl.replace t.committed pc ();
-      Rdbg.set_event conn pc )
+      Debugcom.set_event conn pc )
   in
   Log.debug (fun m -> m "symbols commit start");%lwt
   t.commit_queue |> Hashtbl.to_seq_keys |> Lwt_util.iter_seq_s commit_one;%lwt

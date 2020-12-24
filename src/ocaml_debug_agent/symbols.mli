@@ -1,5 +1,3 @@
-open Debugcom
-
 module Module : sig
   type t = {
     frag : int;
@@ -19,7 +17,7 @@ val version : t -> int
 
 val source_dirs : t -> string list
 
-val commit : t -> (module Debugcom.S) -> conn -> unit Lwt.t
+val commit : t -> Debugcom.conn -> unit Lwt.t
 
 val load : t -> frag:int -> string -> unit Lwt.t
 
@@ -27,7 +25,7 @@ val to_seq_modules : t -> Module.t Seq.t
 
 val to_seq_events : t -> Instruct.debug_event Seq.t
 
-val find_event : t -> pc -> Instruct.debug_event
+val find_event : t -> Debugcom.pc -> Instruct.debug_event
 
 val find_module : t -> string -> Module.t
 

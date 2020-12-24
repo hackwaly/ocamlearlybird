@@ -26,7 +26,6 @@ type action = [ stopped_action | `Pause ]
 
 type t = {
   options : options;
-  debugcom : (module Debugcom.S);
   status_s : status Lwt_react.S.t;
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
@@ -48,10 +47,6 @@ let create options =
   let symbols = Symbols.create () in
   let breakpoints = Breakpoints.create () in
   {
-    debugcom =
-      ( match options.remote_debugger_version with
-      | OCaml_400 -> failwith "Not yet implemented"
-      | OCaml_410 -> (module Debugcom_410 : Debugcom.S) );
     options;
     status_s;
     set_status;
@@ -110,8 +105,7 @@ let stack_trace agent =
   | Stopped _ ->
       let promise, resolver = Lwt.task () in
       push_pending agent (fun conn ->
-          let (module Rdbg) = agent.debugcom in
-          let%lwt curr_fr_sp, _ = Rdbg.get_frame conn in
+          let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
           let make_frame index sp (pc : pc) =
             let event = Symbols.find_event agent.symbols pc in
             let module_ = Symbols.find_module agent.symbols event.ev_module in
@@ -119,13 +113,13 @@ let stack_trace agent =
           in
           let rec walk_up index stacksize frames =
             let index = index + 1 in
-            match%lwt Rdbg.up_frame conn stacksize with
+            match%lwt Debugcom.up_frame conn stacksize with
             | Some (sp, pc) ->
                 let frame = make_frame index sp pc in
                 walk_up index (Stack_frame.stacksize frame) (frame :: frames)
             | None -> Lwt.return frames
           in
-          (let%lwt sp, pc = Rdbg.initial_frame conn in
+          (let%lwt sp, pc = Debugcom.initial_frame conn in
            let intial_frame = make_frame 0 sp pc in
            let%lwt frames =
              walk_up 0 (Stack_frame.stacksize intial_frame) [ intial_frame ]
@@ -133,19 +127,24 @@ let stack_trace agent =
            let frames = List.rev frames in
            Lwt.wakeup_later resolver frames;
            Lwt.return ())
-            [%finally Rdbg.set_frame conn curr_fr_sp]);
+            [%finally Debugcom.set_frame conn curr_fr_sp]);
       promise
 
 let start agent =
-  let (module Rdbg) = agent.debugcom in
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
   let conn =
-    {
-      io_in = Lwt_io.(of_fd ~mode:input fd);
-      io_out = Lwt_io.(of_fd ~mode:output fd);
-    }
+    Debugcom.create_conn
+      ( match agent.options.remote_debugger_version with
+      | OCaml_400 -> failwith "Not yet implemented"
+      | OCaml_410 ->
+          (module Debugcom_basic_410 : Debugcom.BASIC
+            with type conn = Lwt_util.conn ) )
+      {
+        io_in = Lwt_io.(of_fd ~mode:input fd);
+        io_out = Lwt_io.(of_fd ~mode:output fd);
+      }
   in
-  let%lwt pid = Rdbg.get_pid conn in
+  let%lwt pid = Debugcom.get_pid conn in
   ignore pid;
   let flush_pendings () =
     while%lwt agent.pendings <> [] do
@@ -155,8 +154,8 @@ let start agent =
     done
   in
   let sync () =
-    Symbols.commit agent.symbols (module Rdbg) conn;%lwt
-    Breakpoints.commit agent.breakpoints (module Rdbg) conn;%lwt
+    Symbols.commit agent.symbols conn;%lwt
+    Breakpoints.commit agent.breakpoints conn;%lwt
     flush_pendings ()
   in
   let wait_action () =
@@ -204,18 +203,18 @@ let start agent =
       | _ -> Lwt.return None
     in
     let exec_with_trap_barrier stack_pos f =
-      Rdbg.set_trap_barrier conn stack_pos;%lwt
-      (f ()) [%finally Rdbg.set_trap_barrier conn 0]
+      Debugcom.set_trap_barrier conn stack_pos;%lwt
+      (f ()) [%finally Debugcom.set_trap_barrier conn 0]
     in
     let exec_with_temporary_breakpoint pc f =
       let already_has_bp = Breakpoints.is_commited agent.breakpoints pc in
       if already_has_bp then f ()
       else
         let cleanup () =
-          Rdbg.reset_instr conn pc;%lwt
-          Rdbg.set_event conn pc
+          Debugcom.reset_instr conn pc;%lwt
+          Debugcom.set_event conn pc
         in
-        Rdbg.set_breakpoint conn pc;%lwt
+        Debugcom.set_breakpoint conn pc;%lwt
         (f ()) [%finally cleanup ()]
     in
     let exec_with_frame index f =
@@ -226,13 +225,13 @@ let start agent =
         let ev = Symbols.find_event agent.symbols pc in
         if cur = index then Lwt.return (Some (stack_pos, pc, ev))
         else
-          match%lwt Rdbg.up_frame conn ev.Instruct.ev_stacksize with
+          match%lwt Debugcom.up_frame conn ev.Instruct.ev_stacksize with
           | None -> Lwt.return None
           | Some (stack_pos, pc) -> walk (cur + 1) (stack_pos, pc)
       in
-      let%lwt stack_pos, pc = Rdbg.initial_frame conn in
+      let%lwt stack_pos, pc = Debugcom.initial_frame conn in
       let%lwt frame = walk 0 (stack_pos, pc) in
-      (f frame) [%finally Rdbg.set_frame conn stack_pos]
+      (f frame) [%finally Debugcom.set_frame conn stack_pos]
     in
     let wrap_run f () =
       agent.set_status Running;
@@ -242,7 +241,7 @@ let start agent =
     in
     let internal_run () =
       let rec loop () =
-        let%lwt report = Rdbg.go conn agent.options.yield_point in
+        let%lwt report = Debugcom.go conn agent.options.yield_point in
         match%lwt check_stop report with
         | Some status -> Lwt.return status
         | None -> loop ()
@@ -251,7 +250,7 @@ let start agent =
     in
     let run = wrap_run internal_run in
     let internal_step_in () =
-      let%lwt report = Rdbg.go conn 1 in
+      let%lwt report = Debugcom.go conn 1 in
       Lwt.return
         ( match report.rep_type with
         | Breakpoint -> Stopped { breakpoint = true }
@@ -278,7 +277,9 @@ let start agent =
           (exec_with_trap_barrier stack_pos (fun () ->
                exec_with_temporary_breakpoint pc (fun () ->
                    let rec loop () =
-                     let%lwt report = Rdbg.go conn agent.options.yield_point in
+                     let%lwt report =
+                       Debugcom.go conn agent.options.yield_point
+                     in
                      match%lwt check_stop report with
                      | Some status -> Lwt.return status
                      | None -> loop ()
@@ -288,9 +289,9 @@ let start agent =
     in
     let step_out = wrap_run internal_step_out in
     let internal_step_over () =
-      let%lwt stack_pos1, pc1 = Rdbg.get_frame conn in
+      let%lwt stack_pos1, pc1 = Debugcom.get_frame conn in
       let%lwt step_in_status = internal_step_in () in
-      let%lwt stack_pos2, pc2 = Rdbg.get_frame conn in
+      let%lwt stack_pos2, pc2 = Debugcom.get_frame conn in
       let ev1 = Symbols.find_event agent.symbols pc1 in
       let ev2 = Symbols.find_event agent.symbols pc2 in
       (* tailcallopt case *)
@@ -307,7 +308,7 @@ let start agent =
     in
     let step_over = wrap_run internal_step_over in
     let stop () =
-      Rdbg.stop conn;%lwt
+      Debugcom.stop conn;%lwt
       Lwt.fail Exit
     in
     function

@@ -1,3 +1,5 @@
+type conn = { io_in : Lwt_io.input_channel; io_out : Lwt_io.output_channel }
+
 let iter_seq_s f seq =
   Seq.fold_left (fun prev_promise elt ->
     let%lwt () = prev_promise in

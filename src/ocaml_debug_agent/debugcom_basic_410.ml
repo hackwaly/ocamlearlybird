@@ -1,4 +1,7 @@
+open Lwt_util
 open Debugcom
+
+type conn = Lwt_util.conn
 
 let get_pid conn =
   Log.debug (fun m -> m "get_pid");%lwt

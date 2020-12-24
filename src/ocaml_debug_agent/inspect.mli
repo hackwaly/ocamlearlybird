@@ -20,7 +20,6 @@ type expr = Lookup of ident | Field of expr * ident | Component of expr * int
 
 val create :
   symbols:Symbols.t ->
-  debugcom:(module Debugcom.S) ->
   conn:Debugcom.conn ->
   unit ->
   t

@@ -32,18 +32,18 @@ let is_commited t pc =
 let check t pc =
   Lwt.return (Hashtbl.mem t.bp_by_pc pc)
 
-let commit t (module Rdbg : Debugcom.S) conn =
+let commit t conn =
   let commit_one pc =
     let removed = not (Hashtbl.mem t.bp_by_pc pc) in
     let committed = Hashtbl.mem t.committed pc in
     match (removed, committed) with
     | true, true ->
-        Rdbg.reset_instr conn pc;%lwt
-        Rdbg.set_event conn pc;%lwt
+        Debugcom.reset_instr conn pc;%lwt
+        Debugcom.set_event conn pc;%lwt
         Hashtbl.remove t.committed pc |> Lwt.return
     | false, false ->
-        Rdbg.reset_instr conn pc;%lwt
-        Rdbg.set_breakpoint conn pc;%lwt
+      Debugcom.reset_instr conn pc;%lwt
+      Debugcom.set_breakpoint conn pc;%lwt
         Hashtbl.replace t.committed pc () |> Lwt.return
     | _ -> Lwt.return ()
   in

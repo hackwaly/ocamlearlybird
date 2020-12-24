@@ -28,20 +28,18 @@ type scene = {
 type t = {
   symbols : Symbols.t;
   mutable symbol_version : int;
-  debugcom : (module Debugcom.S);
   conn : conn;
   mutable scene : scene option;
 }
 
 (*TODO: Use lwt.detach*)
 
-let create ~symbols ~debugcom ~conn () =
+let create ~symbols ~conn () =
   let source_dirs = Symbols.source_dirs symbols in
   Load_path.init source_dirs;
   Envaux.reset_cache ();
   {
     symbols;
-    debugcom;
     conn;
     symbol_version = Symbols.version symbols;
     scene = None;
@@ -71,12 +69,11 @@ let find_ty env path =
   ty
 
 let make_value t =
-  let (module Rdbg) = t.debugcom in
   let conn = t.conn in
   let scene = t.scene |> Option.get in
   fun rv ty ->
     let marshal f =
-      let%lwt mv = Rdbg.marshal_obj conn rv in
+      let%lwt mv = Debugcom.marshal_obj conn rv in
       Lwt.return (f mv)
     in
     if Ctype.matches scene.typenv Predef.type_int ty then
@@ -84,13 +81,12 @@ let make_value t =
     else Lwt.return Unknown
 
 let list_local t =
-  let (module Rdbg) = t.debugcom in
   let conn = t.conn in
   let scene = t.scene |> Option.get in
   let ce_stack = scene.event.ev_compenv.ce_stack in
   let make_obj (id, index) =
     let ty = find_ty scene.typenv (Path.Pident id) in
-    let%lwt rv = Rdbg.get_local conn index in
+    let%lwt rv = Debugcom.get_local conn index in
     let%lwt value = make_value t rv ty in
     let obj =
       {

@@ -1,12 +1,9 @@
-type conn = { io_in : Lwt_io.input_channel; io_out : Lwt_io.output_channel }
-
 type pc = { frag : int; pos : int } [@@deriving show]
 
 type fork_mode = Fork_child | Fork_parent [@@deriving show]
 
-type debug_info = { eventlists : Instruct.debug_event list array }
-
-let pp_debug_info fmt _ = Format.pp_print_string fmt "<debug info>"
+type debug_info = { eventlists : Instruct.debug_event list array [@opaque] }
+[@@deriving show]
 
 type execution_summary =
   | Event
@@ -35,7 +32,9 @@ type remote_value = nativeint [@@deriving show]
 type get_field_result = Remote_value of remote_value | Double of float
 [@@deriving show]
 
-module type S = sig
+module type BASIC = sig
+  type conn
+
   val get_pid : conn -> int Lwt.t
 
   val set_event : conn -> pc -> unit Lwt.t
@@ -80,3 +79,57 @@ module type S = sig
 
   val set_fork_mode : conn -> fork_mode -> unit Lwt.t
 end
+
+type conn =
+  | Conn : { basic : (module BASIC with type conn = 'a); conn : 'a } -> conn
+
+let create_conn (type conn) (module Basic : BASIC with type conn = conn) conn  =
+  Conn { basic = (module Basic); conn }
+
+[@@@ocamlformat "disable"]
+
+let get_pid (Conn {basic = (module Basic); conn}) = Basic.get_pid conn
+
+let set_event (Conn {basic = (module Basic); conn}) = Basic.set_event conn
+
+let set_breakpoint (Conn {basic = (module Basic); conn}) = Basic.set_breakpoint conn
+
+let reset_instr (Conn {basic = (module Basic); conn}) = Basic.reset_instr conn
+
+let checkpoint (Conn {basic = (module Basic); conn}) = Basic.checkpoint conn
+
+let go (Conn {basic = (module Basic); conn}) = Basic.go conn
+
+let stop (Conn {basic = (module Basic); conn}) = Basic.stop conn
+
+let wait (Conn {basic = (module Basic); conn}) = Basic.wait conn
+
+let initial_frame (Conn {basic = (module Basic); conn}) = Basic.initial_frame conn
+
+let get_frame (Conn {basic = (module Basic); conn}) = Basic.get_frame conn
+
+let set_frame (Conn {basic = (module Basic); conn}) = Basic.set_frame conn
+
+let up_frame (Conn {basic = (module Basic); conn}) = Basic.up_frame conn
+
+let set_trap_barrier (Conn {basic = (module Basic); conn}) = Basic.set_trap_barrier conn
+
+let get_local (Conn {basic = (module Basic); conn}) = Basic.get_local conn
+
+let get_environment (Conn {basic = (module Basic); conn}) = Basic.get_environment conn
+
+let get_global (Conn {basic = (module Basic); conn}) = Basic.get_global conn
+
+let get_accu (Conn {basic = (module Basic); conn}) = Basic.get_accu conn
+
+let get_header (Conn {basic = (module Basic); conn}) = Basic.get_header conn
+
+let get_field (Conn {basic = (module Basic); conn}) = Basic.get_field conn
+
+let marshal_obj (Conn {basic = (module Basic); conn}) = Basic.marshal_obj conn
+
+let get_closure_code (Conn {basic = (module Basic); conn}) = Basic.get_closure_code conn
+
+let set_fork_mode (Conn {basic = (module Basic); conn}) = Basic.set_fork_mode conn
+
+[@@@ocamlformat "enable"]
