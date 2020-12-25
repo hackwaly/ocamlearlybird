@@ -1,10 +1,21 @@
 module Module : sig
-  type t = {
-    frag : int;
-    id : string;
-    resolved_source : string option;
-    events : Instruct.debug_event array;
-  }
+  type t
+
+  val id : t -> string
+
+  val frag : t -> int
+
+  val source : t -> string option
+
+  val source_content : t -> string Lwt.t
+
+  val source_line_start : t -> int -> int Lwt.t
+
+  val source_line_length : t -> int -> int Lwt.t
+
+  val line_column_to_cnum : t -> int -> int -> int Lwt.t
+
+  val to_seq_events : t -> Instruct.debug_event Seq.t
 
   val find_event : t -> int -> int -> Instruct.debug_event Lwt.t
 end

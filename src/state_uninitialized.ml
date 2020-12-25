@@ -13,7 +13,8 @@ let run rpc =
         Capabilities.(
           make ~supports_terminate_request:(Some true)
             ~supports_configuration_done_request:(Some true)
-            ~supports_loaded_sources_request:(Some true) ())
+            ~supports_loaded_sources_request:(Some true)
+            ~supports_breakpoint_locations_request:(Some true) ())
       in
       Lwt.wakeup_later resolver (arg, caps);
       Lwt.return caps);

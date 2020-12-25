@@ -334,7 +334,7 @@ let start agent =
                ~structured:true ()
            in
            let scopes =
-             [ make_scope_obj "stack" `Stack; make_scope_obj "heap" `Heap ]
+             [ make_scope_obj "Stack" `Stack; make_scope_obj "Heap" `Heap ]
            in
            frame.scopes <- scopes);
     Lwt.return ()

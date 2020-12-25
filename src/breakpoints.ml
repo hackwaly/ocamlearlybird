@@ -20,6 +20,11 @@ module Breakpoint_desc_set = CCSet.Make (Breakpoint_desc)
 module String_to_multi_breakpoint_desc =
   CCMultiMap.Make (CCString) (Breakpoint_desc)
 
+let lexing_pos_of_event ev = match ev.Instruct.ev_kind with
+  | Event_before -> ev.ev_loc.Location.loc_start
+  | Event_after _ -> ev.ev_loc.Location.loc_end
+  | _ -> ev.ev_loc.Location.loc_start
+
 let run ~launch_args ~terminate ~agent rpc =
   ignore launch_args;
   ignore terminate;
@@ -30,23 +35,19 @@ let run ~launch_args ~terminate ~agent rpc =
   let to_dap_breakpoint desc =
     if desc.resolved |> Option.is_some then
       let is_line_brekpoint = desc.src_bp.column |> Option.is_none in
-      let m, ev = desc.resolved |> Option.get in
-      let lexing_pos = match ev.Instruct.ev_kind with
-        | Event_before -> ev.ev_loc.Location.loc_start
-        | Event_after _ -> ev.ev_loc.Location.loc_end
-        | _ -> ev.ev_loc.Location.loc_start
-      in
+      let module_, event = desc.resolved |> Option.get in
+      let pos = lexing_pos_of_event event in
       Dap_breakpoint.(
         make ~id:(Some desc.id) ~verified:true
           ~source:
-            (Some Source.(make ~path:(Some (m.resolved_source |> Option.get)) ()))
+            (Some Source.(make ~path:(Some ((Module.source module_) |> Option.get)) ()))
           ~line:
             (Some
                ( if is_line_brekpoint then desc.src_bp.line
-               else lexing_pos.pos_lnum ))
+               else pos.pos_lnum ))
           ~column:
             ( if is_line_brekpoint then None
-            else Some (lexing_pos.pos_cnum - lexing_pos.pos_bol) )
+            else Some (pos.pos_cnum - pos.pos_bol) )
           ())
     else Dap_breakpoint.make ~id:(Some desc.id) ~verified:false ()
   in
@@ -62,7 +63,7 @@ let run ~launch_args ~terminate ~agent rpc =
       in
       desc.resolved <- Some (module_, event);
       Ocaml_debug_agent.set_breakpoint agent
-        { frag = module_.frag; pos = event.ev_pos };
+        { frag = (Module.frag module_); pos = event.ev_pos };
       Lwt.return ()
     with
     | Not_found ->
@@ -116,7 +117,7 @@ let run ~launch_args ~terminate ~agent rpc =
         if%lwt Lwt.return (Option.is_some desc.resolved) then (
           let module_, event = desc.resolved |> Option.get in
           Ocaml_debug_agent.remove_breakpoint agent
-            { frag = module_.frag; pos = event.ev_pos };
+            { frag = (Module.frag module_); pos = event.ev_pos };
           desc.resolved <- None;
           Lwt.return () );%lwt
 
@@ -147,6 +148,30 @@ let run ~launch_args ~terminate ~agent rpc =
       let breakpoints = next |> List.map to_dap_breakpoint in
       Lwt.return Set_breakpoints_command.Result.(make ~breakpoints ()));
   Debug_rpc.set_command_handler rpc
-    (module Set_exception_breakpoints_command)
-    (fun _ -> Lwt.return_unit);
+    (module Breakpoint_locations_command)
+    (fun arg ->
+      let%lwt module_ = Ocaml_debug_agent.find_module_by_source agent (arg.source.path |> Option.get) in
+      let line = arg.line in
+      let column = arg.column |> Option.value ~default:0 in
+      let%lwt start = Module.line_column_to_cnum module_ line column in
+      let end_line = arg.end_line |> Option.value ~default:line in
+      let%lwt end_column = match arg.end_column with
+        | Some end_column -> Lwt.return end_column
+        | None ->
+          let%lwt end_of_line = Module.source_line_length module_ end_line in
+          Lwt.return (end_of_line - 1)
+      in
+      let%lwt end_ = Module.line_column_to_cnum module_ end_line end_column in
+      let breakpoints = Module.to_seq_events module_
+        |> Seq.map (lexing_pos_of_event)
+        |> Seq.filter (fun (pos : Lexing.position) ->
+          pos.pos_cnum >= start && pos.pos_cnum <= end_
+        )
+        |> Seq.map (fun (pos : Lexing.position) ->
+          Breakpoint_location.make ~line:pos.pos_lnum ~column:(Some (pos.pos_cnum - pos.pos_bol)) ()
+        )
+        |> List.of_seq
+      in
+      Lwt.return Breakpoint_locations_command.Result.(make ~breakpoints ())
+    );
   Lwt.join [ resolve_breakpoints () ]

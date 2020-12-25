@@ -1,5 +1,6 @@
 open Debugcom
 open Inspect_types
+open Symbols
 
 type t = {
   index : int;
@@ -16,7 +17,7 @@ let defname t = t.event.ev_defname
 
 let module_ t = t.module_
 
-let pc t = { frag = t.module_.frag; pos = t.event.ev_pos }
+let pc t = { frag = (Module.frag t.module_); pos = t.event.ev_pos }
 
 let loc t =
   if t.index = 0 then

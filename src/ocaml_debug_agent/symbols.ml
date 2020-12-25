@@ -8,6 +8,41 @@ module Module = struct
     events : Instruct.debug_event array;
   }
 
+  let id t = t.id
+
+  let frag t = t.frag
+
+  let source t = t.resolved_source
+
+  let source_content t =
+    let%lwt content, _ =
+      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+    in
+    Lwt.return content
+
+  let source_line_start t line =
+    [%lwt assert (line >= 1)];%lwt
+    let%lwt _, bols =
+      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+    in
+    Lwt.return bols.(line - 1)
+
+  let source_line_length t line =
+    [%lwt assert (line >= 1)];%lwt
+    let%lwt _, bols =
+      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+    in
+    Lwt.return (bols.(line) - bols.(line - 1))
+
+  let line_column_to_cnum t line column =
+    let%lwt _, bols =
+      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get) in
+    let bol = bols.(line - 1) in
+    let cnum = bol + column in
+    Lwt.return cnum
+
+  let to_seq_events m = m.events |> Array.to_seq
+
   let find_event m line column =
     let expand_to_equivalent_range code cnum =
       (* TODO: Support skip comments *)
@@ -205,7 +240,7 @@ let load t ~frag path =
                    |> Array.of_list
                  in
                  Array.fast_sort (Compare.by Debug_event.cnum_of) events;
-                 let module_ = Module.{ frag; id; resolved_source; events } in
+                 let module_ = { Module.frag; id; resolved_source; events } in
                  Hashtbl.replace t.module_by_id id module_;
                  ( match resolved_source with
                  | Some source ->
