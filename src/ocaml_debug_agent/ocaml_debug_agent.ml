@@ -174,8 +174,8 @@ and list_obj agent obj_id () =
         let event = frame.event in
         match Lazy.force frame.env with
         | exception _ ->
-          Log.debug (fun m -> m "no env");%lwt
-          Lwt.return []
+            Log.debug (fun m -> m "no env");%lwt
+            Lwt.return []
         | env ->
             Log.debug (fun m -> m "has env");%lwt
             let ident_tbl =
@@ -184,7 +184,9 @@ and list_obj agent obj_id () =
               | `Heap -> event.ev_compenv.ce_heap
               | `Global -> assert false
             in
-            let iter_bindings f = Ident.iter (fun id index -> f (id, index)) ident_tbl in
+            let iter_bindings f =
+              Ident.iter (fun id index -> f (id, index)) ident_tbl
+            in
             let find_ty env path =
               let val_desc = env |> Env.find_value path in
               let ty = Ctype.correct_levels val_desc.Types.val_type in
@@ -195,16 +197,23 @@ and list_obj agent obj_id () =
               match find_ty env (Path.Pident ident) with
               | exception Not_found -> Lwt.return None
               | ty ->
-                let%lwt rv =  match kind with
-                  | `Stack -> Debugcom.get_local conn (event.ev_stacksize - pos)
-                  | `Heap -> Debugcom.get_environment conn pos
-                  | `Global -> assert%lwt false
-                in
-                let%lwt value = Inspect.get_value agent.symbols conn env rv ty in
-                let obj = make_obj agent ~name:(Ident.name ident) ~value () in
-                Lwt.return (Some obj)
+                  let%lwt rv =
+                    match kind with
+                    | `Stack ->
+                        Debugcom.get_local conn (event.ev_stacksize - pos)
+                    | `Heap -> Debugcom.get_environment conn pos
+                    | `Global -> [%lwt assert false]
+                  in
+                  let%lwt value =
+                    Inspect.get_value agent.symbols conn env rv ty
+                  in
+                  let obj = make_obj agent ~name:(Ident.name ident) ~value () in
+                  Lwt.return (Some obj)
             in
-            let%lwt objs = iter_bindings |> Iter.to_list |> Lwt_list.filter_map_s to_obj in
+            let%lwt objs =
+              exec_with_frame agent conn index (fun _ ->
+                  iter_bindings |> Iter.to_list |> Lwt_list.filter_map_s to_obj)
+            in
             Log.debug (fun m -> m "list_scope_obj 2");%lwt
             Lwt.return objs)
   in
@@ -325,10 +334,7 @@ let start agent =
                ~structured:true ()
            in
            let scopes =
-             [
-               make_scope_obj "stack" `Stack;
-               make_scope_obj "heap" `Heap;
-             ]
+             [ make_scope_obj "stack" `Stack; make_scope_obj "heap" `Heap ]
            in
            frame.scopes <- scopes);
     Lwt.return ()
