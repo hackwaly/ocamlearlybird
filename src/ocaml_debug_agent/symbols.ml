@@ -92,7 +92,7 @@ type t = {
   commit_queue : (pc, unit) Hashtbl.t;
   committed : (pc, unit) Hashtbl.t;
   module_by_id : (string, Module.t) Hashtbl.t;
-  module_by_digest : (string, Module.t) Hashtbl.t;
+  module_by_source : (string, Module.t) Hashtbl.t;
   mutable source_dirs : string list;
   mutable version : int;
 }
@@ -115,7 +115,7 @@ let create () =
     commit_queue = Hashtbl.create 0;
     committed = Hashtbl.create 0;
     module_by_id = Hashtbl.create 0;
-    module_by_digest = Hashtbl.create 0;
+    module_by_source = Hashtbl.create 0;
     source_dirs = [];
     version = 0;
   }
@@ -244,8 +244,7 @@ let load t ~frag path =
                  Hashtbl.replace t.module_by_id id module_;
                  ( match resolved_source with
                  | Some source ->
-                     let%lwt digest = Lwt_util.digest_file source in
-                     Hashtbl.replace t.module_by_digest digest module_;
+                     Hashtbl.replace t.module_by_source source module_;
                      Lwt.return ()
                  | None -> Lwt.return () );%lwt
                  Lwt.return ())))
@@ -257,7 +256,6 @@ let load t ~frag path =
 let find_module t id = Hashtbl.find t.module_by_id id
 
 let find_module_by_source t source =
-  let%lwt digest = Lwt_util.digest_file source in
-  Hashtbl.find t.module_by_digest digest |> Lwt.return
+  Hashtbl.find t.module_by_source source |> Lwt.return
 
 let find_event t pc = Hashtbl.find t.event_by_pc pc
