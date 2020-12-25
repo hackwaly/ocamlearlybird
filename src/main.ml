@@ -9,6 +9,9 @@ let on_connection in_ out =
   Logs_lwt.app (fun m -> m "Connection #%d closed" conn_num);%lwt
   Lwt_io.close out
 
+let debug () =
+  on_connection Lwt_io.stdin Lwt_io.stdout
+
 let serve port =
   let addr = Unix.ADDR_INET (Unix.inet_addr_loopback, port) in
   let%lwt _ =
@@ -32,13 +35,17 @@ open Cmdliner
 let setup_log =
   Term.(const setup_log $ Fmt_cli.style_renderer () $ Logs_cli.level ())
 
+let debug_command =
+  let debug () = Lwt_main.run (debug ()) in
+  Term.(const debug $ setup_log, info "debug")
+
 let serve_command =
   let port_arg = Arg.(value & opt int 4711 & info [ "port" ]) in
   let serve port () = Lwt_main.run (serve port) in
   Term.(const serve $ port_arg $ setup_log, info "serve")
 
-let default_cmd =
-  (Term.(ret (const (`Help (`Pager, None)))), Term.info "ocamlearybird")
+let default_command =
+  Term.(ret (const (`Help (`Pager, None))), info "ocamlearybird")
 
 let () =
   (* I don't know why:
@@ -50,4 +57,4 @@ let () =
        if exn <> Exit then (
          Printf.fprintf stderr "Async exception: %s\n" (Printexc.to_string exn);
          Printexc.print_backtrace stderr ));
-  Term.(exit @@ eval_choice default_cmd [ serve_command ])
+  Term.(exit @@ eval_choice default_command [ debug_command; serve_command ])
