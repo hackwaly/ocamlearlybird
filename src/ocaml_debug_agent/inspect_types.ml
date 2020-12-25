@@ -1,4 +1,4 @@
-type frame_scope_kind = [ `Stack | `Heap | `Rec ]
+type frame_scope_kind = [ `Stack | `Heap ]
 
 type scope_kind = [ frame_scope_kind | `Global ]
 

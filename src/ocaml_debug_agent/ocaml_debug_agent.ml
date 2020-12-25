@@ -182,7 +182,6 @@ and list_obj agent obj_id () =
               match kind with
               | `Stack -> event.ev_compenv.ce_stack
               | `Heap -> event.ev_compenv.ce_heap
-              | `Rec -> event.ev_compenv.ce_rec
               | `Global -> assert false
             in
             let iter_bindings f = Ident.iter (fun id index -> f (id, index)) ident_tbl in
@@ -198,7 +197,7 @@ and list_obj agent obj_id () =
               | ty ->
                 let%lwt rv =  match kind with
                   | `Stack -> Debugcom.get_local conn (event.ev_stacksize - pos)
-                  | `Heap | `Rec -> Debugcom.get_environment conn pos
+                  | `Heap -> Debugcom.get_environment conn pos
                   | `Global -> assert%lwt false
                 in
                 let%lwt value = Inspect.get_value agent.symbols conn env rv ty in
@@ -329,7 +328,6 @@ let start agent =
              [
                make_scope_obj "stack" `Stack;
                make_scope_obj "heap" `Heap;
-               make_scope_obj "rec" `Rec;
              ]
            in
            frame.scopes <- scopes);
