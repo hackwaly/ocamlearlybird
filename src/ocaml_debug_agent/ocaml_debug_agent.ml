@@ -1,10 +1,12 @@
-open Debugcom
+open Debug_types
 include Inspect_types
 module Log = Log
 
-type pc = Debugcom.pc = { frag : int; pos : int }
+type pc = Debug_types.pc = { frag : int; pos : int }
 
-type remote_debugger_version = OCaml_400 | OCaml_410
+type remote_debugger_version = Debug_types.remote_debugger_version =
+  | OCaml_400
+  | OCaml_410
 
 type options = {
   remote_debugger_version : remote_debugger_version; [@default OCaml_410]
@@ -34,7 +36,7 @@ type t = {
   symbols_updated_e : unit Lwt_react.E.t;
   emit_symbols_updated : unit -> unit;
   breakpoints : Breakpoints.t;
-  mutable pendings : (conn -> unit Lwt.t) list;
+  mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
   alloc_obj_id : unit -> int;
   mutable scene : scene option;
   mutable env_symbols_version : int;
@@ -214,17 +216,10 @@ and list_scope_obj agent obj =
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
-  let conn =
-    Debugcom.create_conn
-      ( match agent.options.remote_debugger_version with
-      | OCaml_400 -> failwith "Not yet implemented"
-      | OCaml_410 ->
-          (module Debugcom_basic_410 : Debugcom.BASIC
-            with type conn = Lwt_util.conn ) )
-      {
-        io_in = Lwt_io.(of_fd ~mode:input fd);
-        io_out = Lwt_io.(of_fd ~mode:output fd);
-      }
+  let%lwt conn =
+    Debugcom.connect agent.options.remote_debugger_version
+      Lwt_io.(of_fd ~mode:input fd)
+      Lwt_io.(of_fd ~mode:output fd)
   in
   let%lwt pid = Debugcom.get_pid conn in
   ignore pid;

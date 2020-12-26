@@ -1,7 +1,11 @@
 open Lwt_util
-open Debugcom
+open Debug_types
 
-type conn = Lwt_util.conn
+type conn = { io_in : Lwt_io.input_channel; io_out : Lwt_io.output_channel }
+
+let connect version io_in io_out =
+  [%lwt assert (version = OCaml_410)];%lwt
+  Lwt.return { io_in; io_out }
 
 let get_pid conn =
   Log.debug (fun m -> m "get_pid");%lwt
@@ -36,9 +40,10 @@ let checkpoint conn =
   Log.debug (fun m -> m "checkpoint");%lwt
   assert (not Sys.win32);
   let%lwt pid = Lwt_io.BE.read_int conn.io_in in
-  let res = if pid = -1 then Checkpoint_failed else Checkpoint_done pid in
-  Log.debug (fun m -> m "checkpoint return %s" (show_checkpoint_report res));%lwt
-  Lwt.return res
+  if pid = -1 then Lwt.fail Checkpoint_failure
+  else (
+    Log.debug (fun m -> m "checkpoint return %d" pid);%lwt
+    Lwt.return pid )
 
 let go conn n =
   Log.debug (fun m -> m "go n:%d" n);%lwt
@@ -120,10 +125,10 @@ let up_frame conn stacksize =
   let%lwt stack_pos = Lwt_io.BE.read_int conn.io_in in
   let%lwt res =
     if stack_pos = -1 then Lwt.return None
-  else
-    let%lwt frag = Lwt_io.BE.read_int conn.io_in in
-    let%lwt pos = Lwt_io.BE.read_int conn.io_in in
-    Lwt.return (Some (stack_pos, {frag; pos}))
+    else
+      let%lwt frag = Lwt_io.BE.read_int conn.io_in in
+      let%lwt pos = Lwt_io.BE.read_int conn.io_in in
+      Lwt.return (Some (stack_pos, { frag; pos }))
   in
   Log.debug (fun m -> m "set_frame return %s" ([%show: (int * pc) option] res));%lwt
   Lwt.return res
@@ -182,13 +187,15 @@ let get_field conn rv index =
     match%lwt Lwt_io.read_char conn.io_in with
     | '\000' ->
         let%lwt rv = Lwt_util.read_nativeint_be conn.io_in in
-        Lwt.return (Remote_value rv)
+        Lwt.return (`Remote_value rv)
     | '\001' ->
         let%lwt v = Lwt_io.read_float64 conn.io_in in
-        Lwt.return (Double v)
+        Lwt.return (`Double v)
     | _ -> [%lwt assert false]
   in
-  Log.debug (fun m -> m "get_field return %s" (show_get_field_result res));%lwt
+  Log.debug (fun m ->
+      m "get_field return %s"
+        ([%show: [ `Remote_value of remote_value | `Double of float ]] res));%lwt
   Lwt.return res
 
 let marshal_obj conn rv =

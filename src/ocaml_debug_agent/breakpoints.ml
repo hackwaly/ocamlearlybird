@@ -1,4 +1,4 @@
-open Debugcom
+open Debug_types
 
 type breakpoint_desc = { pc : pc }
 

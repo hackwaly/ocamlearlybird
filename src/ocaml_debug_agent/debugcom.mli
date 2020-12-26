@@ -1,40 +1,9 @@
-type pc = { frag : int; pos : int } [@@deriving show]
+open Debug_types
 
-type fork_mode = Fork_child | Fork_parent
-[@@deriving show]
-
-type debug_info = { eventlists : Instruct.debug_event list array }
-[@@deriving show]
-
-type execution_summary =
-  | Event
-  | Breakpoint
-  | Exited
-  | Trap
-  | Uncaught_exc
-  | Code_debug_info of debug_info
-  | Code_loaded of int
-  | Code_unloaded of int
-[@@deriving show]
-
-type report = {
-  rep_type : execution_summary;
-  rep_event_count : int64;
-  rep_stack_pointer : int;
-  rep_program_pointer : pc;
-}
-[@@deriving show]
-
-type checkpoint_report = Checkpoint_done of int | Checkpoint_failed
-[@@deriving show]
-
-type remote_value = nativeint [@@deriving show]
-
-type get_field_result = Remote_value of remote_value | Double of float
-[@@deriving show]
-
-module type BASIC = sig
+module type S = sig
   type conn
+
+  val connect : remote_debugger_version -> Lwt_io.input_channel -> Lwt_io.output_channel -> conn Lwt.t
 
   val get_pid : conn -> int Lwt.t
 
@@ -44,7 +13,7 @@ module type BASIC = sig
 
   val reset_instr : conn -> pc -> unit Lwt.t
 
-  val checkpoint : conn -> checkpoint_report Lwt.t
+  val checkpoint : conn -> int Lwt.t
 
   val go : conn -> int -> report Lwt.t
 
@@ -72,7 +41,7 @@ module type BASIC = sig
 
   val get_header : conn -> remote_value -> int Lwt.t
 
-  val get_field : conn -> remote_value -> int -> get_field_result Lwt.t
+  val get_field : conn -> remote_value -> int -> [`Remote_value of remote_value | `Double of float] Lwt.t
 
   val marshal_obj : conn -> remote_value -> 'a Lwt.t
 
@@ -81,12 +50,4 @@ module type BASIC = sig
   val set_fork_mode : conn -> fork_mode -> unit Lwt.t
 end
 
-type conn =
-  | Conn : {
-    basic : (module BASIC with type conn = 'a);
-    conn : 'a;
-  } -> conn
-
-val create_conn : (module BASIC with type conn = 'a) -> 'a -> conn
-
-include BASIC with type conn := conn
+include S

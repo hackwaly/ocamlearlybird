@@ -1,39 +1,9 @@
-type pc = { frag : int; pos : int } [@@deriving show]
+open Debug_types
 
-type fork_mode = Fork_child | Fork_parent [@@deriving show]
-
-type debug_info = { eventlists : Instruct.debug_event list array [@opaque] }
-[@@deriving show]
-
-type execution_summary =
-  | Event
-  | Breakpoint
-  | Exited
-  | Trap
-  | Uncaught_exc
-  | Code_debug_info of debug_info
-  | Code_loaded of int
-  | Code_unloaded of int
-[@@deriving show]
-
-type report = {
-  rep_type : execution_summary;
-  rep_event_count : int64;
-  rep_stack_pointer : int;
-  rep_program_pointer : pc;
-}
-[@@deriving show]
-
-type checkpoint_report = Checkpoint_done of int | Checkpoint_failed
-[@@deriving show]
-
-type remote_value = nativeint [@@deriving show]
-
-type get_field_result = Remote_value of remote_value | Double of float
-[@@deriving show]
-
-module type BASIC = sig
+module type S = sig
   type conn
+
+  val connect : remote_debugger_version -> Lwt_io.input_channel -> Lwt_io.output_channel -> conn Lwt.t
 
   val get_pid : conn -> int Lwt.t
 
@@ -43,7 +13,7 @@ module type BASIC = sig
 
   val reset_instr : conn -> pc -> unit Lwt.t
 
-  val checkpoint : conn -> checkpoint_report Lwt.t
+  val checkpoint : conn -> int Lwt.t
 
   val go : conn -> int -> report Lwt.t
 
@@ -71,7 +41,11 @@ module type BASIC = sig
 
   val get_header : conn -> remote_value -> int Lwt.t
 
-  val get_field : conn -> remote_value -> int -> get_field_result Lwt.t
+  val get_field :
+    conn ->
+    remote_value ->
+    int ->
+    [ `Remote_value of remote_value | `Double of float ] Lwt.t
 
   val marshal_obj : conn -> remote_value -> 'a Lwt.t
 
@@ -81,55 +55,62 @@ module type BASIC = sig
 end
 
 type conn =
-  | Conn : { basic : (module BASIC with type conn = 'a); conn : 'a } -> conn
+  | Conn : { impl : (module S with type conn = 'a); conn : 'a } -> conn
 
-let create_conn (type conn) (module Basic : BASIC with type conn = conn) conn =
-  Conn { basic = (module Basic); conn }
+let connect version io_in io_out =
+  let (module Impl) = match version with
+    | OCaml_410 -> (module Debugcom_410 : S)
+    | _ -> assert false
+  in
+  let%lwt conn = Impl.connect version io_in io_out  in
+  Lwt.return (Conn { impl = (module Impl); conn })
 
-[@@@ocamlformat "disable"]
+let get_pid (Conn { impl = (module Impl); conn }) = Impl.get_pid conn
 
-let get_pid (Conn {basic = (module Basic); conn}) = Basic.get_pid conn
+let set_event (Conn { impl = (module Impl); conn }) = Impl.set_event conn
 
-let set_event (Conn {basic = (module Basic); conn}) = Basic.set_event conn
+let set_breakpoint (Conn { impl = (module Impl); conn }) =
+  Impl.set_breakpoint conn
 
-let set_breakpoint (Conn {basic = (module Basic); conn}) = Basic.set_breakpoint conn
+let reset_instr (Conn { impl = (module Impl); conn }) = Impl.reset_instr conn
 
-let reset_instr (Conn {basic = (module Basic); conn}) = Basic.reset_instr conn
+let checkpoint (Conn { impl = (module Impl); conn }) = Impl.checkpoint conn
 
-let checkpoint (Conn {basic = (module Basic); conn}) = Basic.checkpoint conn
+let go (Conn { impl = (module Impl); conn }) = Impl.go conn
 
-let go (Conn {basic = (module Basic); conn}) = Basic.go conn
+let stop (Conn { impl = (module Impl); conn }) = Impl.stop conn
 
-let stop (Conn {basic = (module Basic); conn}) = Basic.stop conn
+let wait (Conn { impl = (module Impl); conn }) = Impl.wait conn
 
-let wait (Conn {basic = (module Basic); conn}) = Basic.wait conn
+let initial_frame (Conn { impl = (module Impl); conn }) =
+  Impl.initial_frame conn
 
-let initial_frame (Conn {basic = (module Basic); conn}) = Basic.initial_frame conn
+let get_frame (Conn { impl = (module Impl); conn }) = Impl.get_frame conn
 
-let get_frame (Conn {basic = (module Basic); conn}) = Basic.get_frame conn
+let set_frame (Conn { impl = (module Impl); conn }) = Impl.set_frame conn
 
-let set_frame (Conn {basic = (module Basic); conn}) = Basic.set_frame conn
+let up_frame (Conn { impl = (module Impl); conn }) = Impl.up_frame conn
 
-let up_frame (Conn {basic = (module Basic); conn}) = Basic.up_frame conn
+let set_trap_barrier (Conn { impl = (module Impl); conn }) =
+  Impl.set_trap_barrier conn
 
-let set_trap_barrier (Conn {basic = (module Basic); conn}) = Basic.set_trap_barrier conn
+let get_local (Conn { impl = (module Impl); conn }) = Impl.get_local conn
 
-let get_local (Conn {basic = (module Basic); conn}) = Basic.get_local conn
+let get_environment (Conn { impl = (module Impl); conn }) =
+  Impl.get_environment conn
 
-let get_environment (Conn {basic = (module Basic); conn}) = Basic.get_environment conn
+let get_global (Conn { impl = (module Impl); conn }) = Impl.get_global conn
 
-let get_global (Conn {basic = (module Basic); conn}) = Basic.get_global conn
+let get_accu (Conn { impl = (module Impl); conn }) = Impl.get_accu conn
 
-let get_accu (Conn {basic = (module Basic); conn}) = Basic.get_accu conn
+let get_header (Conn { impl = (module Impl); conn }) = Impl.get_header conn
 
-let get_header (Conn {basic = (module Basic); conn}) = Basic.get_header conn
+let get_field (Conn { impl = (module Impl); conn }) = Impl.get_field conn
 
-let get_field (Conn {basic = (module Basic); conn}) = Basic.get_field conn
+let marshal_obj (Conn { impl = (module Impl); conn }) = Impl.marshal_obj conn
 
-let marshal_obj (Conn {basic = (module Basic); conn}) = Basic.marshal_obj conn
+let get_closure_code (Conn { impl = (module Impl); conn }) =
+  Impl.get_closure_code conn
 
-let get_closure_code (Conn {basic = (module Basic); conn}) = Basic.get_closure_code conn
-
-let set_fork_mode (Conn {basic = (module Basic); conn}) = Basic.set_fork_mode conn
-
-[@@@ocamlformat "enable"]
+let set_fork_mode (Conn { impl = (module Impl); conn }) =
+  Impl.set_fork_mode conn

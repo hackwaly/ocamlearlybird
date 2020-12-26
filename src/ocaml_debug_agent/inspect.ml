@@ -21,7 +21,7 @@ let get_value symbols conn env rv ty =
       match (Ctype.repr ty).desc with
       | Types.Tarrow _ ->
           let%lwt pc = Debugcom.get_closure_code conn rv in
-          Log.debug (fun m -> m "%s" (Debugcom.show_pc pc));%lwt
+          Log.debug (fun m -> m "%s" (Debug_types.show_pc pc));%lwt
           let event = Symbols.find_event symbols pc in
           Lwt.return (Function { location = event.ev_loc })
       | Tconstr(path, ty_args, _) -> (

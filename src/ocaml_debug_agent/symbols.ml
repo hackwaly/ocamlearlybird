@@ -1,4 +1,4 @@
-open Debugcom
+open Debug_types
 
 module Module = struct
   type t = {

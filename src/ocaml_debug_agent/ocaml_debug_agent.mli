@@ -2,9 +2,9 @@ module Log = Log
 
 include module type of Inspect_types
 
-type pc = Debugcom.pc = { frag : int; pos : int }
+type pc = Debug_types.pc = { frag : int; pos : int }
 
-type remote_debugger_version = OCaml_400 | OCaml_410
+type remote_debugger_version = Debug_types.remote_debugger_version = OCaml_400 | OCaml_410
 
 type options = {
   remote_debugger_version : remote_debugger_version; [@default OCaml_410]
