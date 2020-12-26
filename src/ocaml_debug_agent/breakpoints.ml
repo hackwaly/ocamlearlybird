@@ -1,4 +1,4 @@
-open Debug_types
+type pc = Pc.t
 
 type breakpoint_desc = { pc : pc }
 

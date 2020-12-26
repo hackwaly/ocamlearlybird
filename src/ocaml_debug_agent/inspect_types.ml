@@ -1,5 +1,3 @@
-open Debug_types
-
 type frame_scope_kind = [ `Stack | `Heap ]
 
 type scope_kind = [ frame_scope_kind | `Global ]
@@ -47,7 +45,7 @@ module Stack_frame = struct
 
   let module_ t = t.module_
 
-  let pc t = { frag = (Module.frag t.module_); pos = t.event.ev_pos }
+  let pc t = { Pc.frag = (Module.frag t.module_); pos = t.event.ev_pos }
 
   let loc t =
     if t.index = 0 then
@@ -57,7 +55,7 @@ module Stack_frame = struct
 end
 
 type scene = {
-  report : report;
+  report : Debugcom.report;
   frames : Stack_frame.t array;
   obj_tbl : (int, obj) Hashtbl.t;
 }

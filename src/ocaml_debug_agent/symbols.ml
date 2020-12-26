@@ -1,5 +1,3 @@
-open Debug_types
-
 module Module = struct
   type t = {
     frag : int;
@@ -88,9 +86,9 @@ end
 type eventlist = { evl : Instruct.debug_event list; dirs : string list }
 
 type t = {
-  event_by_pc : (pc, Instruct.debug_event) Hashtbl.t;
-  commit_queue : (pc, unit) Hashtbl.t;
-  committed : (pc, unit) Hashtbl.t;
+  event_by_pc : (Pc.t, Instruct.debug_event) Hashtbl.t;
+  commit_queue : (Pc.t, unit) Hashtbl.t;
+  committed : (Pc.t, unit) Hashtbl.t;
   module_by_id : (string, Module.t) Hashtbl.t;
   module_by_source : (string, Module.t) Hashtbl.t;
   mutable source_dirs : string list;
@@ -231,7 +229,7 @@ let load t ~frag path =
                  in
                  evl
                  |> List.iter (fun ev ->
-                        let pc = { frag; pos = ev.Instruct.ev_pos } in
+                        let pc = { Pc.frag; pos = ev.Instruct.ev_pos } in
                         Hashtbl.replace t.event_by_pc pc ev;
                         Hashtbl.replace t.commit_queue pc ());
                  let events =

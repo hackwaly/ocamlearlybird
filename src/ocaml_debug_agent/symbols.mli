@@ -1,5 +1,3 @@
-open Debug_types
-
 module Module : sig
   type t
 
@@ -38,7 +36,7 @@ val to_seq_modules : t -> Module.t Seq.t
 
 val to_seq_events : t -> Instruct.debug_event Seq.t
 
-val find_event : t -> pc -> Instruct.debug_event
+val find_event : t -> Pc.t -> Instruct.debug_event
 
 val find_module : t -> string -> Module.t
 

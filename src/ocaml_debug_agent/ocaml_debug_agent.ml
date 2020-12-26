@@ -1,10 +1,9 @@
-open Debug_types
 include Inspect_types
 module Log = Log
 
-type pc = Debug_types.pc = { frag : int; pos : int }
+type pc = Pc.t = { frag : int; pos : int }
 
-type remote_debugger_version = Debug_types.remote_debugger_version =
+type remote_debugger_version = Debugcom.remote_debugger_version =
   | OCaml_400
   | OCaml_410
 
@@ -253,7 +252,7 @@ let start agent =
   let update_scene agent report =
     let obj_tbl = Hashtbl.create 0 in
     let%lwt frames =
-      match report.rep_type with
+      match report.Debugcom.rep_type with
       | Event | Breakpoint ->
           let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
           let make_frame index sp (pc : pc) =
@@ -325,13 +324,13 @@ let start agent =
       match temporary_trap_barrier_and_breakpoint.contents with
       | None -> false
       | Some (stack_pos, pc) ->
-          report.rep_stack_pointer = stack_pos
+          report.Debugcom.rep_stack_pointer = stack_pos
           && report.rep_program_pointer = pc
     in
     let check_stop report =
       [%lwt assert (is_running agent)];%lwt
       sync ();%lwt
-      match report.rep_type with
+      match report.Debugcom.rep_type with
       | Breakpoint ->
           let met_temporary_trap_barrier_and_breakpoint =
             check_met_temporary_trap_barrier_and_breakpoint report
