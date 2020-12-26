@@ -1,8 +1,10 @@
+open Util
+
 module Module = struct
   type t = {
     frag : int;
     id : string;
-    resolved_source : string option;
+    source : string option;
     events : Instruct.debug_event array;
   }
 
@@ -10,31 +12,31 @@ module Module = struct
 
   let frag t = t.frag
 
-  let source t = t.resolved_source
+  let source t = t.source
 
   let source_content t =
     let%lwt content, _ =
-      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+      Lwt_util.file_content_and_bols (t.source |> Option.get)
     in
     Lwt.return content
 
   let source_line_start t line =
     [%lwt assert (line >= 1)];%lwt
     let%lwt _, bols =
-      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+      Lwt_util.file_content_and_bols (t.source |> Option.get)
     in
     Lwt.return bols.(line - 1)
 
   let source_line_length t line =
     [%lwt assert (line >= 1)];%lwt
     let%lwt _, bols =
-      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get)
+      Lwt_util.file_content_and_bols (t.source |> Option.get)
     in
     Lwt.return (bols.(line) - bols.(line - 1))
 
   let line_column_to_cnum t line column =
     let%lwt _, bols =
-      Lwt_util.file_content_and_bols (t.resolved_source |> Option.get) in
+      Lwt_util.file_content_and_bols (t.source |> Option.get) in
     let bol = bols.(line - 1) in
     let cnum = bol + column in
     Lwt.return cnum
@@ -64,7 +66,7 @@ module Module = struct
       let%lwt l, r = expand_to_equivalent_range code cnum in
       assert (l <= r);
       let cmp ev () =
-        let ev_cnum = Debug_event.cnum_of ev in
+        let ev_cnum = (Debug_event.lexing_position ev).pos_cnum in
         if ev_cnum < l then -1 else if ev_cnum > r then 1 else 0
       in
       Lwt.return
@@ -74,7 +76,7 @@ module Module = struct
     in
     let%lwt code, bols =
       Lwt_util.file_content_and_bols
-        ( try m.resolved_source |> Option.get
+        ( try m.source |> Option.get
           with Invalid_argument _ -> raise Not_found )
     in
     let bol = bols.(line - 1) in
@@ -219,7 +221,7 @@ let load t ~frag path =
           |> Lwt_list.iter_s (fun evl ->
                  let id = (List.hd evl).Instruct.ev_module in
                  let%lwt source_paths = derive_source_paths ~id ~dirs in
-                 let%lwt resolved_source =
+                 let%lwt source =
                    try%lwt
                      let%lwt source_path =
                        source_paths |> Lwt_list.find_s Lwt_unix.file_exists
@@ -237,10 +239,11 @@ let load t ~frag path =
                    |> List.filter (fun ev -> not (Debug_event.is_pseudo ev))
                    |> Array.of_list
                  in
-                 Array.fast_sort (Compare.by Debug_event.cnum_of) events;
-                 let module_ = { Module.frag; id; resolved_source; events } in
+                 let cnum_of ev = (Debug_event.lexing_position ev).pos_cnum in
+                 Array.fast_sort (Compare.by cnum_of) events;
+                 let module_ = { Module.frag; id; source; events } in
                  Hashtbl.replace t.module_by_id id module_;
-                 ( match resolved_source with
+                 ( match source with
                  | Some source ->
                      Hashtbl.replace t.module_by_source source module_;
                      Lwt.return ()
