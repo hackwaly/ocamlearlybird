@@ -3,7 +3,7 @@ type event = { frag : int; ev : Instruct.debug_event; env : Env.t Lwt.t Lazy.t }
 type module_ = {
   frag : int;
   id : string;
-  mutable source : string option;
+  source : string option;
   events : event array;
 }
 

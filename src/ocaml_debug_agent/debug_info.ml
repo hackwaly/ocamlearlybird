@@ -5,7 +5,7 @@ type event = { frag : int; ev : Instruct.debug_event; env : Env.t Lwt.t Lazy.t }
 type module_ = {
   frag : int;
   id : string;
-  mutable source : string option;
+  source : string option;
   events : event array;
 }
 
@@ -109,43 +109,31 @@ let load frag file =
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.input file in
   (let%lwt toc = read_toc ic in
    let%lwt eventlists = read_eventlists toc ic in
-   let source_by_id = Hashtbl.create 0 in
-   let modules =
+   let%lwt modules =
      eventlists |> CCList.to_iter
      |> Iter.flat_map (fun (evl, load_path) ->
             CCList.to_iter (partition_modules evl)
-            |> Iter.map (fun evl ->
-                   let id = (List.hd evl).Instruct.ev_module in
-                   let events =
-                     evl |> CCList.to_iter
-                     |> Iter.map (fun ev ->
-                            {
-                              frag;
-                              ev;
-                              env = Lazy.from_fun (load_env ev load_path);
-                            })
-                     |> Iter.to_array
-                   in
-                   let cnum_of event =
-                     let pos = Debug_event.lexing_position event.ev in
-                     pos.pos_cnum
-                   in
-                   Hashtbl.replace source_by_id id
-                     (Lazy.from_fun (resolve_source id load_path));
-                   events |> Array.fast_sort (Compare.by cnum_of);
-                   { frag; id; source = None; events }))
+            |> Iter.map (fun evl -> (evl, load_path)))
      |> Iter.to_list
+     |> Lwt_list.map_s (fun (evl, load_path) ->
+            let id = (List.hd evl).Instruct.ev_module in
+            let events =
+              evl |> CCList.to_iter
+              |> Iter.map (fun ev ->
+                     { frag; ev; env = Lazy.from_fun (load_env ev load_path) })
+              |> Iter.to_array
+            in
+            let cnum_of event =
+              let pos = Debug_event.lexing_position event.ev in
+              pos.pos_cnum
+            in
+            let%lwt source =
+              match%lwt resolve_source id load_path () with
+              | r -> Lwt.return (Some r)
+              | exception _ -> Lwt.return None
+            in
+            events |> Array.fast_sort (Compare.by cnum_of);
+            Lwt.return { frag; id; source; events })
    in
-   modules
-   |> Lwt_list.iter_s (fun module_ ->
-          let%lwt source =
-            match Hashtbl.find_opt source_by_id module_.id with
-            | None -> Lwt.return None
-            | Some source ->
-                let%lwt source = Lazy.force source in
-                Lwt.return (Some source)
-          in
-          module_.source <- source;
-          Lwt.return ());%lwt
    Lwt.return modules)
     [%finally Lwt_io.close ic]
