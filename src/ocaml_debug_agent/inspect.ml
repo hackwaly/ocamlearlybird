@@ -1,5 +1,5 @@
 open Inspect_types
-open Debug_info
+open Symbols
 
 let get_value find_event conn env rv ty =
   try%lwt

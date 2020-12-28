@@ -25,8 +25,8 @@ type obj = {
 type stack_frame = {
   index : int;
   stack_pos : int;
-  module_ : Debug_info.module_;
-  event : Debug_info.event;
+  module_ : Symbols.module_;
+  event : Symbols.event;
   mutable scopes : obj list;
   env : Env.t Lwt.t Lazy.t;
 }
@@ -35,8 +35,8 @@ module Stack_frame = struct
   type t = stack_frame = {
     index : int;
     stack_pos : int;
-    module_ : Debug_info.module_;
-    event : Debug_info.event;
+    module_ : Symbols.module_;
+    event : Symbols.event;
     mutable scopes : obj list;
     env : Env.t Lwt.t Lazy.t;
   }

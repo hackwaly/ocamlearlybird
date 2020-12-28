@@ -1,4 +1,4 @@
-type t = Debug_info.event = {
+type t = Symbols.event = {
   frag : int;
   ev : Instruct.debug_event;
   env : Env.t Lwt.t Lazy.t;

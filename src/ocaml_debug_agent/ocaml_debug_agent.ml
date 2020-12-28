@@ -32,11 +32,11 @@ type t = {
   action_e : action Lwt_react.E.t;
   emit_action : action -> unit;
   (* #region Symbols *)
-  event_by_pc : (Pc.t, Debug_info.event) Hashtbl.t;
+  event_by_pc : (Pc.t, Symbols.event) Hashtbl.t;
   events_commit_queue : (Pc.t, unit) Hashtbl.t;
   events_committed : (Pc.t, unit) Hashtbl.t;
-  module_by_id : (string, Debug_info.module_) Hashtbl.t;
-  module_by_source : (string, Debug_info.module_) Hashtbl.t;
+  module_by_id : (string, Symbols.module_) Hashtbl.t;
+  module_by_source : (string, Symbols.module_) Hashtbl.t;
   symbols_updated_e : unit Lwt_react.E.t;
   emit_symbols_updated : unit -> unit;
   (* #endregion *)
@@ -226,12 +226,12 @@ and list_scope_obj agent obj =
   | _ -> [%lwt assert false]
 
 let load_debug_info frag agent file =
-  let%lwt modules = Debug_info.load frag file in
-  let add_event (event : Debug_info.event) =
+  let%lwt modules = Symbols.load frag file in
+  let add_event (event : Symbols.event) =
     Hashtbl.replace agent.event_by_pc (Event.pc event) event;
     Hashtbl.replace agent.events_commit_queue (Event.pc event) ()
   in
-  let add_module (module_ : Debug_info.module_) =
+  let add_module (module_ : Symbols.module_) =
     Hashtbl.replace agent.module_by_id module_.id module_;
     module_.events
     |> CCArray.to_iter
