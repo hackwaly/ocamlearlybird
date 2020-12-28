@@ -1,6 +1,4 @@
 open Debug_protocol_ex
-module Dap_breakpoint = Debug_protocol_ex.Breakpoint
-module Dap_stack_frame = Debug_protocol_ex.Stack_frame
 
 let run ~launch_args ~terminate ~agent rpc =
   ignore launch_args;
