@@ -24,7 +24,7 @@ type t
 
 module Module = Module
 module Event = Event
-module Stack_frame = Stack_frame
+module Frame = Frame
 
 val create : options -> t
 
@@ -54,7 +54,7 @@ val pause : t -> unit
 
 val stop : t -> unit
 
-val stack_frames : t -> Stack_frame.t array Lwt.t
+val stack_frames : t -> Frame.t array Lwt.t
 
 val find_obj : t -> int -> obj
 

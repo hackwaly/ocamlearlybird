@@ -54,14 +54,14 @@ let run ~launch_args ~terminate ~agent rpc =
       let%lwt stack_frames =
         frames |> Array.to_list
         |> Lwt_list.map_s (fun fr ->
-               let module_ = Ocaml_debug_agent.Stack_frame.module_ fr in
+               let module_ = Frame.module_ fr in
                let source =
                  Source.(make ~path:(module_.Ocaml_debug_agent.Module.source) ())
                in
                let frame =
-                 let loc = Ocaml_debug_agent.Stack_frame.loc fr in
+                 let loc = Frame.loc fr in
                  Stack_frame.(
-                   make ~id:fr.index ~name:(Ocaml_debug_agent.Stack_frame.defname fr)
+                   make ~id:fr.index ~name:(Frame.defname fr)
                      ~source:(Some source) ~line:loc.loc_start.pos_lnum
                      ~column:(loc.loc_start.pos_cnum - loc.loc_start.pos_bol + 1)
                      ~end_line:(Some loc.loc_end.pos_lnum)

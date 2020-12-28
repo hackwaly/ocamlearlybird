@@ -48,7 +48,7 @@ type t = {
 
 module Module = Module
 module Event = Event
-module Stack_frame = Stack_frame
+module Frame = Frame
 
 let create options =
   let status_s, set_status = React.S.create Entry in
@@ -304,7 +304,7 @@ let start agent =
             let event = find_event agent pc in
             let module_ = find_module agent event.ev.ev_module in
             {
-              Stack_frame.index;
+              Frame.index;
               stack_pos = sp;
               module_;
               event;
@@ -317,13 +317,13 @@ let start agent =
             match%lwt Debugcom.up_frame conn stacksize with
             | Some (sp, pc) ->
                 let frame = make_frame index sp pc in
-                walk_up index (Stack_frame.stacksize frame) (frame :: frames)
+                walk_up index (Frame.stacksize frame) (frame :: frames)
             | None -> Lwt.return frames
           in
           (let%lwt sp, pc = Debugcom.initial_frame conn in
            let intial_frame = make_frame 0 sp pc in
            let%lwt frames =
-             walk_up 0 (Stack_frame.stacksize intial_frame) [ intial_frame ]
+             walk_up 0 (Frame.stacksize intial_frame) [ intial_frame ]
            in
            let frames = List.rev frames |> Array.of_list in
            Lwt.return frames)
@@ -332,9 +332,9 @@ let start agent =
     in
     let scene = { report; frames; obj_tbl } in
     agent.scene <- Some scene;
-    (* We delay set Stack_frame's `scopes` field. Because make_obj need agent's `scene` field to be set *)
+    (* We delay set Frame's `scopes` field. Because make_obj need agent's `scene` field to be set *)
     scene.frames
-    |> Array.iter (fun (frame : Stack_frame.t) ->
+    |> Array.iter (fun (frame : Frame.t) ->
            let make_scope_obj name kind =
              make_obj agent ~name
                ~value:
