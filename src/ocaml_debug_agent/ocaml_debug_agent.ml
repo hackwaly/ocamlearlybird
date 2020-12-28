@@ -31,24 +31,29 @@ type t = {
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
   emit_action : action -> unit;
-  symbols : Symbols.t;
+  (* #region Symbols *)
+  event_by_pc : (Pc.t, Debug_info.event) Hashtbl.t;
+  events_commit_queue : (Pc.t, unit) Hashtbl.t;
+  events_committed : (Pc.t, unit) Hashtbl.t;
+  module_by_id : (string, Debug_info.module_) Hashtbl.t;
+  module_by_source : (string, Debug_info.module_) Hashtbl.t;
   symbols_updated_e : unit Lwt_react.E.t;
   emit_symbols_updated : unit -> unit;
+  (* #endregion *)
   breakpoints : Breakpoints.t;
   mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
   alloc_obj_id : unit -> int;
   mutable scene : scene option;
-  mutable env_symbols_version : int;
 }
 
-module Module = Symbols.Module
+module Module = Module
+module Event = Event
 module Stack_frame = Stack_frame
 
 let create options =
   let status_s, set_status = React.S.create Entry in
   let action_e, emit_action = Lwt_react.E.create () in
   let symbols_updated_e, emit_symbols_updated = Lwt_react.E.create () in
-  let symbols = Symbols.create () in
   let breakpoints = Breakpoints.create () in
   {
     options;
@@ -56,24 +61,31 @@ let create options =
     set_status;
     action_e;
     emit_action;
-    symbols;
+    event_by_pc = Hashtbl.create 0;
+    events_commit_queue = Hashtbl.create 0;
+    events_committed = Hashtbl.create 0;
+    module_by_id = Hashtbl.create 0;
+    module_by_source = Hashtbl.create 0;
     symbols_updated_e;
     emit_symbols_updated;
     breakpoints;
     pendings = [];
     alloc_obj_id = Unique_id.make_alloc ();
     scene = None;
-    env_symbols_version = 0;
   }
 
 let symbols_updated_event agent = agent.symbols_updated_e
 
-let to_seq_modules agent = Symbols.to_seq_modules agent.symbols
+let to_seq_modules agent = agent.module_by_id |> Hashtbl.to_seq_values
 
 let find_module_by_source agent source =
-  Symbols.find_module_by_source agent.symbols source
+  Hashtbl.find agent.module_by_source source |> Lwt.return
 
-let find_module agent id = Symbols.find_module agent.symbols id
+let find_module agent id =
+  Hashtbl.find agent.module_by_id id
+
+let find_event agent pc =
+  Hashtbl.find agent.event_by_pc pc
 
 let is_running agent =
   match agent.status_s |> Lwt_react.S.value with Running -> true | _ -> false
@@ -131,10 +143,10 @@ let exec_with_frame agent conn index f =
   assert (index >= 0);
   let rec walk cur (stack_pos, pc) =
     Log.debug (fun m -> m "exec_with_frame cur:%d" cur);%lwt
-    let ev = Symbols.find_event agent.symbols pc in
+    let ev = find_event agent pc in
     if cur = index then Lwt.return (Some (stack_pos, pc, ev))
     else
-      match%lwt Debugcom.up_frame conn ev.Instruct.ev_stacksize with
+      match%lwt Debugcom.up_frame conn ev.ev.Instruct.ev_stacksize with
       | None -> Lwt.return None
       | Some (stack_pos, pc) -> walk (cur + 1) (stack_pos, pc)
   in
@@ -164,7 +176,7 @@ and list_scope_obj agent obj =
       exec_in_loop agent (fun conn ->
           let frame = scene.frames.(index) in
           let event = frame.event in
-          match Lazy.force frame.env with
+          match%lwt Lazy.force frame.env with
           | exception _ ->
               Log.debug (fun m -> m "no env");%lwt
               Lwt.return []
@@ -172,8 +184,8 @@ and list_scope_obj agent obj =
               Log.debug (fun m -> m "has env");%lwt
               let ident_tbl =
                 match kind with
-                | `Stack -> event.ev_compenv.ce_stack
-                | `Heap -> event.ev_compenv.ce_heap
+                | `Stack -> event.ev.ev_compenv.ce_stack
+                | `Heap -> event.ev.ev_compenv.ce_heap
                 | `Global -> assert false
               in
               let iter_bindings f =
@@ -192,12 +204,12 @@ and list_scope_obj agent obj =
                     let%lwt rv =
                       match kind with
                       | `Stack ->
-                          Debugcom.get_local conn (event.ev_stacksize - pos)
+                          Debugcom.get_local conn (event.ev.ev_stacksize - pos)
                       | `Heap -> Debugcom.get_environment conn pos
                       | `Global -> [%lwt assert false]
                     in
                     let%lwt value =
-                      Inspect.get_value agent.symbols conn env rv ty
+                      Inspect.get_value (find_event agent) conn env rv ty
                     in
                     let obj =
                       make_obj agent ~name:(Ident.name ident) ~value ()
@@ -212,6 +224,39 @@ and list_scope_obj agent obj =
               Log.debug (fun m -> m "list_scope_obj 2");%lwt
               Lwt.return objs)
   | _ -> [%lwt assert false]
+
+let load_debug_info frag agent file =
+  let%lwt modules = Debug_info.load frag file in
+  let add_event (event : Debug_info.event) =
+    Hashtbl.replace agent.event_by_pc (Event.pc event) event;
+    Hashtbl.replace agent.events_commit_queue (Event.pc event) ()
+  in
+  let add_module (module_ : Debug_info.module_) =
+    Hashtbl.replace agent.module_by_id module_.id module_;
+    module_.events
+    |> CCArray.to_iter
+    |> Iter.iter add_event;
+    match module_.source with
+    | Some source ->
+        Hashtbl.replace agent.module_by_source source module_;
+        Lwt.return ()
+    | None -> Lwt.return ()
+  in
+  modules |> Lwt_list.iter_s add_module;%lwt
+  Lwt.return ()
+
+let commit_events agent conn =
+  let commit_one pc =
+    let committed = Hashtbl.mem agent.events_committed pc in
+    if%lwt Lwt.return (not committed) then (
+      Hashtbl.replace agent.events_committed pc ();
+      Debugcom.set_event conn pc )
+  in
+  Log.debug (fun m -> m "commit_events start");%lwt
+  agent.events_commit_queue |> Hashtbl.to_seq_keys |> Lwt_util.iter_seq_s commit_one;%lwt
+  Hashtbl.reset agent.events_commit_queue;
+  Log.debug (fun m -> m "commit_events end");%lwt
+  Lwt.return ()
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
@@ -230,7 +275,7 @@ let start agent =
     done
   in
   let sync () =
-    Symbols.commit agent.symbols conn;%lwt
+    commit_events agent conn;%lwt
     Breakpoints.commit agent.breakpoints conn;%lwt
     flush_pendings ()
   in
@@ -256,26 +301,15 @@ let start agent =
       | Event | Breakpoint ->
           let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
           let make_frame index sp (pc : pc) =
-            let event = Symbols.find_event agent.symbols pc in
-            let module_ = Symbols.find_module agent.symbols event.ev_module in
-            let env =
-              Lazy.from_fun (fun () ->
-                  (* TODO: Move to rpc call *)
-                  if Symbols.version agent.symbols <> agent.env_symbols_version
-                  then (
-                    let source_dirs = Symbols.source_dirs agent.symbols in
-                    Load_path.init source_dirs;
-                    Envaux.reset_cache ();
-                    agent.env_symbols_version <- Symbols.version agent.symbols );
-                  Envaux.env_from_summary event.ev_typenv event.ev_typsubst)
-            in
+            let event = find_event agent pc in
+            let module_ = find_module agent event.ev.ev_module in
             {
               Stack_frame.index;
               stack_pos = sp;
               module_;
               event;
               scopes = [];
-              env;
+              env = event.env;
             }
           in
           let rec walk_up index stacksize frames =
@@ -434,16 +468,16 @@ let start agent =
       let%lwt stack_pos1, pc1 = Debugcom.get_frame conn in
       let%lwt step_in_status = internal_step_in () in
       let%lwt stack_pos2, pc2 = Debugcom.get_frame conn in
-      let ev1 = Symbols.find_event agent.symbols pc1 in
-      let ev2 = Symbols.find_event agent.symbols pc2 in
+      let ev1 = find_event agent pc1 in
+      let ev2 = find_event agent pc2 in
       (* tailcallopt case *)
       let is_tco () =
-        if stack_pos2 - ev2.ev_stacksize = stack_pos1 - ev1.ev_stacksize then
-          ev2.ev_info = Event_function
+        if stack_pos2 - ev2.ev.ev_stacksize = stack_pos1 - ev1.ev.ev_stacksize then
+          ev2.ev.ev_info = Event_function
         else false
       in
       let is_entered () =
-        stack_pos2 - ev2.ev_stacksize > stack_pos1 - ev1.ev_stacksize
+        stack_pos2 - ev2.ev.ev_stacksize > stack_pos1 - ev1.ev.ev_stacksize
       in
       if is_entered () || is_tco () then internal_step_out ()
       else Lwt.return step_in_status
@@ -460,7 +494,7 @@ let start agent =
     | `Step_over -> step_over ()
     | `Stop -> stop ()
   in
-  Symbols.load agent.symbols ~frag:0 agent.options.symbols_file;%lwt
+  load_debug_info 0 agent agent.options.symbols_file;%lwt
   agent.emit_symbols_updated ();
   try%lwt
     while%lwt true do

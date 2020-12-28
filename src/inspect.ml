@@ -39,8 +39,8 @@ let run ~launch_args ~terminate ~agent rpc =
       let modules = Ocaml_debug_agent.to_seq_modules agent |> List.of_seq in
       let sources =
         modules
-        |> List.filter (fun module_ -> (Module.source module_) |> Option.is_some)
-        |> List.map (fun module_ -> Source.make ~path:(Module.source module_) ())
+        |> List.filter (fun module_ -> module_.Module.source |> Option.is_some)
+        |> List.map (fun module_ -> Source.make ~path:(module_.Module.source) ())
       in
       Loaded_sources_command.Result.make ~sources () |> Lwt.return);
   Debug_rpc.set_command_handler rpc
@@ -58,7 +58,7 @@ let run ~launch_args ~terminate ~agent rpc =
         |> Lwt_list.map_s (fun fr ->
                let module_ = Stack_frame.module_ fr in
                let source =
-                 Source.(make ~path:(Module.source module_) ())
+                 Source.(make ~path:(module_.Module.source) ())
                in
                let frame =
                  let loc = Stack_frame.loc fr in

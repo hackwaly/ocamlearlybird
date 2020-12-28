@@ -1,6 +1,7 @@
 open Inspect_types
+open Debug_info
 
-let get_value symbols conn env rv ty =
+let get_value find_event conn env rv ty =
   try%lwt
     if Ctype.matches env Predef.type_int ty then
       let%lwt mv = Debugcom.marshal_obj conn rv in
@@ -22,8 +23,8 @@ let get_value symbols conn env rv ty =
       | Types.Tarrow _ ->
           let%lwt pc = Debugcom.get_closure_code conn rv in
           Log.debug (fun m -> m "%s" (Pc.show pc));%lwt
-          let event = Symbols.find_event symbols pc in
-          Lwt.return (Function { location = event.ev_loc })
+          let event = find_event pc in
+          Lwt.return (Function { location = event.ev.ev_loc })
       | Tconstr(path, ty_args, _) -> (
         match env |> Env.find_type path with
         | _ -> Lwt.return Unknown

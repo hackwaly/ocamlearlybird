@@ -25,35 +25,35 @@ type obj = {
 type stack_frame = {
   index : int;
   stack_pos : int;
-  module_ : Symbols.Module.t;
-  event : Instruct.debug_event;
+  module_ : Debug_info.module_;
+  event : Debug_info.event;
   mutable scopes : obj list;
-  env : Env.t Lazy.t;
+  env : Env.t Lwt.t Lazy.t;
 }
 
 module Stack_frame = struct
   type t = stack_frame = {
     index : int;
     stack_pos : int;
-    module_ : Symbols.Module.t;
-    event : Instruct.debug_event;
+    module_ : Debug_info.module_;
+    event : Debug_info.event;
     mutable scopes : obj list;
-    env : Env.t Lazy.t;
+    env : Env.t Lwt.t Lazy.t;
   }
 
-  let stacksize t = t.event.ev_stacksize
+  let stacksize t = t.event.ev.ev_stacksize
 
-  let defname t = t.event.ev_defname
+  let defname t = t.event.ev.ev_defname
 
   let module_ t = t.module_
 
-  let pc t = { Pc.frag = (Module.frag t.module_); pos = t.event.ev_pos }
+  let pc t = { Pc.frag = t.module_.frag; pos = t.event.ev.ev_pos }
 
   let loc t =
     if t.index = 0 then
-      let pos = Debug_event.lexing_position t.event in
+      let pos = Debug_event.lexing_position t.event.ev in
       Location.{ loc_start = pos; loc_end = pos; loc_ghost = false }
-    else t.event.ev_loc
+    else t.event.ev.ev_loc
 end
 
 type scene = {

@@ -7,7 +7,7 @@ type breakpoint_desc = {
   id : int;
   source : Source.t;
   src_bp : Source_breakpoint.t;
-  mutable resolved : (Module.t * Instruct.debug_event) option;
+  mutable resolved : (Ocaml_debug_agent.Module.t * Ocaml_debug_agent.Event.t) option;
 }
 
 module Breakpoint_desc = struct
@@ -20,7 +20,9 @@ module Breakpoint_desc_set = CCSet.Make (Breakpoint_desc)
 module String_to_multi_breakpoint_desc =
   CCMultiMap.Make (CCString) (Breakpoint_desc)
 
-let lexing_pos_of_event ev = match ev.Instruct.ev_kind with
+let lexing_pos_of_event (ev : Ocaml_debug_agent.Event.t) =
+  let ev = ev.ev in
+  match ev.Instruct.ev_kind with
   | Event_before -> ev.ev_loc.Location.loc_start
   | Event_after _ -> ev.ev_loc.Location.loc_end
   | _ -> ev.ev_loc.Location.loc_start
@@ -40,7 +42,7 @@ let run ~launch_args ~terminate ~agent rpc =
       Dap_breakpoint.(
         make ~id:(Some desc.id) ~verified:true
           ~source:
-            (Some Source.(make ~path:(Some ((Module.source module_) |> Option.get)) ()))
+            (Some Source.(make ~path:(Some (module_.source |> Option.get)) ()))
           ~line:
             (Some
                ( if is_line_brekpoint then desc.src_bp.line
@@ -63,7 +65,7 @@ let run ~launch_args ~terminate ~agent rpc =
       in
       desc.resolved <- Some (module_, event);
       Ocaml_debug_agent.set_breakpoint agent
-        { frag = (Module.frag module_); pos = event.ev_pos };
+        { frag = module_.frag; pos = event.ev.ev_pos };
       Lwt.return ()
     with
     | Not_found ->
@@ -117,7 +119,7 @@ let run ~launch_args ~terminate ~agent rpc =
         if%lwt Lwt.return (Option.is_some desc.resolved) then (
           let module_, event = desc.resolved |> Option.get in
           Ocaml_debug_agent.remove_breakpoint agent
-            { frag = (Module.frag module_); pos = event.ev_pos };
+            { frag = module_.frag; pos = event.ev.ev_pos };
           desc.resolved <- None;
           Lwt.return () );%lwt
 

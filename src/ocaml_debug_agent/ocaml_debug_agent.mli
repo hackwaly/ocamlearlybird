@@ -22,7 +22,8 @@ type status =
 
 type t
 
-module Module = Symbols.Module
+module Module = Module
+module Event = Event
 module Stack_frame = Stack_frame
 
 val create : options -> t
