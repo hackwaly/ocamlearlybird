@@ -1,7 +1,5 @@
 open Debug_protocol_ex
 open Ocaml_debug_agent
-module Dap_breakpoint = Debug_protocol_ex.Breakpoint
-module Dap_stack_frame = Debug_protocol_ex.Stack_frame
 
 type breakpoint_desc = {
   id : int;
@@ -34,12 +32,12 @@ let run ~launch_args ~terminate ~agent rpc =
   let alloc_breakpoint_id = Unique_id.make_alloc () in
   let module_breakpoints_map = ref String_to_multi_breakpoint_desc.empty in
   let unresolved_breakpoints = ref Breakpoint_desc_set.empty in
-  let to_dap_breakpoint desc =
+  let to_Breakpoint desc =
     if desc.resolved |> Option.is_some then
       let is_line_brekpoint = desc.src_bp.column |> Option.is_none in
       let module_, event = desc.resolved |> Option.get in
       let pos = lexing_pos_of_event event in
-      Dap_breakpoint.(
+      Breakpoint.(
         make ~id:(Some desc.id) ~verified:true
           ~source:
             (Some Source.(make ~path:(Some (module_.source |> Option.get)) ()))
@@ -51,7 +49,7 @@ let run ~launch_args ~terminate ~agent rpc =
             ( if is_line_brekpoint then None
             else Some (pos.pos_cnum - pos.pos_bol) )
           ())
-    else Dap_breakpoint.make ~id:(Some desc.id) ~verified:false ()
+    else Breakpoint.make ~id:(Some desc.id) ~verified:false ()
   in
   let resolve_breakpoint desc =
     try%lwt
@@ -92,7 +90,7 @@ let run ~launch_args ~terminate ~agent rpc =
         Debug_rpc.send_event rpc
           (module Breakpoint_event)
           Breakpoint_event.Payload.(
-            make ~reason:Reason.Changed ~breakpoint:(to_dap_breakpoint desc))
+            make ~reason:Reason.Changed ~breakpoint:(to_Breakpoint desc))
       in
       Log.debug (fun m ->
           m "resolved_breakpoints %d"
@@ -147,7 +145,7 @@ let run ~launch_args ~terminate ~agent rpc =
                String_to_multi_breakpoint_desc.add !module_breakpoints_map
                  source_path desc);
       next |> Lwt_list.iter_s resolve_breakpoint;%lwt
-      let breakpoints = next |> List.map to_dap_breakpoint in
+      let breakpoints = next |> List.map to_Breakpoint in
       Lwt.return Set_breakpoints_command.Result.(make ~breakpoints ()));
   Debug_rpc.set_command_handler rpc
     (module Breakpoint_locations_command)
