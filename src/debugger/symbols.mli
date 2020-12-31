@@ -14,5 +14,4 @@ val find_event : t -> Pc.t -> Debuginfo.event
 
 val load : t -> int -> string -> unit Lwt.t
 
-val commit : t -> (Pc.t Seq.t -> unit Lwt.t) -> unit Lwt.t
-
+val commit : t -> (Pc.t Seq.t -> unit Lwt.t) -> (Pc.t Seq.t ->unit Lwt.t) -> unit Lwt.t

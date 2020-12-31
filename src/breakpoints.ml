@@ -53,7 +53,7 @@ let run ~launch_args ~terminate ~agent rpc =
   in
   let resolve_breakpoint desc =
     try%lwt
-      let%lwt module_ =
+      let module_ =
         Debugger.find_module_by_source agent
           (desc.source.path |> Option.get)
       in
@@ -72,8 +72,8 @@ let run ~launch_args ~terminate ~agent rpc =
         Lwt.return ()
   in
   let resolve_breakpoints () =
-    let symbols_updated_stream =
-      Debugger.symbols_updated_event agent |> Lwt_react.E.to_stream
+    let symbols_did_update_stream =
+      Debugger.symbols_did_update_event agent |> Lwt_react.E.to_stream
     in
     while%lwt true do
       Log.debug (fun m ->
@@ -101,7 +101,7 @@ let run ~launch_args ~terminate ~agent rpc =
         !unresolved_breakpoints
         |> Breakpoint_desc_set.filter (fun desc ->
                desc.resolved |> Option.is_none);
-      Lwt_stream.next symbols_updated_stream;%lwt
+      Lwt_stream.next symbols_did_update_stream;%lwt
       Log.debug (fun m -> m "symbols updated")
     done
   in
@@ -150,7 +150,7 @@ let run ~launch_args ~terminate ~agent rpc =
   Debug_rpc.set_command_handler rpc
     (module Breakpoint_locations_command)
     (fun arg ->
-      let%lwt module_ = Debugger.find_module_by_source agent (arg.source.path |> Option.get) in
+      let module_ = Debugger.find_module_by_source agent (arg.source.path |> Option.get) in
       let line = arg.line in
       let column = arg.column |> Option.value ~default:0 in
       let%lwt start = Module.line_column_to_cnum module_ line column in

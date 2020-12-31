@@ -28,13 +28,13 @@ module Frame = Frame
 
 val create : options -> t
 
-val symbols_updated_event : t -> unit Lwt_react.E.t
+val symbols_did_update_event : t -> unit Lwt_react.E.t
 
 val to_seq_modules : t -> Module.t Seq.t
 
 val find_module : t -> string -> Module.t
 
-val find_module_by_source : t -> string -> Module.t Lwt.t
+val find_module_by_source : t -> string -> Module.t
 
 val status_signal : t -> status Lwt_react.S.t
 

@@ -31,15 +31,7 @@ type t = {
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
   emit_action : action -> unit;
-  (* #region Debuginfo *)
-  event_by_pc : (Pc.t, Debuginfo.event) Hashtbl.t;
-  events_commit_queue : (Pc.t, unit) Hashtbl.t;
-  events_committed : (Pc.t, unit) Hashtbl.t;
-  module_by_id : (string, Debuginfo.module_) Hashtbl.t;
-  module_by_source : (string, Debuginfo.module_) Hashtbl.t;
-  symbols_updated_e : unit Lwt_react.E.t;
-  emit_symbols_updated : unit -> unit;
-  (* #endregion *)
+  symbols :Symbols.t;
   breakpoints : Breakpoints.t;
   mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
   mutable inspect : Inspect.t;
@@ -49,18 +41,15 @@ module Module = Module
 module Event = Event
 module Frame = Frame
 
-let symbols_updated_event agent = agent.symbols_updated_e
+let symbols_did_update_event agent = Symbols.did_update_event agent.symbols
 
-let to_seq_modules agent = agent.module_by_id |> Hashtbl.to_seq_values
+let to_seq_modules agent = Symbols.to_seq_modules agent.symbols
 
-let find_module_by_source agent source =
-  Hashtbl.find agent.module_by_source source |> Lwt.return
+let find_module_by_source agent source = Symbols.find_module_by_source agent.symbols source
 
-let find_module agent id =
-  Hashtbl.find agent.module_by_id id
+let find_module agent id = Symbols.find_module agent.symbols id
 
-let find_event agent pc =
-  Hashtbl.find agent.event_by_pc pc
+let find_event agent pc = Symbols.find_event agent.symbols pc
 
 let is_running agent =
   match agent.status_s |> Lwt_react.S.value with Running -> true | _ -> false
@@ -94,21 +83,15 @@ let find_obj agent id =
 let create options =
   let status_s, set_status = React.S.create Entry in
   let action_e, emit_action = Lwt_react.E.create () in
-  let symbols_updated_e, emit_symbols_updated = Lwt_react.E.create () in
   let breakpoints = Breakpoints.create () in
+	let symbols = Symbols.create () in
   let agent = {
     options;
     status_s;
     set_status;
     action_e;
     emit_action;
-    event_by_pc = Hashtbl.create 0;
-    events_commit_queue = Hashtbl.create 0;
-    events_committed = Hashtbl.create 0;
-    module_by_id = Hashtbl.create 0;
-    module_by_source = Hashtbl.create 0;
-    symbols_updated_e;
-    emit_symbols_updated;
+    symbols;
     breakpoints;
     pendings = [];
     inspect = Obj.magic ();
@@ -143,36 +126,11 @@ let pause agent = agent.emit_action `Pause
 
 let stop agent = agent.emit_action `Stop
 
-let load_debug_info frag agent file =
-  let%lwt modules = Debuginfo.load frag file in
-  let add_event (event : Debuginfo.event) =
-    Hashtbl.replace agent.event_by_pc (Event.pc event) event;
-    Hashtbl.replace agent.events_commit_queue (Event.pc event) ()
-  in
-  let add_module (module_ : Debuginfo.module_) =
-    Hashtbl.replace agent.module_by_id module_.id module_;
-    module_.events
-    |> CCArray.to_iter
-    |> Iter.iter add_event;
-    match module_.source with
-    | Some source ->
-        Hashtbl.replace agent.module_by_source source module_;
-        Lwt.return ()
-    | None -> Lwt.return ()
-  in
-  modules |> Lwt_list.iter_s add_module;%lwt
-  Lwt.return ()
-
 let commit_events agent conn =
-  let commit_one pc =
-    let committed = Hashtbl.mem agent.events_committed pc in
-    if%lwt Lwt.return (not committed) then (
-      Hashtbl.replace agent.events_committed pc ();
-      Debugcom.set_event conn pc )
-  in
   Log.debug (fun m -> m "commit_events start");%lwt
-  agent.events_commit_queue |> Hashtbl.to_seq_keys |> Lwt_util.iter_seq_s commit_one;%lwt
-  Hashtbl.reset agent.events_commit_queue;
+  Symbols.commit agent.symbols
+  	(Lwt_util.iter_seq_s (Debugcom.set_event conn))
+    (Lwt_util.iter_seq_s (Debugcom.reset_instr conn));%lwt
   Log.debug (fun m -> m "commit_events end");%lwt
   Lwt.return ()
 
@@ -353,8 +311,7 @@ let start agent =
     | `Step_over -> step_over ()
     | `Stop -> stop ()
   in
-  load_debug_info 0 agent agent.options.symbols_file;%lwt
-  agent.emit_symbols_updated ();
+  Symbols.load agent.symbols 0 agent.options.symbols_file;%lwt
   try%lwt
     while%lwt true do
       sync ();%lwt
