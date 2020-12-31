@@ -20,18 +20,18 @@ let create () =
     emit_did_update;
   }
 
-let did_update_event agent = agent.did_update_e
+let did_update_event t = t.did_update_e
 
-let to_seq_modules agent = agent.module_by_id |> Hashtbl.to_seq_values
+let to_seq_modules t = t.module_by_id |> Hashtbl.to_seq_values
 
-let find_module_by_source agent source =
-  Hashtbl.find agent.module_by_source source |> Lwt.return
+let find_module_by_source t source =
+  Hashtbl.find t.module_by_source source
 
-let find_module agent id =
-  Hashtbl.find agent.module_by_id id
+let find_module t id =
+  Hashtbl.find t.module_by_id id
 
-let find_event agent pc =
-  Hashtbl.find agent.event_by_pc pc
+let find_event t pc =
+  Hashtbl.find t.event_by_pc pc
 
 let load t frag file =
   let%lwt modules = Debuginfo.load frag file in
