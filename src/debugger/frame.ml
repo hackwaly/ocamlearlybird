@@ -4,8 +4,8 @@ open Inspect_types
 type t = Inspect_types.stack_frame = {
   index : int;
   stack_pos : int;
-  module_ : Symbols.module_;
-  event : Symbols.event;
+  module_ : Debuginfo.module_;
+  event : Debuginfo.event;
   mutable scopes : obj list;
   env : Env.t Lwt.t Lazy.t;
 }

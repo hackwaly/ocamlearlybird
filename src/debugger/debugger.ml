@@ -31,12 +31,12 @@ type t = {
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
   emit_action : action -> unit;
-  (* #region Symbols *)
-  event_by_pc : (Pc.t, Symbols.event) Hashtbl.t;
+  (* #region Debuginfo *)
+  event_by_pc : (Pc.t, Debuginfo.event) Hashtbl.t;
   events_commit_queue : (Pc.t, unit) Hashtbl.t;
   events_committed : (Pc.t, unit) Hashtbl.t;
-  module_by_id : (string, Symbols.module_) Hashtbl.t;
-  module_by_source : (string, Symbols.module_) Hashtbl.t;
+  module_by_id : (string, Debuginfo.module_) Hashtbl.t;
+  module_by_source : (string, Debuginfo.module_) Hashtbl.t;
   symbols_updated_e : unit Lwt_react.E.t;
   emit_symbols_updated : unit -> unit;
   (* #endregion *)
@@ -144,12 +144,12 @@ let pause agent = agent.emit_action `Pause
 let stop agent = agent.emit_action `Stop
 
 let load_debug_info frag agent file =
-  let%lwt modules = Symbols.load frag file in
-  let add_event (event : Symbols.event) =
+  let%lwt modules = Debuginfo.load frag file in
+  let add_event (event : Debuginfo.event) =
     Hashtbl.replace agent.event_by_pc (Event.pc event) event;
     Hashtbl.replace agent.events_commit_queue (Event.pc event) ()
   in
-  let add_module (module_ : Symbols.module_) =
+  let add_module (module_ : Debuginfo.module_) =
     Hashtbl.replace agent.module_by_id module_.id module_;
     module_.events
     |> CCArray.to_iter

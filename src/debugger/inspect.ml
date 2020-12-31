@@ -1,5 +1,5 @@
 open Inspect_types
-open Symbols
+open Debuginfo
 
 type t = {
   find_event : Pc.t -> Event.t;

@@ -1,7 +1,7 @@
-open Symbols
+open Debuginfo
 open Util
 
-type t = Symbols.module_ = {
+type t = Debuginfo.module_ = {
   frag : int;
   id : string;
   source : string option;
@@ -61,7 +61,7 @@ let find_event t line column =
     let%lwt l, r = expand_to_equivalent_range code cnum in
     assert (l <= r);
     let cmp ev () =
-      let ev_cnum = (Debug_event.lexing_position ev.Symbols.ev).pos_cnum in
+      let ev_cnum = (Debug_event.lexing_position ev.Debuginfo.ev).pos_cnum in
       if ev_cnum < l then -1 else if ev_cnum > r then 1 else 0
     in
     Lwt.return
