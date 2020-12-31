@@ -1,4 +1,5 @@
 open Util
+module String_set = CCSet.Make (CCString)
 
 type event = { frag : int; ev : Instruct.debug_event; env : Env.t Lwt.t Lazy.t }
 
@@ -73,20 +74,8 @@ let partition_modules evl =
 
 let load_env_mutex = Lwt_mutex.create ()
 
-let load_env ev load_path () =
-  try%lwt
-    Lwt_mutex.with_lock load_env_mutex
-      (Lwt_preemptive.detach (fun () ->
-           if Load_path.get_paths () <> load_path then (
-             Load_path.init load_path;
-             Envaux.reset_cache () );
-           Envaux.env_from_summary ev.Instruct.ev_typenv ev.ev_typsubst))
-  with exc ->
-    Log.warn (fun m -> m "load_env fail: %s" (Printexc.to_string exc));%lwt
-    Lwt.fail exc
-
-let resolve_source id load_path () =
-  let%lwt source_paths = derive_source_paths id load_path in
+let resolve_source id dirs () =
+  let%lwt source_paths = derive_source_paths id dirs in
   source_paths |> Lwt_list.find_s Lwt_unix.file_exists
 
 let load frag file =
@@ -100,8 +89,8 @@ let load frag file =
       let%lwt evl = Lwt_io.read_value ic in
       let evl = (evl : Instruct.debug_event list) in
       List.iter (relocate_event orig) evl;
-      let%lwt (load_path : string list) = Lwt_io.read_value ic in
-      eventlists := (evl, load_path) :: !eventlists;
+      let%lwt (dirs : string list) = Lwt_io.read_value ic in
+      eventlists := (evl, dirs) :: !eventlists;
       Lwt.return ()
     done;%lwt
     Lwt.return (List.rev !eventlists)
@@ -109,18 +98,36 @@ let load frag file =
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.input file in
   (let%lwt toc = read_toc ic in
    let%lwt eventlists = read_eventlists toc ic in
+   let all_dirs = ref String_set.empty in
+   let load_env ev () =
+     try%lwt
+       Lwt_mutex.with_lock load_env_mutex
+         (Lwt_preemptive.detach (fun () ->
+              let dirs = String_set.to_list !all_dirs in
+              if Load_path.get_paths () <> dirs then (
+                Load_path.init dirs;
+                Envaux.reset_cache () );
+              Envaux.env_from_summary ev.Instruct.ev_typenv ev.ev_typsubst))
+     with Envaux.Error (Envaux.Module_not_found path) as exc ->
+       Path.print Format.str_formatter path;
+       let path_str = Format.flush_str_formatter () in
+       Log.warn (fun m -> m "load_env fail: Module_not_found path %s" path_str);%lwt
+       Lwt.fail exc
+   in
    let%lwt modules =
      eventlists |> CCList.to_iter
-     |> Iter.flat_map (fun (evl, load_path) ->
+     |> Iter.flat_map (fun (evl, dirs) ->
             CCList.to_iter (partition_modules evl)
-            |> Iter.map (fun evl -> (evl, load_path)))
+            |> Iter.map (fun evl -> (evl, dirs)))
      |> Iter.to_list
-     |> Lwt_list.map_s (fun (evl, load_path) ->
+     |> Lwt_list.map_s (fun (evl, dirs) ->
+            all_dirs :=
+              String_set.add_iter !all_dirs (CCList.to_iter dirs);
             let id = (List.hd evl).Instruct.ev_module in
             let events =
               evl |> CCList.to_iter
               |> Iter.map (fun ev ->
-                     { frag; ev; env = Lazy.from_fun (load_env ev load_path) })
+                     { frag; ev; env = Lazy.from_fun (load_env ev) })
               |> Iter.to_array
             in
             let cnum_of event =
@@ -128,7 +135,7 @@ let load frag file =
               pos.pos_cnum
             in
             let%lwt source =
-              match%lwt resolve_source id load_path () with
+              match%lwt resolve_source id dirs () with
               | r -> Lwt.return (Some r)
               | exception _ -> Lwt.return None
             in
