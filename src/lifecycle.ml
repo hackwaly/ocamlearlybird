@@ -11,14 +11,14 @@ let run ~launch_args ~terminate ~agent rpc =
     (fun _ ->
       let open Launch_command.Arguments in
       if (not launch_args.stop_on_entry) then
-        Ocaml_debug_agent.run agent;
+        Debugger.run agent;
       Lwt.return ());
   Debug_rpc.set_command_handler rpc
     (module Terminate_command)
     (fun _ ->
       Debug_rpc.remove_command_handler rpc (module Terminate_command);
       Lwt.async (fun () ->
-          Ocaml_debug_agent.stop agent;
+          Debugger.stop agent;
           Debug_rpc.send_event rpc
             (module Terminated_event)
             Terminated_event.Payload.(make ()));
@@ -32,6 +32,6 @@ let run ~launch_args ~terminate ~agent rpc =
       Lwt.return_unit);
   Lwt.join [
     send_initialize_event ();
-    Ocaml_debug_agent.start agent;
+    Debugger.start agent;
     promise
   ]

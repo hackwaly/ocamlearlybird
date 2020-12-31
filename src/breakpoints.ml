@@ -1,11 +1,11 @@
 open Debug_protocol_ex
-open Ocaml_debug_agent
+open Debugger
 
 type breakpoint_desc = {
   id : int;
   source : Source.t;
   src_bp : Source_breakpoint.t;
-  mutable resolved : (Ocaml_debug_agent.Module.t * Ocaml_debug_agent.Event.t) option;
+  mutable resolved : (Debugger.Module.t * Debugger.Event.t) option;
 }
 
 module Breakpoint_desc = struct
@@ -18,7 +18,7 @@ module Breakpoint_desc_set = CCSet.Make (Breakpoint_desc)
 module String_to_multi_breakpoint_desc =
   CCMultiMap.Make (CCString) (Breakpoint_desc)
 
-let lexing_pos_of_event (ev : Ocaml_debug_agent.Event.t) =
+let lexing_pos_of_event (ev : Debugger.Event.t) =
   let ev = ev.ev in
   match ev.Instruct.ev_kind with
   | Event_before -> ev.ev_loc.Location.loc_start
@@ -54,7 +54,7 @@ let run ~launch_args ~terminate ~agent rpc =
   let resolve_breakpoint desc =
     try%lwt
       let%lwt module_ =
-        Ocaml_debug_agent.find_module_by_source agent
+        Debugger.find_module_by_source agent
           (desc.source.path |> Option.get)
       in
       let%lwt event =
@@ -62,7 +62,7 @@ let run ~launch_args ~terminate ~agent rpc =
           (desc.src_bp.column |> Option.value ~default:0)
       in
       desc.resolved <- Some (module_, event);
-      Ocaml_debug_agent.set_breakpoint agent
+      Debugger.set_breakpoint agent
         { frag = module_.frag; pos = event.ev.ev_pos };
       Lwt.return ()
     with
@@ -73,7 +73,7 @@ let run ~launch_args ~terminate ~agent rpc =
   in
   let resolve_breakpoints () =
     let symbols_updated_stream =
-      Ocaml_debug_agent.symbols_updated_event agent |> Lwt_react.E.to_stream
+      Debugger.symbols_updated_event agent |> Lwt_react.E.to_stream
     in
     while%lwt true do
       Log.debug (fun m ->
@@ -116,7 +116,7 @@ let run ~launch_args ~terminate ~agent rpc =
       let remove_breakpoint desc =
         if%lwt Lwt.return (Option.is_some desc.resolved) then (
           let module_, event = desc.resolved |> Option.get in
-          Ocaml_debug_agent.remove_breakpoint agent
+          Debugger.remove_breakpoint agent
             { frag = module_.frag; pos = event.ev.ev_pos };
           desc.resolved <- None;
           Lwt.return () );%lwt
@@ -150,7 +150,7 @@ let run ~launch_args ~terminate ~agent rpc =
   Debug_rpc.set_command_handler rpc
     (module Breakpoint_locations_command)
     (fun arg ->
-      let%lwt module_ = Ocaml_debug_agent.find_module_by_source agent (arg.source.path |> Option.get) in
+      let%lwt module_ = Debugger.find_module_by_source agent (arg.source.path |> Option.get) in
       let line = arg.line in
       let column = arg.column |> Option.value ~default:0 in
       let%lwt start = Module.line_column_to_cnum module_ line column in

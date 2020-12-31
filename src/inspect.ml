@@ -1,4 +1,4 @@
-open Ocaml_debug_agent
+open Debugger
 open Debug_protocol_ex
 
 let run ~launch_args ~terminate ~agent rpc =
@@ -27,18 +27,18 @@ let run ~launch_args ~terminate ~agent rpc =
                 ~thread_id:(Some 0) ())
       | Running -> Lwt.return ()
     in
-    process (Ocaml_debug_agent.status_signal agent |> Lwt_react.S.value);%lwt
-    Ocaml_debug_agent.status_signal agent
+    process (Debugger.status_signal agent |> Lwt_react.S.value);%lwt
+    Debugger.status_signal agent
     |> Lwt_react.S.changes |> Lwt_react.E.to_stream |> Lwt_stream.iter_s process
   in
   Debug_rpc.set_command_handler rpc
     (module Loaded_sources_command)
     (fun () ->
-      let modules = Ocaml_debug_agent.to_seq_modules agent |> List.of_seq in
+      let modules = Debugger.to_seq_modules agent |> List.of_seq in
       let sources =
         modules
-        |> List.filter (fun module_ -> module_.Ocaml_debug_agent.Module.source |> Option.is_some)
-        |> List.map (fun module_ -> Source.make ~path:(module_.Ocaml_debug_agent.Module.source) ())
+        |> List.filter (fun module_ -> module_.Debugger.Module.source |> Option.is_some)
+        |> List.map (fun module_ -> Source.make ~path:(module_.Debugger.Module.source) ())
       in
       Loaded_sources_command.Result.make ~sources () |> Lwt.return);
   Debug_rpc.set_command_handler rpc
@@ -50,13 +50,13 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Stack_trace_command)
     (fun arg ->
       assert (arg.thread_id = 0);
-      let%lwt frames = Ocaml_debug_agent.stack_frames agent in
+      let%lwt frames = Debugger.stack_frames agent in
       let%lwt stack_frames =
         frames |> Array.to_list
         |> Lwt_list.map_s (fun fr ->
                let module_ = Frame.module_ fr in
                let source =
-                 Source.(make ~path:(module_.Ocaml_debug_agent.Module.source) ())
+                 Source.(make ~path:(module_.Debugger.Module.source) ())
                in
                let frame =
                  let loc = Frame.loc fr in
@@ -78,7 +78,7 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Scopes_command)
     (fun arg ->
       let frame_index = arg.frame_id in
-      let%lwt frames = Ocaml_debug_agent.stack_frames agent in
+      let%lwt frames = Debugger.stack_frames agent in
       let frame = frames.(frame_index) in
       let scopes =
         frame.scopes
@@ -91,7 +91,7 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Variables_command)
     (fun arg ->
       let obj_id = arg.variables_reference in
-      let obj = Ocaml_debug_agent.find_obj agent obj_id in
+      let obj = Debugger.find_obj agent obj_id in
       let%lwt objs = Lazy.force obj.members in
       let value_to_string v =
         match v with

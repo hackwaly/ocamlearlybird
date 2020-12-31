@@ -1,7 +1,7 @@
 open Astring
 open Debug_protocol_ex
 
-type debug = Debug of Ocaml_debug_agent.t | No_debug
+type debug = Debug of Debugger.t | No_debug
 
 let spawn ~rpc ?debug_sock ?env ?cwd prog args =
   let cwd = Option.value ~default:(Filename.dirname prog) cwd in
@@ -95,7 +95,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
         launch_args.arguments
     in
     let agent =
-      Ocaml_debug_agent.(
+      Debugger.(
         create
           (make_options ~debug_socket:lsock
              ~symbols_file:
