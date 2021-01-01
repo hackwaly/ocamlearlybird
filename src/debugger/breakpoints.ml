@@ -6,7 +6,6 @@ type t = {
   bp_by_pc : (pc, breakpoint_desc) Hashtbl.t;
   commit_queue : (pc, unit) Hashtbl.t;
   committed : (pc, unit) Hashtbl.t;
-  mutable temporary_breakpoint : pc option;
 }
 
 let create () =
@@ -14,7 +13,6 @@ let create () =
     bp_by_pc = Hashtbl.create 0;
     commit_queue = Hashtbl.create 0;
     committed = Hashtbl.create 0;
-    temporary_breakpoint = None;
   }
 
 let set t pc =
