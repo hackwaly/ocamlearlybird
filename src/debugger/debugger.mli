@@ -4,10 +4,10 @@ include module type of Inspect_types
 
 type pc = Pc.t = { frag : int; pos : int }
 
-type remote_debugger_version = Debugcom.remote_debugger_version = OCaml_400 | OCaml_410
+type protocol_version = Debugcom.protocol_version = OCaml_400 | OCaml_410
 
 type options = {
-  remote_debugger_version : remote_debugger_version; [@default OCaml_410]
+  protocol_version : protocol_version; [@default OCaml_410]
   debug_socket : Lwt_unix.file_descr;
   symbols_file : string;
   yield_point : int; [@default 1024]

@@ -3,12 +3,10 @@ module Log = Log
 
 type pc = Pc.t = { frag : int; pos : int }
 
-type remote_debugger_version = Debugcom.remote_debugger_version =
-  | OCaml_400
-  | OCaml_410
+type protocol_version = Debugcom.protocol_version = OCaml_400 | OCaml_410
 
 type options = {
-  remote_debugger_version : remote_debugger_version; [@default OCaml_410]
+  protocol_version : protocol_version; [@default OCaml_410]
   debug_socket : Lwt_unix.file_descr;
   symbols_file : string;
   yield_point : int; [@default 1024]
@@ -131,10 +129,20 @@ let stop agent = agent.emit_action `Stop
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
-  let%lwt conn =
-    Debugcom.connect agent.options.remote_debugger_version
-      Lwt_io.(of_fd ~mode:input fd)
-      Lwt_io.(of_fd ~mode:output fd)
+  let conn =
+    object
+      val io_in = Lwt_io.(of_fd ~mode:input fd)
+
+      val io_out = Lwt_io.(of_fd ~mode:output fd)
+
+      method io_in = io_in
+
+      method io_out = io_out
+
+      method protocol_version = agent.options.protocol_version
+
+      method symbols = agent.symbols
+    end
   in
   let%lwt pid = Debugcom.get_pid conn in
   ignore pid;
