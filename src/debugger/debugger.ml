@@ -31,7 +31,7 @@ type t = {
   set_status : status -> unit;
   action_e : action Lwt_react.E.t;
   emit_action : action -> unit;
-  symbols :Symbols.t;
+  symbols : Symbols.t;
   breakpoints : Breakpoints.t;
   mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
   mutable inspect : Inspect.t;
@@ -45,7 +45,8 @@ let symbols_did_update_event agent = Symbols.did_update_event agent.symbols
 
 let to_seq_modules agent = Symbols.to_seq_modules agent.symbols
 
-let find_module_by_source agent source = Symbols.find_module_by_source agent.symbols source
+let find_module_by_source agent source =
+  Symbols.find_module_by_source agent.symbols source
 
 let find_module agent id = Symbols.find_module agent.symbols id
 
@@ -75,35 +76,37 @@ let exec_in_loop agent f =
   promise
 
 let stack_frames agent =
-  Lwt.return (match agent.inspect.scene with None -> [||] | Some scene -> scene.frames)
+  Lwt.return
+    (match agent.inspect.scene with None -> [||] | Some scene -> scene.frames)
 
-let find_obj agent id =
-  Inspect.find_obj agent.inspect id
+let find_obj agent id = Inspect.find_obj agent.inspect id
 
 let create options =
   let status_s, set_status = React.S.create Entry in
   let action_e, emit_action = Lwt_react.E.create () in
   let breakpoints = Breakpoints.create () in
-	let symbols = Symbols.create () in
-  let agent = {
-    options;
-    status_s;
-    set_status;
-    action_e;
-    emit_action;
-    symbols;
-    breakpoints;
-    pendings = [];
-    inspect = Obj.magic ();
-  }
+  let symbols = Symbols.create () in
+  let agent =
+    {
+      options;
+      status_s;
+      set_status;
+      action_e;
+      emit_action;
+      symbols;
+      breakpoints;
+      pendings = [];
+      inspect = Obj.magic ();
+    }
   in
-  agent.inspect <- {
-    find_event = find_event agent;
-    find_module = find_module agent;
-    lock_conn = (fun f -> exec_in_loop agent f);
-    alloc_obj_id = Unique_id.make_alloc ();
-    scene = None;
-  };
+  agent.inspect <-
+    {
+      find_event = find_event agent;
+      find_module = find_module agent;
+      lock_conn = (fun f -> exec_in_loop agent f);
+      alloc_obj_id = Unique_id.make_alloc ();
+      scene = None;
+    };
   agent
 
 let set_breakpoint agent pc =
@@ -126,12 +129,6 @@ let pause agent = agent.emit_action `Pause
 
 let stop agent = agent.emit_action `Stop
 
-let commit_events agent conn =
-  Log.debug (fun m -> m "commit_events start");%lwt
-  Symbols.commit agent.symbols (Debugcom.set_event conn) (Debugcom.reset_instr conn);%lwt
-  Log.debug (fun m -> m "commit_events end");%lwt
-  Lwt.return ()
-
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
   let%lwt conn =
@@ -149,8 +146,12 @@ let start agent =
     done
   in
   let sync () =
-    commit_events agent conn;%lwt
-    Breakpoints.commit agent.breakpoints conn;%lwt
+    Symbols.commit agent.symbols (Debugcom.set_event conn)
+      (Debugcom.reset_instr conn);%lwt
+    Breakpoints.commit agent.breakpoints (Debugcom.set_breakpoint conn)
+      (fun pc ->
+        Debugcom.reset_instr conn pc;%lwt
+        Debugcom.set_event conn pc);%lwt
     flush_pendings ()
   in
   let wait_action () =
@@ -287,8 +288,8 @@ let start agent =
       let ev2 = find_event agent pc2 in
       (* tailcallopt case *)
       let is_tco () =
-        if stack_pos2 - ev2.ev.ev_stacksize = stack_pos1 - ev1.ev.ev_stacksize then
-          ev2.ev.ev_info = Event_function
+        if stack_pos2 - ev2.ev.ev_stacksize = stack_pos1 - ev1.ev.ev_stacksize
+        then ev2.ev.ev_info = Event_function
         else false
       in
       let is_entered () =

@@ -32,19 +32,22 @@ let is_commited t pc =
 let check t pc =
   Lwt.return (Hashtbl.mem t.bp_by_pc pc)
 
-let commit t conn =
-  let commit_one pc =
-    let removed = not (Hashtbl.mem t.bp_by_pc pc) in
-    let committed = Hashtbl.mem t.committed pc in
-    match (removed, committed) with
-    | true, true ->
-        Debugcom.reset_instr conn pc;%lwt
-        Debugcom.set_event conn pc;%lwt
-        Hashtbl.remove t.committed pc |> Lwt.return
-    | false, false ->
-      Debugcom.reset_instr conn pc;%lwt
-      Debugcom.set_breakpoint conn pc;%lwt
-        Hashtbl.replace t.committed pc () |> Lwt.return
-    | _ -> Lwt.return ()
+let commit t set clear =
+	let to_set =
+  	t.commit_queue
+    |> Hashtbl.to_seq_keys
+    |> Seq.filter (fun pc ->
+      Hashtbl.mem t.bp_by_pc pc &&
+      not (Hashtbl.mem t.committed pc))
   in
-  t.commit_queue |> Hashtbl.to_seq_keys |> Lwt_util.iter_seq_s commit_one
+  let to_clear =
+  	t.commit_queue
+    |> Hashtbl.to_seq_keys
+    |> Seq.filter (fun pc ->
+      not (Hashtbl.mem t.bp_by_pc pc) &&
+      Hashtbl.mem t.committed pc)
+  in
+  to_set |> Lwt_util.iter_seq_s set;%lwt
+  to_clear |> Lwt_util.iter_seq_s clear;%lwt
+  Hashtbl.reset t.committed;
+  Lwt.return ()
