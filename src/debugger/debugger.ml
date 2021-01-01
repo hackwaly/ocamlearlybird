@@ -262,7 +262,7 @@ let start agent =
     let step_in = wrap_run internal_step_in in
     let internal_step_out () =
       let promise, resolver = Lwt.task () in
-      Inspect.exec_with_frame agent.inspect conn 1 (fun frame ->
+      Debugcom.exec_with_frame conn 1 (fun frame ->
           Lwt.wakeup_later resolver frame;
           Lwt.return ());%lwt
       let%lwt frame = promise in

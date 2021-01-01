@@ -14,22 +14,6 @@ let find_obj t id =
   | None -> raise Not_found
   | Some scene -> Hashtbl.find scene.obj_tbl id
 
-let exec_with_frame t conn index f =
-  Log.debug (fun m -> m "exec_with_frame");%lwt
-  assert (index >= 0);
-  let rec walk cur (stack_pos, pc) =
-    Log.debug (fun m -> m "exec_with_frame cur:%d" cur);%lwt
-    let ev = t.find_event pc in
-    if cur = index then Lwt.return (Some (stack_pos, pc, ev))
-    else
-      match%lwt Debugcom.up_frame conn ev.ev.Instruct.ev_stacksize with
-      | None -> Lwt.return None
-      | Some (stack_pos, pc) -> walk (cur + 1) (stack_pos, pc)
-  in
-  let%lwt stack_pos, pc = Debugcom.initial_frame conn in
-  let%lwt frame = walk 0 (stack_pos, pc) in
-  (f frame) [%finally Debugcom.set_frame conn stack_pos]
-
 let undef_lazy = Lazy.from_fun (fun () -> assert false)
 
 let rec make_obj t ~name ~value ?(structured = false)
@@ -89,7 +73,7 @@ and list_scope_obj t obj =
                     Lwt.return (Some obj)
               in
               let%lwt objs =
-                exec_with_frame t conn index (fun _ ->
+                Debugcom.exec_with_frame conn index (fun _ ->
                     iter_bindings |> Iter.to_list
                     |> Lwt_list.filter_map_s to_obj)
               in
