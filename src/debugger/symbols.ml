@@ -54,7 +54,7 @@ let load t frag file =
   t.emit_did_update ();
   Lwt.return ()
 
-let commit t f1 f2 =
+let commit t set clear =
 	let to_set =
   	t.events_commit_queue
     |> Hashtbl.to_seq_keys
@@ -69,7 +69,7 @@ let commit t f1 f2 =
       not (Hashtbl.mem t.event_by_pc pc) &&
       Hashtbl.mem t.events_committed pc)
   in
-  f1 to_set;%lwt
-  f2 to_clear;%lwt
+  to_set |> Lwt_util.iter_seq_s set;%lwt
+  to_clear |> Lwt_util.iter_seq_s clear;%lwt
   Hashtbl.reset t.events_commit_queue;
   Lwt.return ()

@@ -128,9 +128,7 @@ let stop agent = agent.emit_action `Stop
 
 let commit_events agent conn =
   Log.debug (fun m -> m "commit_events start");%lwt
-  Symbols.commit agent.symbols
-  	(Lwt_util.iter_seq_s (Debugcom.set_event conn))
-    (Lwt_util.iter_seq_s (Debugcom.reset_instr conn));%lwt
+  Symbols.commit agent.symbols (Debugcom.set_event conn) (Debugcom.reset_instr conn);%lwt
   Log.debug (fun m -> m "commit_events end");%lwt
   Lwt.return ()
 
