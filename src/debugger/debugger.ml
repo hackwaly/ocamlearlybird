@@ -16,8 +16,8 @@ type options = {
 type status =
   | Entry
   | Running
-  | Stopped of { breakpoint : bool }
-  | Exited of { uncaught_exc : bool }
+  | Stopped of { time : int64; breakpoint : bool }
+  | Exited of { time : int64; uncaught_exc : bool }
 
 type stopped_action = [ `Run | `Step_in | `Step_out | `Step_over | `Stop ]
 
@@ -194,15 +194,33 @@ let start agent =
             check_met_temporary_trap_barrier_and_breakpoint report
           in
           if met_temporary_trap_barrier_and_breakpoint then
-            Lwt.return (Some (report, Stopped { breakpoint = false }))
+            Lwt.return
+              (Some
+                 ( report,
+                   Stopped { time = report.rep_event_count; breakpoint = false }
+                 ))
           else
             if%lwt
               Breakpoints.check agent.breakpoints report.rep_program_pointer
-            then Lwt.return (Some (report, Stopped { breakpoint = true }))
+            then
+              Lwt.return
+                (Some
+                   ( report,
+                     Stopped
+                       { time = report.rep_event_count; breakpoint = true } ))
             else Lwt.return None
       | Uncaught_exc ->
-          Lwt.return (Some (report, Exited { uncaught_exc = true }))
-      | Exited -> Lwt.return (Some (report, Exited { uncaught_exc = false }))
+          Lwt.return
+            (Some
+               ( report,
+                 Exited { time = report.rep_event_count; uncaught_exc = true }
+               ))
+      | Exited ->
+          Lwt.return
+            (Some
+               ( report,
+                 Exited { time = report.rep_event_count; uncaught_exc = false }
+               ))
       | Trap -> (
           match temporary_trap_barrier_and_breakpoint.contents with
           | None -> [%lwt assert false]
@@ -211,7 +229,12 @@ let start agent =
                 check_met_temporary_trap_barrier_and_breakpoint report
               in
               if met_temporary_trap_barrier_and_breakpoint then
-                Lwt.return (Some (report, Stopped { breakpoint = false }))
+                Lwt.return
+                  (Some
+                     ( report,
+                       Stopped
+                         { time = report.rep_event_count; breakpoint = false }
+                     ))
               else Lwt.return None )
       | _ -> Lwt.return None
     in
@@ -253,10 +276,14 @@ let start agent =
       Lwt.return
         ( report,
           match report.rep_type with
-          | Breakpoint -> Stopped { breakpoint = true }
-          | Event -> Stopped { breakpoint = false }
-          | Uncaught_exc -> Exited { uncaught_exc = true }
-          | Exited -> Exited { uncaught_exc = false }
+          | Breakpoint ->
+              Stopped { time = report.rep_event_count; breakpoint = true }
+          | Event ->
+              Stopped { time = report.rep_event_count; breakpoint = false }
+          | Uncaught_exc ->
+              Exited { time = report.rep_event_count; uncaught_exc = true }
+          | Exited ->
+              Exited { time = report.rep_event_count; uncaught_exc = false }
           | _ -> assert false )
     in
     let step_in = wrap_run internal_step_in in

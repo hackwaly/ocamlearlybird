@@ -17,8 +17,8 @@ type options = {
 type status =
   | Entry
   | Running
-  | Stopped of { breakpoint : bool }
-  | Exited of { uncaught_exc : bool }
+  | Stopped of { time : int64; breakpoint : bool }
+  | Exited of { time : int64; uncaught_exc : bool }
 
 type t
 

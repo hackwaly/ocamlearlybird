@@ -18,7 +18,7 @@ let run ~launch_args ~terminate ~agent rpc =
           Debug_rpc.send_event rpc
             (module Terminated_event)
             Terminated_event.Payload.(make ())
-      | Stopped { breakpoint } ->
+      | Stopped { breakpoint; _ } ->
           Debug_rpc.send_event rpc
             (module Stopped_event)
             Stopped_event.Payload.(
