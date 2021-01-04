@@ -36,7 +36,7 @@ and list_scope_obj t obj =
       t.lock_conn (fun conn ->
           let frame = scene.frames.(index) in
           let event = frame.event in
-          match%lwt Lazy.force frame.env with
+          match%lwt Lazy.force frame.event.env with
           | exception _ ->
               Log.debug (fun m -> m "no env");%lwt
               Lwt.return []
@@ -122,14 +122,11 @@ let update_scene t conn report =
         let%lwt curr_fr_sp, _ = Debugcom.get_frame conn in
         let make_frame index sp (pc : Pc.t) =
           let event = t.find_event pc in
-          let module_ = t.find_module event.ev.ev_module in
           {
             Frame.index;
             stack_pos = sp;
-            module_;
             event;
             scopes = [];
-            env = event.env;
           }
         in
         let rec walk_up index stacksize frames =

@@ -4,19 +4,17 @@ open Inspect_types
 type t = Inspect_types.stack_frame = {
   index : int;
   stack_pos : int;
-  module_ : Debuginfo.module_;
   event : Debuginfo.event;
   mutable scopes : obj list;
-  env : Env.t Lwt.t Lazy.t;
 }
 
 let stacksize t = t.event.ev.ev_stacksize
 
 let defname t = t.event.ev.ev_defname
 
-let module_ t = t.module_
+let module_ t = t.event.module_
 
-let pc t = { Pc.frag = t.module_.frag; pos = t.event.ev.ev_pos }
+let pc t = { Pc.frag = t.event.module_.frag; pos = t.event.ev.ev_pos }
 
 let loc t =
   if t.index = 0 then

@@ -5,7 +5,7 @@ type t = Debuginfo.module_ = {
   frag : int;
   id : string;
   source : string option;
-  events : event array;
+  mutable events : event array;
 }
 
 let source_content t =

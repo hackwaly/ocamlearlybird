@@ -1,13 +1,17 @@
 open Util
 module String_set = CCSet.Make (CCString)
 
-type event = { frag : int; ev : Instruct.debug_event; env : Env.t Lwt.t Lazy.t }
-
 type module_ = {
   frag : int;
   id : string;
   source : string option;
-  events : event array;
+  mutable events : event array;
+}
+
+and event = {
+  module_ : module_;
+  ev : Instruct.debug_event;
+  env : Env.t Lwt.t Lazy.t;
 }
 
 let derive_source_paths id dirs =
@@ -121,26 +125,27 @@ let load frag file =
             |> Iter.map (fun evl -> (evl, dirs)))
      |> Iter.to_list
      |> Lwt_list.map_s (fun (evl, dirs) ->
-            all_dirs :=
-              String_set.add_iter !all_dirs (CCList.to_iter dirs);
+            all_dirs := String_set.add_iter !all_dirs (CCList.to_iter dirs);
             let id = (List.hd evl).Instruct.ev_module in
+            let%lwt source =
+              match%lwt resolve_source id dirs () with
+              | r -> Lwt.return (Some r)
+              | exception _ -> Lwt.return None
+            in
+            let module_ = { frag; id; source; events = [||] } in
             let events =
               evl |> CCList.to_iter
               |> Iter.map (fun ev ->
-                     { frag; ev; env = Lazy.from_fun (load_env ev) })
+                     { module_; ev; env = Lazy.from_fun (load_env ev) })
               |> Iter.to_array
             in
             let cnum_of event =
               let pos = Debug_event.lexing_position event.ev in
               pos.pos_cnum
             in
-            let%lwt source =
-              match%lwt resolve_source id dirs () with
-              | r -> Lwt.return (Some r)
-              | exception _ -> Lwt.return None
-            in
             events |> Array.fast_sort (Compare.by cnum_of);
-            Lwt.return { frag; id; source; events })
+            module_.events <- events;
+            Lwt.return module_)
    in
    Lwt.return modules)
     [%finally Lwt_io.close ic]
