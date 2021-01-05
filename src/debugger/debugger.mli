@@ -1,7 +1,5 @@
 module Log = Log
 
-include module type of Inspect_types
-
 type pc = Pc.t = { frag : int; pos : int }
 
 type protocol_version = Debugcom.protocol_version = OCaml_400 | OCaml_410
@@ -15,7 +13,7 @@ type options = {
 [@@deriving make]
 
 type status =
-  | Entry
+  | Unstarted
   | Running
   | Stopped of { time : int64; breakpoint : bool }
   | Exited of { time : int64; uncaught_exc : bool }
@@ -54,8 +52,10 @@ val pause : t -> unit
 
 val stop : t -> unit
 
-val stack_frames : t -> Frame.t array Lwt.t
+val initial_frame : t -> Frame.t Lwt.t
 
-val find_obj : t -> int -> obj
+val up_frame : t -> Frame.t -> Frame.t option Lwt.t
+
+val set_frame : t -> Frame.t -> unit Lwt.t
 
 val start : t -> unit Lwt.t

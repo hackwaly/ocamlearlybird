@@ -8,12 +8,8 @@ let run ~launch_args ~terminate ~agent rpc =
   let process_status_changes () =
     let process status =
       match status with
-      | Entry ->
-          if launch_args.Launch_command.Arguments.stop_on_entry then
-            Debug_rpc.send_event rpc
-              (module Stopped_event)
-              Stopped_event.Payload.(make ~reason:Entry ~thread_id:(Some 0) ())
-          else Lwt.return ()
+      | Unstarted ->
+          Lwt.return ()
       | Exited _ ->
           Debug_rpc.send_event rpc
             (module Terminated_event)
@@ -37,8 +33,10 @@ let run ~launch_args ~terminate ~agent rpc =
       let modules = Debugger.to_seq_modules agent |> List.of_seq in
       let sources =
         modules
-        |> List.filter (fun module_ -> module_.Debugger.Module.source |> Option.is_some)
-        |> List.map (fun module_ -> Source.make ~path:(module_.Debugger.Module.source) ())
+        |> List.filter (fun module_ ->
+               module_.Debugger.Module.source |> Option.is_some)
+        |> List.map (fun module_ ->
+               Source.make ~path:module_.Debugger.Module.source ())
       in
       Loaded_sources_command.Result.make ~sources () |> Lwt.return);
   Debug_rpc.set_command_handler rpc
@@ -50,13 +48,34 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Stack_trace_command)
     (fun arg ->
       assert (arg.thread_id = 0);
-      let%lwt frames = Debugger.stack_frames agent in
+      let%lwt frames =
+        match agent |> Debugger.status_signal |> Lwt_react.S.value with
+        | Stopped _ ->
+            let frames = ref [] in
+            let%lwt frame0 = Debugger.initial_frame agent in
+            let rec walk frame =
+              frames := frame :: !frames;
+              match arg.levels with
+              | Some levels when levels <> 0 && frame.Frame.index + 1 >= levels
+                ->
+                  Lwt.return ()
+              | _ -> (
+                  let%lwt frame' = Debugger.up_frame agent frame in
+                  match frame' with
+                  | Some frame' -> walk frame'
+                  | None -> Lwt.return () )
+            in
+            (walk frame0) [%finally Debugger.set_frame agent frame0];%lwt
+            let frames = List.rev !frames in
+            Lwt.return frames
+        | _ -> Lwt.return []
+      in
       let%lwt stack_frames =
-        frames |> Array.to_list
+        frames
         |> Lwt_list.map_s (fun fr ->
                let module_ = Frame.module_ fr in
                let source =
-                 Source.(make ~path:(module_.Debugger.Module.source) ())
+                 Source.(make ~path:module_.Debugger.Module.source ())
                in
                let frame =
                  let loc = Frame.loc fr in
@@ -73,45 +92,15 @@ let run ~launch_args ~terminate ~agent rpc =
       in
       Lwt.return
         Stack_trace_command.Result.(
-          make ~stack_frames ~total_frames:(Some (Array.length frames)) ()));
+          make ~stack_frames ~total_frames:(Some (List.length frames)) ()));
   Debug_rpc.set_command_handler rpc
     (module Scopes_command)
     (fun arg ->
-      let frame_index = arg.frame_id in
-      let%lwt frames = Debugger.stack_frames agent in
-      let frame = frames.(frame_index) in
-      let scopes =
-        frame.scopes
-        |> List.map (fun obj ->
-               Scope.make ~name:obj.name ~variables_reference:obj.id
-                 ~expensive:false ())
-      in
+      let scopes = [] in
       Lwt.return Scopes_command.Result.(make ~scopes ()));
   Debug_rpc.set_command_handler rpc
     (module Variables_command)
     (fun arg ->
-      let obj_id = arg.variables_reference in
-      let obj = Debugger.find_obj agent obj_id in
-      let%lwt objs = Lazy.force obj.members in
-      let value_to_string v =
-        match v with
-        | Int v -> string_of_int v
-        | Double v -> string_of_float v
-        | Bool v -> string_of_bool v
-        | Char v -> Char.escaped v
-        | String v -> String.escaped v
-        | Function { location } ->
-            let file, line, column = Location.get_pos_info location.loc_start in
-            Format.sprintf "<fun> %@ %s:%d:%d" file line column
-        | _ -> "Not supported"
-      in
-      let variables =
-        objs
-        |> List.map (fun obj ->
-               Variable.make ~name:obj.name
-                 ~value:(value_to_string obj.value)
-                 ~variables_reference:(if obj.structured then obj.id else 0)
-                 ())
-      in
+      let variables = [] in
       Lwt.return Variables_command.Result.(make ~variables ()));
   Lwt.join [ process_status_changes () ]

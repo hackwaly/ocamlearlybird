@@ -1,4 +1,3 @@
-include Inspect_types
 module Log = Log
 
 type pc = Pc.t = { frag : int; pos : int }
@@ -14,7 +13,7 @@ type options = {
 [@@deriving make]
 
 type status =
-  | Entry
+  | Unstarted
   | Running
   | Stopped of { time : int64; breakpoint : bool }
   | Exited of { time : int64; uncaught_exc : bool }
@@ -32,7 +31,6 @@ type t = {
   symbols : Symbols.t;
   breakpoints : Breakpoints.t;
   mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
-  mutable inspect : Inspect.t;
 }
 
 module Module = Module
@@ -55,32 +53,8 @@ let is_running agent =
 
 let status_signal agent = agent.status_s
 
-let exec_in_loop agent f =
-  Log.debug (fun m -> m "exec_in_loop 1");%lwt
-  let promise, resolver = Lwt.task () in
-  agent.pendings <-
-    (fun conn ->
-      Log.debug (fun m -> m "exec_in_loop 2");%lwt
-      match%lwt f conn with
-      | result ->
-          Lwt.wakeup_later resolver result;
-          Lwt.return ()
-      | exception exc ->
-          Lwt.wakeup_later_exn resolver exc;
-          Lwt.return ())
-    :: agent.pendings;
-  agent.emit_action `Wakeup;
-  Log.debug (fun m -> m "exec_in_loop 3");%lwt
-  promise
-
-let stack_frames agent =
-  Lwt.return
-    (match agent.inspect.scene with None -> [||] | Some scene -> scene.frames)
-
-let find_obj agent id = Inspect.find_obj agent.inspect id
-
 let create options =
-  let status_s, set_status = React.S.create Entry in
+  let status_s, set_status = React.S.create Unstarted in
   let action_e, emit_action = Lwt_react.E.create () in
   let breakpoints = Breakpoints.create () in
   let symbols = Symbols.create () in
@@ -94,17 +68,8 @@ let create options =
       symbols;
       breakpoints;
       pendings = [];
-      inspect = Obj.magic ();
     }
   in
-  agent.inspect <-
-    {
-      find_event = find_event agent;
-      find_module = find_module agent;
-      lock_conn = (fun f -> exec_in_loop agent f);
-      alloc_obj_id = Unique_id.make_alloc ();
-      scene = None;
-    };
   agent
 
 let set_breakpoint agent pc =
@@ -114,6 +79,36 @@ let set_breakpoint agent pc =
 let remove_breakpoint agent pc =
   Breakpoints.remove agent.breakpoints pc;
   agent.emit_action `Wakeup
+
+let exec_in_loop agent f =
+  let promise, resolver = Lwt.task () in
+  agent.pendings <-
+    (fun conn ->
+      try%lwt
+        let%lwt r = f conn in
+        Lwt.wakeup_later resolver r;
+        Lwt.return ()
+      with e ->
+        Lwt.wakeup_later_exn resolver e;
+        Lwt.return ())
+    :: agent.pendings;
+  agent.emit_action `Wakeup;
+  promise
+
+let initial_frame agent =
+  exec_in_loop agent (fun conn ->
+    Debugcom.initial_frame conn
+  )
+
+let up_frame agent frame =
+  exec_in_loop agent (fun conn ->
+    Debugcom.up_frame conn frame
+  )
+
+let set_frame agent frame =
+  exec_in_loop agent (fun conn ->
+    Debugcom.set_frame conn frame
+  )
 
 let run agent = agent.emit_action `Run
 
@@ -146,14 +141,14 @@ let start agent =
   in
   let%lwt pid = Debugcom.get_pid conn in
   ignore pid;
-  let flush_pendings () =
-    while%lwt agent.pendings <> [] do
-      let pendings = List.rev agent.pendings in
-      agent.pendings <- [];
-      pendings |> Lwt_list.iter_s (fun f -> f conn)
-    done
-  in
   let sync () =
+    let flush_pendings () =
+      while%lwt agent.pendings <> [] do
+        let pendings = List.rev agent.pendings in
+        agent.pendings <- [];
+        pendings |> Lwt_list.iter_s (fun f -> f conn)
+      done
+    in
     Symbols.commit agent.symbols (Debugcom.set_event conn)
       (Debugcom.reset_instr conn);%lwt
     Breakpoints.commit agent.breakpoints (Debugcom.set_breakpoint conn)
@@ -255,9 +250,7 @@ let start agent =
     in
     let wrap_run f () =
       agent.set_status Running;
-      Inspect.clear_scene agent.inspect;
       let%lwt report, status = f () in
-      Inspect.update_scene agent.inspect conn report;%lwt
       agent.set_status status;
       Lwt.return ()
     in
@@ -295,7 +288,9 @@ let start agent =
       let%lwt frame = promise in
       match frame with
       | None -> internal_run ()
-      | Some (stack_pos, pc, _) ->
+      | Some frame ->
+          let stack_pos = frame.stack_pos in
+          let pc = Frame.pc frame in
           temporary_trap_barrier_and_breakpoint := Some (stack_pos, pc);
           let cleanup () =
             temporary_trap_barrier_and_breakpoint := None;
@@ -346,6 +341,9 @@ let start agent =
     | `Stop -> stop ()
   in
   Symbols.load agent.symbols 0 agent.options.symbols_file;%lwt
+  sync ();%lwt
+  let%lwt report = Debugcom.go conn 1 in
+  agent.set_status (Stopped { time = report.rep_event_count; breakpoint = false });
   try%lwt
     while%lwt true do
       sync ();%lwt

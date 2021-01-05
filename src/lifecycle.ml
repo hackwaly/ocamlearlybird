@@ -10,8 +10,13 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Configuration_done_command)
     (fun _ ->
       let open Launch_command.Arguments in
-      if (not launch_args.stop_on_entry) then
+      if not launch_args.stop_on_entry then (
         Debugger.run agent;
+        Lwt.return () )
+      else
+        Debug_rpc.send_event rpc
+          (module Stopped_event)
+          Stopped_event.Payload.(make ~reason:Entry ~thread_id:(Some 0) ());%lwt
       Lwt.return ());
   Debug_rpc.set_command_handler rpc
     (module Terminate_command)
@@ -30,8 +35,4 @@ let run ~launch_args ~terminate ~agent rpc =
       terminate true;%lwt
       Lwt.wakeup_later_exn resolver Exit;
       Lwt.return_unit);
-  Lwt.join [
-    send_initialize_event ();
-    Debugger.start agent;
-    promise
-  ]
+  Lwt.join [ send_initialize_event (); Debugger.start agent; promise ]

@@ -1,11 +1,9 @@
 open Util
-open Inspect_types
 
-type t = Inspect_types.stack_frame = {
+type t = {
   index : int;
   stack_pos : int;
   event : Debuginfo.event;
-  mutable scopes : obj list;
 }
 
 let stacksize t = t.event.ev.ev_stacksize
