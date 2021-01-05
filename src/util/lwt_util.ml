@@ -1,8 +1,18 @@
 let iter_seq_s f seq =
-  Seq.fold_left (fun prev_promise elt ->
-    let%lwt () = prev_promise in
-    f elt
-  ) (Lwt.return ()) seq
+  Seq.fold_left
+    (fun prev_promise elt ->
+      let%lwt () = prev_promise in
+      f elt)
+    (Lwt.return ()) seq
+
+let find_map_seq_s f seq =
+  let rec aux seq =
+    match seq () with
+    | Seq.Nil -> Lwt.fail Not_found
+    | Seq.Cons (it, seq) -> (
+        match%lwt f it with Some r -> Lwt.return r | None -> aux seq )
+  in
+  aux seq
 
 let chdir_lock = Lwt_mutex.create ()
 
@@ -127,7 +137,4 @@ let digest_file =
 
 (* This function is needed while Lwt_mvar.take_available may results mvar is still full *)
 let take_mvar_nonblocking var =
-  if not (Lwt_mvar.is_empty var) then
-    Lwt_mvar.take var
-  else
-    Lwt.return ()
+  if not (Lwt_mvar.is_empty var) then Lwt_mvar.take var else Lwt.return ()

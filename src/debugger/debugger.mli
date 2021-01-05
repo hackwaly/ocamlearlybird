@@ -23,6 +23,7 @@ type t
 module Module = Module
 module Event = Event
 module Frame = Frame
+module Value = Value
 
 val create : options -> t
 
@@ -59,3 +60,5 @@ val up_frame : t -> Frame.t -> Frame.t option Lwt.t
 val set_frame : t -> Frame.t -> unit Lwt.t
 
 val start : t -> unit Lwt.t
+
+val frame_variables : t -> Frame.t -> [`Stack | `Heap] -> (Ident.t * Value.t) list Lwt.t

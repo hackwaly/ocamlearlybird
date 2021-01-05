@@ -14,7 +14,8 @@ let run rpc =
           make ~supports_terminate_request:(Some true)
             ~supports_configuration_done_request:(Some true)
             ~supports_loaded_sources_request:(Some true)
-            ~supports_breakpoint_locations_request:(Some true) ())
+            ~supports_breakpoint_locations_request:(Some true)
+            ~supports_value_formatting_options:(Some true) ())
       in
       Lwt.wakeup_later resolver (arg, caps);
       Lwt.return caps);

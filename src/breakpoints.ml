@@ -29,7 +29,7 @@ let run ~launch_args ~terminate ~agent rpc =
   ignore launch_args;
   ignore terminate;
   Lwt.pause ();%lwt
-  let alloc_breakpoint_id = Unique_id.make_alloc () in
+  let alloc_breakpoint_id = Unique_id.make_alloc 0 in
   let module_breakpoints_map = ref String_to_multi_breakpoint_desc.empty in
   let unresolved_breakpoints = ref Breakpoint_desc_set.empty in
   let to_Breakpoint desc =

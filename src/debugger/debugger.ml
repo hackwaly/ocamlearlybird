@@ -36,6 +36,7 @@ type t = {
 module Module = Module
 module Event = Event
 module Frame = Frame
+module Value = Value
 
 let symbols_did_update_event agent = Symbols.did_update_event agent.symbols
 
@@ -96,19 +97,13 @@ let exec_in_loop agent f =
   promise
 
 let initial_frame agent =
-  exec_in_loop agent (fun conn ->
-    Debugcom.initial_frame conn
-  )
+  exec_in_loop agent (fun conn -> Debugcom.initial_frame conn)
 
 let up_frame agent frame =
-  exec_in_loop agent (fun conn ->
-    Debugcom.up_frame conn frame
-  )
+  exec_in_loop agent (fun conn -> Debugcom.up_frame conn frame)
 
 let set_frame agent frame =
-  exec_in_loop agent (fun conn ->
-    Debugcom.set_frame conn frame
-  )
+  exec_in_loop agent (fun conn -> Debugcom.set_frame conn frame)
 
 let run agent = agent.emit_action `Run
 
@@ -124,21 +119,7 @@ let stop agent = agent.emit_action `Stop
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
-  let conn =
-    object
-      val io_in = Lwt_io.(of_fd ~mode:input fd)
-
-      val io_out = Lwt_io.(of_fd ~mode:output fd)
-
-      method io_in = io_in
-
-      method io_out = io_out
-
-      method protocol_version = agent.options.protocol_version
-
-      method symbols = agent.symbols
-    end
-  in
+  let conn = Debugcom.make_conn agent.options.protocol_version agent.symbols fd in
   let%lwt pid = Debugcom.get_pid conn in
   ignore pid;
   let sync () =
@@ -250,7 +231,7 @@ let start agent =
     in
     let wrap_run f () =
       agent.set_status Running;
-      let%lwt report, status = f () in
+      let%lwt _report, status = f () in
       agent.set_status status;
       Lwt.return ()
     in
@@ -343,7 +324,8 @@ let start agent =
   Symbols.load agent.symbols 0 agent.options.symbols_file;%lwt
   sync ();%lwt
   let%lwt report = Debugcom.go conn 1 in
-  agent.set_status (Stopped { time = report.rep_event_count; breakpoint = false });
+  agent.set_status
+    (Stopped { time = report.rep_event_count; breakpoint = false });
   try%lwt
     while%lwt true do
       sync ();%lwt
@@ -359,3 +341,31 @@ let start agent =
       | None -> Lwt.return ()
     done
   with Exit -> Lwt.return ()
+
+let frame_variables agent frame kind =
+  exec_in_loop agent (fun conn ->
+      let%lwt frame0 = Debugcom.initial_frame conn in
+      ( Debugcom.set_frame conn frame;%lwt
+        let%lwt env = Lazy.force frame.event.env in
+        let tbl =
+          match kind with
+          | `Stack -> frame.event.ev.ev_compenv.ce_stack
+          | `Heap -> frame.event.ev.ev_compenv.ce_heap
+        in
+        let get_rv pos =
+          match kind with
+          | `Stack -> Debugcom.get_local conn (frame.event.ev.ev_stacksize - pos)
+          | `Heap -> Debugcom.get_environment conn pos
+        in
+        let iter f = tbl |> Ident.iter (fun id pos -> f (id, pos)) in
+        let to_value (id, pos) =
+          let%lwt rv = get_rv pos in
+          match env |> Env.find_value (Path.Pident id) with
+          | exception Not_found -> Lwt.return None
+          | valdesc ->
+              let ty = Ctype.correct_levels valdesc.val_type in
+              let%lwt value = Value.adopt conn env ty rv in
+              Lwt.return (Some (id, value))
+        in
+        Iter.to_list iter |> Lwt_list.filter_map_s to_value )
+        [%finally Debugcom.set_frame conn frame0])
