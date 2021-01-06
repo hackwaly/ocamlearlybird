@@ -396,5 +396,7 @@ let frame_variables agent frame kind =
               let%lwt value = Value.adopt conn env ty rv in
               Lwt.return (Some (id, value))
         in
-        Iter.to_list iter |> Lwt_list.filter_map_s to_value )
+        Iter.to_list iter
+        |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
+        |> Lwt_list.filter_map_s to_value )
         [%finally Debugcom.set_frame conn frame0])

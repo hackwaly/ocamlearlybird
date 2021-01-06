@@ -180,7 +180,7 @@ let run ~launch_args ~terminate ~agent rpc =
                                  v ))
                       in
                       Lwt.return variables
-                  | (Some Named | None), true, false -> Lwt.return []
+                  | (Some Named | None), true, false -> Value.get_named value
                   | _ -> Lwt.return [] )
             in
             let variables = variables |> List.map alloc_variable in

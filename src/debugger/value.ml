@@ -19,6 +19,8 @@ module type VALUE = sig
   val num_indexed : t -> int
 
   val get_indexed : t -> int -> t Lwt.t
+
+  val get_named : t -> (Ident.t * t) list Lwt.t
 end
 
 module type SIMPLE_VALUE = sig
@@ -29,10 +31,12 @@ module type SIMPLE_VALUE = sig
   type t += Value of v
 end
 
-module Unknown_value = struct
-  type t += Value
+let rec_adopt = ref (fun _ -> assert false)
 
-  let extension_constructor = Obj.Extension_constructor.of_val Value
+module Unknown_value = struct
+  type t += Unknown
+
+  let extension_constructor = Obj.Extension_constructor.of_val Unknown
 
   let is_named_container = false
 
@@ -43,7 +47,7 @@ module Unknown_value = struct
     ignore env;
     ignore ty;
     ignore rv;
-    Lwt.return (Some Value)
+    Lwt.return (Some Unknown)
 
   let to_short_string ?(hex = false) v =
     ignore hex;
@@ -58,13 +62,17 @@ module Unknown_value = struct
     ignore v;
     ignore index;
     [%lwt assert false]
+
+  let get_named v =
+    ignore v;
+    Lwt.return []
 end
 
 module Function_value = struct
-  type t += Value of Event.t
+  type t += Function of Event.t
 
   let extension_constructor =
-    Obj.Extension_constructor.of_val (Value (Obj.magic ()))
+    Obj.Extension_constructor.of_val (Function (Obj.magic ()))
 
   let is_named_container = false
 
@@ -76,13 +84,15 @@ module Function_value = struct
     | Types.Tarrow _ ->
         let%lwt pc = Debugcom.get_closure_code conn rv in
         let event = Symbols.find_event conn#symbols pc in
-        Lwt.return (Some (Value event))
+        Lwt.return (Some (Function event))
     | _ -> Lwt.return None
 
   let to_short_string ?(hex = false) v =
     ignore hex;
-    let [@warning "-8"] (Value event) = v [@warning "+8"] in
-    let (_, line, col) = event.ev.ev_loc.Location.loc_start |> Location.get_pos_info in
+    let[@warning "-8"] (Function event) = (v [@warning "+8"]) in
+    let _, line, col =
+      event.ev.ev_loc.Location.loc_start |> Location.get_pos_info
+    in
     let fname = event.module_.source |> Option.value ~default:"(none)" in
     Printf.sprintf "«fun» @ %s:%d:%d" (Filename.basename fname) line col
 
@@ -94,6 +104,10 @@ module Function_value = struct
     ignore v;
     ignore index;
     [%lwt assert false]
+
+  let get_named v =
+    ignore v;
+    Lwt.return []
 end
 
 let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
@@ -139,6 +153,10 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
           | Value v -> Lwt.return (get_indexed v index)
           | _ -> [%lwt assert false] )
       | None -> [%lwt assert false]
+
+    let get_named v =
+      ignore v;
+      Lwt.return []
   end : SIMPLE_VALUE
     with type v = v )
 
@@ -169,6 +187,66 @@ module Bool_value =
 module Unit_value =
 (val make_simple_value_module Predef.type_unit Unit.to_string)
 
+module Tuple_value = struct
+  type v = {
+    conn : Debugcom.conn;
+    env : Env.t;
+    tys : Types.type_expr list;
+    rv : Debugcom.remote_value;
+    pos : int;
+    unboxed : bool;
+  }
+
+  type t += Tuple of v
+
+  let extension_constructor =
+    Obj.Extension_constructor.of_val (Tuple (Obj.magic ()))
+
+  let is_named_container = true
+
+  let is_indexed_container = false
+
+  let to_short_string ?(hex=false) v =
+    ignore hex;
+    ignore v;
+    "«tuple»"
+
+  let adopt conn env ty rv =
+    match (Ctype.repr ty).desc with
+    | Ttuple tys ->
+        Lwt.return
+          (Some (Tuple { conn; env; tys; rv; pos = 0; unboxed = false }))
+    | _ -> Lwt.return None
+
+  let num_indexed v = ignore v; 0
+
+  let get_indexed v index =
+    ignore v;
+    ignore index;
+    assert%lwt false
+
+  let get_named v =
+    let[@warning "-8"] (Tuple { conn; env; tys; rv; pos; unboxed }) =
+      (v [@warning "+9"])
+    in
+    if unboxed then
+      let%lwt value = !rec_adopt conn env (List.hd tys) rv in
+      Lwt.return [ (Ident.create_local "·1", value) ]
+    else
+      let rec build_values values pos idx tys =
+        match tys with
+        | [] -> Lwt.return values
+        | ty :: tys ->
+            let%lwt rv = Debugcom.get_field conn rv pos in
+            let ident = Ident.create_local ("·" ^ string_of_int (idx + 1)) in
+            let%lwt value = !rec_adopt conn env ty rv in
+            build_values ((ident, value) :: values) (pos + 1) (idx + 1) tys
+      in
+      let%lwt values = build_values [] pos 0 tys in
+      let values = List.rev values in
+      Lwt.return values
+end
+
 let modules =
   Hashtbl.of_seq
     ( [
@@ -180,6 +258,7 @@ let modules =
         (module Bool_value : VALUE);
         (module Unit_value : VALUE);
         (module Function_value : VALUE);
+        (module Tuple_value : VALUE);
       ]
     |> List.to_seq
     |> Seq.map (fun (module Value : VALUE) ->
@@ -196,7 +275,7 @@ let adopt conn env ty rv =
     modules |> Hashtbl.to_seq_values
     |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
            Value.adopt conn env ty rv)
-  with Not_found -> Lwt.return Unknown_value.Value
+  with Not_found -> Lwt.return Unknown_value.Unknown
 
 let to_short_string ?(hex = false) v =
   let (module Value : VALUE) = find_module v in
@@ -217,3 +296,9 @@ let get_indexed v index =
 let num_indexed v =
   let (module Value : VALUE) = find_module v in
   Value.num_indexed v
+
+let get_named v =
+  let (module Value : VALUE) = find_module v in
+  Value.get_named v
+
+let () = rec_adopt := adopt
