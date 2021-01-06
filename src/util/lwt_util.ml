@@ -49,22 +49,6 @@ let getstringsockname sock =
   | Unix.ADDR_INET (addr, port) ->
       Unix.string_of_inet_addr addr ^ ":" ^ string_of_int port
 
-let read_nativeint_be in_ =
-  if Sys.word_size = 64 then
-    let%lwt word = Lwt_io.BE.read_int64 in_ in
-    Lwt.return (Int64.to_nativeint word)
-  else
-    let%lwt word = Lwt_io.BE.read_int32 in_ in
-    Lwt.return (Nativeint.of_int32 word)
-
-let write_nativeint_be out n =
-  if Sys.word_size = 64 then
-    let word = Int64.of_nativeint n in
-    Lwt_io.BE.write_int64 out word
-  else
-    let word = Nativeint.to_int32 n in
-    Lwt_io.BE.write_int32 out word
-
 let read_to_string_exactly ic count =
   let buf = Bytes.create count in
   Lwt_io.read_into_exactly ic buf 0 count;%lwt

@@ -102,7 +102,7 @@ let get_size (conn : conn) rv =
       in
       Lwt.return size)
 
-let is_block _conn rv =
+let is_block rv =
   Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
 
 let go (conn : conn) n =

@@ -132,34 +132,40 @@ let set_trap_barrier conn pos =
   Lwt_io.write_char conn#io_out 'b';%lwt
   Lwt_io.BE.write_int conn#io_out pos
 
-type remote_value = nativeint [@@deriving show]
+type remote_value = string [@@deriving show]
+
+let read_remote_value conn =
+  Lwt_util.read_to_string_exactly conn#io_in (Sys.word_size / 8)
+
+let write_remote_value conn rv =
+  Lwt_io.write conn#io_out rv
 
 let get_local conn index =
   Lwt_io.write_char conn#io_out 'L';%lwt
   Lwt_io.BE.write_int conn#io_out index;%lwt
-  let%lwt rv = Lwt_util.read_nativeint_be conn#io_in in
+  let%lwt rv = read_remote_value conn in
   Lwt.return rv
 
 let get_environment conn index =
   Lwt_io.write_char conn#io_out 'E';%lwt
   Lwt_io.BE.write_int conn#io_out index;%lwt
-  let%lwt rv = Lwt_util.read_nativeint_be conn#io_in in
+  let%lwt rv = read_remote_value conn in
   Lwt.return rv
 
 let get_global conn index =
   Lwt_io.write_char conn#io_out 'G';%lwt
   Lwt_io.BE.write_int conn#io_out index;%lwt
-  let%lwt rv = Lwt_util.read_nativeint_be conn#io_in in
+  let%lwt rv = read_remote_value conn in
   Lwt.return rv
 
 let get_accu conn =
   Lwt_io.write_char conn#io_out 'A';%lwt
-  let%lwt rv = Lwt_util.read_nativeint_be conn#io_in in
+  let%lwt rv = read_remote_value conn in
   Lwt.return rv
 
 let get_header conn rv =
   Lwt_io.write_char conn#io_out 'H';%lwt
-  Lwt_util.write_nativeint_be conn#io_out rv;%lwt
+  write_remote_value conn rv;%lwt
   let%lwt hdr = Lwt_io.BE.read_int conn#io_in in
   Lwt.return hdr
 
@@ -167,12 +173,12 @@ exception Double_field of float
 
 let get_field conn rv index =
   Lwt_io.write_char conn#io_out 'F';%lwt
-  Lwt_util.write_nativeint_be conn#io_out rv;%lwt
+  write_remote_value conn rv;%lwt
   Lwt_io.BE.write_int conn#io_out index;%lwt
   let%lwt res =
     match%lwt Lwt_io.read_char conn#io_in with
     | '\000' ->
-        let%lwt rv = Lwt_util.read_nativeint_be conn#io_in in
+        let%lwt rv = read_remote_value conn in
         Lwt.return rv
     | '\001' ->
         let%lwt v = Lwt_io.read_float64 conn#io_in in
@@ -183,13 +189,13 @@ let get_field conn rv index =
 
 let marshal_obj conn rv =
   Lwt_io.write_char conn#io_out 'M';%lwt
-  Lwt_util.write_nativeint_be conn#io_out rv;%lwt
+  write_remote_value conn rv;%lwt
   let%lwt v = Lwt_io.read_value conn#io_in in
   Lwt.return v
 
 let get_closure_code conn rv =
   Lwt_io.write_char conn#io_out 'C';%lwt
-  Lwt_util.write_nativeint_be conn#io_out rv;%lwt
+  write_remote_value conn rv;%lwt
   let%lwt pc = read_pc conn in
   Lwt.return pc
 
