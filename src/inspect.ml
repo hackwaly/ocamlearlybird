@@ -142,6 +142,10 @@ let run ~launch_args ~terminate ~agent rpc =
               in
               Variable.make ~name:(Ident.name ident)
                 ~value:(Value.to_short_string ~hex value)
+                ~named_variables:
+                  ( if Value.is_named_container value then
+                    Some (Value.num_named value)
+                  else None )
                 ~indexed_variables:
                   ( if Value.is_indexed_container value then
                     Some (Value.num_indexed value)
@@ -152,36 +156,50 @@ let run ~launch_args ~terminate ~agent rpc =
               match handle_desc with
               | Scope (frame, kind) -> Debugger.frame_variables agent frame kind
               | Value value -> (
-                  let named = Value.is_named_container value in
-                  let indexed = Value.is_indexed_container value in
-                  match (arg.filter, named, indexed) with
-                  | _, true, true -> Lwt.fail_with "Not supported"
-                  | (Some Indexed | None), false, true ->
-                      let num_indexed = Value.num_indexed value in
+                  let list_indexed start count =
+                    let values = ref [] in
+                    for%lwt i = start to start + count - 1 do
+                      let%lwt value' = Value.get_indexed value i in
+                      values := value' :: !values;
+                      Lwt.return ()
+                    done;%lwt
+                    let values = List.rev !values in
+                    let variables =
+                      values
+                      |> List.mapi (fun i v ->
+                             (Ident.create_local (string_of_int (start + i)), v))
+                    in
+                    Lwt.return variables
+                  in
+                  let num_named = Value.num_named value in
+                  let num_indexed = Value.num_indexed value in
+                  match arg.filter with
+                  | None ->
+                    Log.debug (fun m -> m "num_named %d num_indexed %d" num_named num_indexed);%lwt
+                      [%lwt assert (arg.count |> Option.is_none)];%lwt
+                      if num_named > 0 && num_indexed > 0 then
+                        let%lwt named = Value.list_named value in
+                        let%lwt indexed = list_indexed 0 num_indexed in
+                        Lwt.return (named @ indexed)
+                      else if num_named > 0 then
+                        let%lwt named = Value.list_named value in
+                        Lwt.return named
+                      else if num_indexed > 0 then
+                        let%lwt indexed = list_indexed 0 num_indexed in
+                        Lwt.return indexed
+                      else Lwt.return []
+                  | Some Indexed ->
                       let start, count =
                         match (arg.start, arg.count) with
                         | _, None -> (0, num_indexed)
                         | start, Some count ->
                             (start |> Option.value ~default:0, count)
                       in
-                      let start = min num_indexed start in
-                      let count = min num_indexed count in
-                      let values = ref [] in
-                      for%lwt i = start to start + count - 1 do
-                        let%lwt value' = Value.get_indexed value i in
-                        values := value' :: !values;
-                        Lwt.return ()
-                      done;%lwt
-                      let values = List.rev !values in
-                      let variables =
-                        values
-                        |> List.mapi (fun i v ->
-                               ( Ident.create_local (string_of_int (start + i)),
-                                 v ))
-                      in
-                      Lwt.return variables
-                  | (Some Named | None), true, false -> Value.get_named value
-                  | _ -> Lwt.return [] )
+                      let%lwt indexed = list_indexed start count in
+                      Lwt.return indexed
+                  | Some Named ->
+                      let%lwt named = Value.list_named value in
+                      Lwt.return named )
             in
             let variables = variables |> List.map alloc_variable in
             Lwt.return variables

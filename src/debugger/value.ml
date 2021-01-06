@@ -20,7 +20,9 @@ module type VALUE = sig
 
   val get_indexed : t -> int -> t Lwt.t
 
-  val get_named : t -> (Ident.t * t) list Lwt.t
+  val num_named : t -> int
+
+  val list_named : t -> (Ident.t * t) list Lwt.t
 end
 
 module type SIMPLE_VALUE = sig
@@ -63,7 +65,9 @@ module Unknown_value = struct
     ignore index;
     [%lwt assert false]
 
-  let get_named v =
+  let num_named _ = 0
+
+  let list_named v =
     ignore v;
     Lwt.return []
 end
@@ -105,13 +109,15 @@ module Function_value = struct
     ignore index;
     [%lwt assert false]
 
-  let get_named v =
+  let num_named _ = 0
+
+  let list_named v =
     ignore v;
     Lwt.return []
 end
 
-let make_simple_value_module (type v) ?num_indexed ?get_indexed ?get_named
-    ?to_hex_string type' to_string =
+let make_simple_value_module (type v) ?num_indexed ?get_indexed ?num_named
+    ?list_named ?to_hex_string type' to_string =
   ( module struct
     type nonrec v = v
 
@@ -120,7 +126,7 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?get_named
     let extension_constructor =
       Obj.Extension_constructor.of_val (Value (Obj.magic ()))
 
-    let is_named_container = get_named |> Option.is_some
+    let is_named_container = list_named |> Option.is_some
 
     let is_indexed_container = get_indexed |> Option.is_some
 
@@ -142,8 +148,9 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?get_named
 
     let num_indexed v =
       match num_indexed with
-      | Some num_indexed -> (
-          match v with Value v -> num_indexed v | _ -> assert false )
+      | Some num_indexed ->
+          let[@warning "-8"] (Value v) = (v [@warning "+8"]) in
+          num_indexed v
       | None -> 0
 
     let get_indexed v index =
@@ -153,11 +160,18 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?get_named
           Lwt.return (get_indexed v index)
       | None -> [%lwt assert false]
 
-    let get_named v =
-      match get_named with
-      | Some get_named ->
+    let num_named v =
+      match num_named with
+      | Some num_named ->
           let[@warning "-8"] (Value v) = (v [@warning "+8"]) in
-          Lwt.return (get_named v)
+          num_named v
+      | None -> 0
+
+    let list_named v =
+      match list_named with
+      | Some list_named ->
+          let[@warning "-8"] (Value v) = (v [@warning "+8"]) in
+          Lwt.return (list_named v)
       | None -> Lwt.return []
   end : SIMPLE_VALUE
     with type v = v )
@@ -199,7 +213,8 @@ module Int64_value =
 
 module Extension_constructor_value = ( val make_simple_value_module
                                              Predef.type_extension_constructor
-                                             ~get_named:(fun v ->
+                                             ~num_named:(fun _ -> 2)
+                                             ~list_named:(fun v ->
                                                [
                                                  ( Ident.create_local "name",
                                                    String_value.Value
@@ -210,7 +225,8 @@ module Extension_constructor_value = ( val make_simple_value_module
                                                      (Obj.Extension_constructor
                                                       .id v) );
                                                ])
-                                             (fun _ -> "«extension constructor»")
+                                             (fun _ ->
+                                               "«extension constructor»")
                                          : SIMPLE_VALUE
                                          with type v = Obj.Extension_constructor
                                                        .t )
@@ -255,7 +271,11 @@ module Tuple_value = struct
     ignore index;
     [%lwt assert false]
 
-  let get_named v =
+  let num_named v =
+    let[@warning "-8"] (Tuple { tys; _ }) = (v [@warning "+8"]) in
+    List.length tys
+
+  let list_named v =
     let[@warning "-8"] (Tuple { conn; env; tys; rv; pos; unboxed }) =
       (v [@warning "+8"])
     in
@@ -309,7 +329,9 @@ module List_nil_value = struct
     ignore index;
     [%lwt assert false]
 
-  let get_named v =
+  let num_named _ = 0
+
+  let list_named v =
     ignore v;
     Lwt.return []
 end
@@ -352,7 +374,9 @@ module List_cons_value = struct
     ignore index;
     [%lwt assert false]
 
-  let get_named v =
+  let num_named _ = 2
+
+  let list_named v =
     let[@warning "-8"] (List { conn; env; ty; rv }) = (v [@warning "+8"]) in
     let[@warning "-8"] (Types.Tconstr (_, [ elt_ty ], _)) =
       ((Ctype.repr ty).desc [@warning "+8"])
@@ -363,9 +387,58 @@ module List_cons_value = struct
       let%lwt value = !rec_adopt conn env ty rv in
       Lwt.return (name, value)
     in
-    let%lwt hd = make_variable "hd" 0 elt_ty in
-    let%lwt tl = make_variable "tl" 1 ty in
+    let%lwt hd = make_variable "·hd" 0 elt_ty in
+    let%lwt tl = make_variable "·tl" 1 ty in
     Lwt.return [ hd; tl ]
+end
+
+module Array_value = struct
+  type v = {
+    conn : Debugcom.conn;
+    env : Env.t;
+    elt_ty : Types.type_expr;
+    rv : Debugcom.remote_value;
+    len : int;
+  }
+
+  type t += Array of v
+
+  let extension_constructor =
+    Obj.Extension_constructor.of_val (Array (Obj.magic ()))
+
+  let is_named_container = true
+
+  let is_indexed_container = true
+
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    ignore v;
+    "«array»"
+
+  let adopt conn env ty rv =
+    match (Ctype.repr ty).desc with
+    | Tconstr (path, [ elt_ty ], _)
+      when Path.same path Predef.path_array && Debugcom.is_block rv ->
+        let%lwt len = Debugcom.get_size conn rv in
+        Lwt.return (Some (Array { conn; env; elt_ty; rv; len }))
+    | _ -> Lwt.return None
+
+  let num_indexed v =
+    let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
+    len
+
+  let get_indexed v index =
+    let[@warning "-8"] (Array { conn; env; elt_ty; rv; _ }) =
+      (v [@warning "+8"])
+    in
+    let%lwt rv' = Debugcom.get_field conn rv index in
+    !rec_adopt conn env elt_ty rv'
+
+  let num_named _ = 1
+
+  let list_named v =
+    let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
+    Lwt.return [ (Ident.create_local "length", Int_value.Value len) ]
 end
 
 let modules =
@@ -386,6 +459,7 @@ let modules =
         (module Tuple_value : VALUE);
         (module List_cons_value : VALUE);
         (module List_nil_value : VALUE);
+        (module Array_value : VALUE);
       ]
     |> List.to_seq
     |> Seq.map (fun (module Value : VALUE) ->
@@ -424,8 +498,12 @@ let num_indexed v =
   let (module Value : VALUE) = find_module v in
   Value.num_indexed v
 
-let get_named v =
+let num_named v =
   let (module Value : VALUE) = find_module v in
-  Value.get_named v
+  Value.num_named v
+
+let list_named v =
+  let (module Value : VALUE) = find_module v in
+  Value.list_named v
 
 let () = rec_adopt := adopt
