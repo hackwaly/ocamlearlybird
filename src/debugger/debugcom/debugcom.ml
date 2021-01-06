@@ -96,7 +96,7 @@ let get_size (conn : conn) rv =
   conn#lock (fun conn ->
       let%lwt hdr = Debugcom_basic.get_header conn rv in
       let size =
-        if hdr land 0xFF = Obj.double_array_tag && Sys.word_size = 32 then
+        if hdr land 0xff = Obj.double_array_tag && Sys.word_size = 32 then
           hdr lsr 11
         else hdr lsr 10
       in

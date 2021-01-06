@@ -29,8 +29,39 @@ module type SIMPLE_VALUE = sig
   type t += Value of v
 end
 
-let make_simple_value_module (type v) ?num_indexed ?get_indexed ?limit_size
-    ?to_hex_string type' to_string =
+module Unknown_value = struct
+  type t += Value
+
+  let extension_constructor = Obj.Extension_constructor.of_val Value
+
+  let is_named_container = false
+
+  let is_indexed_container = false
+
+  let adopt conn env ty rv =
+    ignore conn;
+    ignore env;
+    ignore ty;
+    ignore rv;
+    Lwt.return (Some Value)
+
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    ignore v;
+    "«unknown»"
+
+  let num_indexed v =
+    ignore v;
+    0
+
+  let get_indexed v index =
+    ignore v;
+    ignore index;
+    [%lwt assert false]
+end
+
+let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
+    type' to_string =
   ( module struct
     type nonrec v = v
 
@@ -44,16 +75,7 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?limit_size
     let is_indexed_container = get_indexed |> Option.is_some
 
     let adopt conn env ty rv =
-      let%lwt pass =
-        if Ctype.matches env type' ty then
-          match limit_size with
-          | Some limit_size ->
-              let%lwt size = Debugcom.get_size conn rv in
-              Lwt.return (size <= limit_size)
-          | None -> Lwt.return true
-        else Lwt.return false
-      in
-      if pass then
+      if Ctype.matches env type' ty then
         let%lwt v = Debugcom.marshal_obj conn rv in
         Lwt.return (Some (Value v))
       else Lwt.return None
@@ -92,10 +114,9 @@ module Int_value =
 module Char_value = (val make_simple_value_module Predef.type_char Char.escaped)
 
 module String_value =
-( val make_simple_value_module ~limit_size:32768 Predef.type_string
-        String.escaped )
+(val make_simple_value_module Predef.type_string String.escaped)
 
-module Bytes_value = ( val make_simple_value_module ~limit_size:32768
+module Bytes_value = ( val make_simple_value_module
                              ~num_indexed:(fun b -> Bytes.length b)
                              ~get_indexed:(fun b i ->
                                Int_value.Value (Bytes.get_uint8 b i))
@@ -128,13 +149,17 @@ let modules =
            (Value.extension_constructor, (module Value : VALUE))) )
 
 let find_module v =
-  let ec = Obj.Extension_constructor.of_val v in
-  Hashtbl.find modules ec
+  try
+    let ec = Obj.Extension_constructor.of_val v in
+    Hashtbl.find modules ec
+  with Not_found -> (module Unknown_value : VALUE)
 
 let adopt conn env ty rv =
-  modules |> Hashtbl.to_seq_values
-  |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
-         Value.adopt conn env ty rv)
+  try%lwt
+    modules |> Hashtbl.to_seq_values
+    |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
+           Value.adopt conn env ty rv)
+  with Not_found -> Lwt.return Unknown_value.Value
 
 let to_short_string ?(hex = false) v =
   let (module Value : VALUE) = find_module v in

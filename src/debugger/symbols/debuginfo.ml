@@ -14,16 +14,23 @@ and event = {
   env : Env.t Lwt.t Lazy.t;
 }
 
+let derive_source_ids id =
+  let id' = Str.split (Str.regexp "__") id |> List.rev |> List.hd in
+  if id' <> id then [ id; id' ] else [ id ]
+
 let derive_source_paths id dirs =
-  dirs |> List.to_seq
-  |> Seq.flat_map (fun dir ->
-         List.to_seq
-           [
-             dir ^ "/" ^ String.uncapitalize_ascii id ^ ".ml";
-             dir ^ "/" ^ String.uncapitalize_ascii id ^ ".re";
-             dir ^ "/" ^ id ^ ".ml";
-             dir ^ "/" ^ id ^ ".re";
-           ])
+  let ids = derive_source_ids id in
+  ids |> List.to_seq
+  |> Seq.flat_map (fun id ->
+         dirs |> List.to_seq
+         |> Seq.flat_map (fun dir ->
+                List.to_seq
+                  [
+                    dir ^ "/" ^ String.uncapitalize_ascii id ^ ".ml";
+                    dir ^ "/" ^ String.uncapitalize_ascii id ^ ".re";
+                    dir ^ "/" ^ id ^ ".ml";
+                    dir ^ "/" ^ id ^ ".re";
+                  ]))
   |> List.of_seq |> Lwt.return
 
 let read_toc ic =
@@ -126,11 +133,14 @@ let load frag file =
      |> Iter.to_list
      |> Lwt_list.map_s (fun (evl, dirs) ->
             all_dirs := String_set.add_iter !all_dirs (CCList.to_iter dirs);
-            let id = (List.hd evl).Instruct.ev_module in
+            let ev = List.hd evl in
+            let id = ev.Instruct.ev_module in
             let%lwt source =
               match%lwt resolve_source id dirs () with
               | r -> Lwt.return (Some r)
-              | exception _ -> Lwt.return None
+              | exception _ ->
+                  Log.warn (fun m -> m "Module %s source not found" id);%lwt
+                  Lwt.return None
             in
             let module_ = { frag; id; source; events = [||] } in
             let events =
