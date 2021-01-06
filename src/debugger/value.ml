@@ -110,8 +110,8 @@ module Function_value = struct
     Lwt.return []
 end
 
-let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
-    type' to_string =
+let make_simple_value_module (type v) ?num_indexed ?get_indexed ?get_named
+    ?to_hex_string type' to_string =
   ( module struct
     type nonrec v = v
 
@@ -120,7 +120,7 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
     let extension_constructor =
       Obj.Extension_constructor.of_val (Value (Obj.magic ()))
 
-    let is_named_container = false
+    let is_named_container = get_named |> Option.is_some
 
     let is_indexed_container = get_indexed |> Option.is_some
 
@@ -148,15 +148,17 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
 
     let get_indexed v index =
       match get_indexed with
-      | Some get_indexed -> (
-          match v with
-          | Value v -> Lwt.return (get_indexed v index)
-          | _ -> [%lwt assert false] )
+      | Some get_indexed ->
+          let[@warning "-8"] (Value v) = (v [@warning "+8"]) in
+          Lwt.return (get_indexed v index)
       | None -> [%lwt assert false]
 
     let get_named v =
-      ignore v;
-      Lwt.return []
+      match get_named with
+      | Some get_named ->
+          let[@warning "-8"] (Value v) = (v [@warning "+8"]) in
+          Lwt.return (get_named v)
+      | None -> Lwt.return []
   end : SIMPLE_VALUE
     with type v = v )
 
@@ -170,11 +172,10 @@ module Char_value = (val make_simple_value_module Predef.type_char Char.escaped)
 module String_value =
 (val make_simple_value_module Predef.type_string String.escaped)
 
-module Bytes_value = ( val make_simple_value_module
+module Bytes_value = ( val make_simple_value_module Predef.type_bytes
                              ~num_indexed:(fun b -> Bytes.length b)
                              ~get_indexed:(fun b i ->
                                Int_value.Value (Bytes.get_uint8 b i))
-                             Predef.type_bytes
                              (fun _ -> "«bytes»") : SIMPLE_VALUE
                          with type v = bytes )
 
@@ -186,6 +187,33 @@ module Bool_value =
 
 module Unit_value =
 (val make_simple_value_module Predef.type_unit Unit.to_string)
+
+module Nativeint_value =
+(val make_simple_value_module Predef.type_nativeint Nativeint.to_string)
+
+module Int32_value =
+(val make_simple_value_module Predef.type_int32 Int32.to_string)
+
+module Int64_value =
+(val make_simple_value_module Predef.type_int64 Int64.to_string)
+
+module Extension_constructor_value = ( val make_simple_value_module
+                                             Predef.type_extension_constructor
+                                             ~get_named:(fun v ->
+                                               [
+                                                 ( Ident.create_local "name",
+                                                   String_value.Value
+                                                     (Obj.Extension_constructor
+                                                      .name v) );
+                                                 ( Ident.create_local "id",
+                                                   Int_value.Value
+                                                     (Obj.Extension_constructor
+                                                      .id v) );
+                                               ])
+                                             (fun _ -> "«extension constructor»")
+                                         : SIMPLE_VALUE
+                                         with type v = Obj.Extension_constructor
+                                                       .t )
 
 module Tuple_value = struct
   type v = {
@@ -252,8 +280,7 @@ end
 module List_nil_value = struct
   type t += List_nil
 
-  let extension_constructor =
-    Obj.Extension_constructor.of_val List_nil
+  let extension_constructor = Obj.Extension_constructor.of_val List_nil
 
   let is_named_container = false
 
@@ -351,6 +378,10 @@ let modules =
         (module Float_value : VALUE);
         (module Bool_value : VALUE);
         (module Unit_value : VALUE);
+        (module Nativeint_value : VALUE);
+        (module Int32_value : VALUE);
+        (module Int64_value : VALUE);
+        (module Extension_constructor_value : VALUE);
         (module Function_value : VALUE);
         (module Tuple_value : VALUE);
         (module List_cons_value : VALUE);
