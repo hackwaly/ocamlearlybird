@@ -27,6 +27,8 @@ module Value = Value
 
 val create : options -> t
 
+val ready : t -> unit Lwt.t
+
 val symbols_did_update_event : t -> unit Lwt_react.E.t
 
 val to_seq_modules : t -> Module.t Seq.t

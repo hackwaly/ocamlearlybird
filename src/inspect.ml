@@ -29,6 +29,7 @@ let run ~launch_args ~terminate ~agent rpc =
       | Running -> Lwt.return ()
     in
     process (Debugger.status_signal agent |> Lwt_react.S.value);%lwt
+    Debugger.ready agent;%lwt
     Debugger.status_signal agent
     |> Lwt_react.S.changes |> Lwt_react.E.to_stream |> Lwt_stream.iter_s process
   in

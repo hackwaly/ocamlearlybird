@@ -60,6 +60,42 @@ module Unknown_value = struct
     [%lwt assert false]
 end
 
+module Function_value = struct
+  type t += Value of Event.t
+
+  let extension_constructor =
+    Obj.Extension_constructor.of_val (Value (Obj.magic ()))
+
+  let is_named_container = false
+
+  let is_indexed_container = false
+
+  let adopt conn env ty rv =
+    ignore env;
+    match (Ctype.repr ty).desc with
+    | Types.Tarrow _ ->
+        let%lwt pc = Debugcom.get_closure_code conn rv in
+        let event = Symbols.find_event conn#symbols pc in
+        Lwt.return (Some (Value event))
+    | _ -> Lwt.return None
+
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    let [@warning "-8"] (Value event) = v [@warning "+8"] in
+    let (_, line, col) = event.ev.ev_loc.Location.loc_start |> Location.get_pos_info in
+    let fname = event.module_.source |> Option.value ~default:"(none)" in
+    Printf.sprintf "«fun» @ %s:%d:%d" (Filename.basename fname) line col
+
+  let num_indexed v =
+    ignore v;
+    0
+
+  let get_indexed v index =
+    ignore v;
+    ignore index;
+    [%lwt assert false]
+end
+
 let make_simple_value_module (type v) ?num_indexed ?get_indexed ?to_hex_string
     type' to_string =
   ( module struct
@@ -143,6 +179,7 @@ let modules =
         (module Float_value : VALUE);
         (module Bool_value : VALUE);
         (module Unit_value : VALUE);
+        (module Function_value : VALUE);
       ]
     |> List.to_seq
     |> Seq.map (fun (module Value : VALUE) ->

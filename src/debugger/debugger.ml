@@ -32,12 +32,16 @@ type t = {
   symbols : Symbols.t;
   breakpoints : Breakpoints.t;
   mutable pendings : (Debugcom.conn -> unit Lwt.t) list;
+  ready : unit Lwt.t;
+  ready_u : unit Lwt.u;
 }
 
 module Module = Module
 module Event = Event
 module Frame = Frame
 module Value = Value
+
+let ready agent = agent.ready
 
 let symbols_did_update_event agent = Symbols.did_update_event agent.symbols
 
@@ -60,6 +64,7 @@ let create options =
   let action_e, emit_action = Lwt_react.E.create () in
   let breakpoints = Breakpoints.create () in
   let symbols = Symbols.create () in
+  let ready, ready_u = Lwt.wait () in
   let agent =
     {
       options;
@@ -70,6 +75,8 @@ let create options =
       symbols;
       breakpoints;
       pendings = [];
+      ready;
+      ready_u;
     }
   in
   agent
@@ -347,6 +354,7 @@ let start agent =
   let%lwt report = Debugcom.go conn 1 in
   agent.set_status
     (Stopped { time = report.rep_event_count; breakpoint = false });
+  Lwt.wakeup_later agent.ready_u ();
   try%lwt
     while%lwt true do
       sync ();%lwt
