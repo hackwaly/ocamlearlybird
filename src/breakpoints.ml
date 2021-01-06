@@ -168,7 +168,7 @@ let run ~launch_args ~terminate ~agent rpc =
           pos.pos_cnum >= start && pos.pos_cnum <= end_
         )
         |> Seq.map (fun (pos : Lexing.position) ->
-          Breakpoint_location.make ~line:pos.pos_lnum ~column:(Some (pos.pos_cnum - pos.pos_bol)) ()
+          Breakpoint_location.make ~line:pos.pos_lnum ~column:(Some (pos.pos_cnum - pos.pos_bol + 1)) ()
         )
         |> List.of_seq
       in
