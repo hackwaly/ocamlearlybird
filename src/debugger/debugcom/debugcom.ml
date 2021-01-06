@@ -108,7 +108,16 @@ let is_block _conn rv =
 let go (conn : conn) n =
   conn#lock (fun conn ->
       let%lwt report = Debugcom_basic.go conn n in
-      Log.debug (fun m -> m "%s" (Debugcom_basic.show_report report));%lwt
+      ( match report.rep_type with
+      | Uncaught_exc | Exited -> Lwt.return ()
+      | _ ->
+          let event =
+            Symbols.find_event conn#symbols report.rep_program_pointer
+          in
+          Log.debug (fun m ->
+              m "Report: %s\nEvent: %s"
+                (Debugcom_basic.show_report report)
+                (Debuginfo.show_event event)) );%lwt
       Lwt.return report)
 
 let initial_frame (conn : conn) =

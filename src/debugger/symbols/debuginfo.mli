@@ -4,12 +4,14 @@ type module_ = {
   source : string option;
   mutable events : event array;
 }
+[@@deriving show]
 
 and event = {
   module_ : module_;
   ev : Instruct.debug_event;
   env : Env.t Lwt.t Lazy.t;
 }
+[@@deriving show]
 
 val load : int -> string -> module_ list Lwt.t
 (** [load frag file] Load debug info from file *)

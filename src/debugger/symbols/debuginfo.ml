@@ -1,18 +1,55 @@
 open Util
 module String_set = CCSet.Make (CCString)
 
+type type_expr = Types.type_expr
+let pp_type_expr fmt _t = Format.pp_print_string fmt "<opaque>"
+
+type debug_event = Instruct.debug_event =
+  { mutable ev_pos: int;
+    ev_module: string;
+    ev_loc: Location.t;  [@opaque]
+    ev_kind: debug_event_kind;
+    ev_defname: string;
+    ev_info: debug_event_info;
+    ev_typenv: Env.summary;  [@opaque]
+    ev_typsubst: Subst.t;  [@opaque]
+    ev_compenv: Instruct.compilation_env;  [@opaque]
+    ev_stacksize: int;
+    ev_repr: debug_event_repr }
+[@@deriving show]
+
+and debug_event_kind = Instruct.debug_event_kind =
+    Event_before
+  | Event_after of type_expr
+  | Event_pseudo
+[@@deriving show]
+
+and debug_event_info = Instruct.debug_event_info =
+    Event_function
+  | Event_return of int
+  | Event_other
+[@@deriving show]
+
+and debug_event_repr = Instruct.debug_event_repr =
+    Event_none
+  | Event_parent of int ref
+  | Event_child of int ref
+[@@deriving show]
+
 type module_ = {
   frag : int;
   id : string;
   source : string option;
-  mutable events : event array;
+  mutable events : event array; [@opaque]
 }
+[@@deriving show]
 
 and event = {
   module_ : module_;
-  ev : Instruct.debug_event;
-  env : Env.t Lwt.t Lazy.t;
+  ev : debug_event;
+  env : Env.t Lwt.t Lazy.t; [@opaque]
 }
+[@@deriving show]
 
 let derive_source_ids id =
   let id' = Str.split (Str.regexp "__") id |> List.rev |> List.hd in

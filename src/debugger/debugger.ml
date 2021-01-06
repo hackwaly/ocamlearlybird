@@ -1,4 +1,5 @@
 module Log = Log
+open Util
 
 type pc = Pc.t = { frag : int; pos : int }
 
@@ -119,7 +120,9 @@ let stop agent = agent.emit_action `Stop
 
 let start agent =
   let%lwt fd, _ = Lwt_unix.accept agent.options.debug_socket in
-  let conn = Debugcom.make_conn agent.options.protocol_version agent.symbols fd in
+  let conn =
+    Debugcom.make_conn agent.options.protocol_version agent.symbols fd
+  in
   let%lwt pid = Debugcom.get_pid conn in
   ignore pid;
   let sync () =
@@ -161,13 +164,30 @@ let start agent =
           report.Debugcom.rep_stack_pointer = stack_pos
           && report.rep_program_pointer = pc
     in
-    let check_stop report =
+    let rec skip_pseudo_event report =
+      let is_at_pseudo_event () =
+        let event =
+          Symbols.find_event agent.symbols report.Debugcom.rep_program_pointer
+        in
+        Debug_event.is_pseudo event.ev
+      in
+      match report.Debugcom.rep_type with
+      | Event | Breakpoint | Trap ->
+          if is_at_pseudo_event () then (
+            Log.debug (fun m -> m "Pseudo event skipped");%lwt
+            let%lwt report = Debugcom.go conn 1 in
+            skip_pseudo_event report )
+          else Lwt.return report
+      | _ -> Lwt.return report
+    in
+    let check_stop report0 =
       [%lwt assert (is_running agent)];%lwt
       sync ();%lwt
-      match report.Debugcom.rep_type with
+      let%lwt report = skip_pseudo_event report0 in
+      match report0.Debugcom.rep_type with
       | Breakpoint ->
           let met_temporary_trap_barrier_and_breakpoint =
-            check_met_temporary_trap_barrier_and_breakpoint report
+            check_met_temporary_trap_barrier_and_breakpoint report0
           in
           if met_temporary_trap_barrier_and_breakpoint then
             Lwt.return
@@ -231,7 +251,7 @@ let start agent =
     in
     let wrap_run f () =
       agent.set_status Running;
-      let%lwt _report, status = f () in
+      let%lwt _, status = f () in
       agent.set_status status;
       Lwt.return ()
     in
@@ -247,6 +267,7 @@ let start agent =
     let run = wrap_run internal_run in
     let internal_step_in () =
       let%lwt report = Debugcom.go conn 1 in
+      let%lwt report = skip_pseudo_event report in
       Lwt.return
         ( report,
           match report.rep_type with
