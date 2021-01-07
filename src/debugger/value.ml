@@ -434,14 +434,15 @@ module Array_value = struct
     let[@warning "-8"] (Array { conn; env; elt_ty; rv; _ }) =
       (v [@warning "+8"])
     in
-    let%lwt rv' = Debugcom.get_field conn rv index in
-    !rec_adopt conn env elt_ty rv'
+    match%lwt Debugcom.get_field conn rv index with
+    | exception Debugcom.Float_field v -> Lwt.return (Float_value.Value v)
+    | rv' -> !rec_adopt conn env elt_ty rv'
 
   let num_named _ = 1
 
   let list_named v =
     let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "length", Int_value.Value len) ]
+    Lwt.return [ (Ident.create_local "·length", Int_value.Value len) ]
 end
 
 module Lazy_value = struct
@@ -487,9 +488,7 @@ module Lazy_value = struct
 
   let list_named v =
     let[@warning "-8"] (Lazy f) = (v [@warning "+8"]) in
-    Lwt.return [
-      Ident.create_local "·fun", f
-    ]
+    Lwt.return [ (Ident.create_local "·fun", f) ]
 end
 
 module Lazy_fourced_value = struct
@@ -532,9 +531,7 @@ module Lazy_fourced_value = struct
 
   let list_named v =
     let[@warning "-8"] (Forced v) = (v [@warning "+8"]) in
-    Lwt.return [
-      Ident.create_local "·val", v
-    ]
+    Lwt.return [ (Ident.create_local "·val", v) ]
 end
 
 let modules =

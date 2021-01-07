@@ -169,7 +169,7 @@ let get_header conn rv =
   let%lwt hdr = Lwt_io.BE.read_int conn#io_in in
   Lwt.return hdr
 
-exception Double_field of float
+exception Float_field of float
 
 let get_field conn rv index =
   Lwt_io.write_char conn#io_out 'F';%lwt
@@ -181,8 +181,9 @@ let get_field conn rv index =
         let%lwt rv = read_remote_value conn in
         Lwt.return rv
     | '\001' ->
+        Log.debug (fun m -> m "Float field");%lwt
         let%lwt v = Lwt_io.read_float64 conn#io_in in
-        Lwt.fail (Double_field v)
+        Lwt.fail (Float_field v)
     | _ -> [%lwt assert false]
   in
   Lwt.return res
