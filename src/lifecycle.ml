@@ -10,6 +10,7 @@ let run ~launch_args ~terminate ~agent rpc =
     (module Configuration_done_command)
     (fun _ ->
       let open Launch_command.Arguments in
+      Debugger.ready agent;%lwt
       if not launch_args.stop_on_entry then (
         Debugger.run agent;
         Lwt.return () )
