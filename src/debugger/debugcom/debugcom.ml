@@ -138,7 +138,10 @@ let get_size (conn : conn) rv =
           in
           Lwt.return size)
 
-let is_block rv = Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
+let is_block rv =
+  match rv with
+  | Local v -> Obj.is_block v
+  | Remote rv -> Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
 
 let go (conn : conn) n =
   conn#lock (fun conn ->
