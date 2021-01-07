@@ -21,3 +21,10 @@ module Path = struct
     Path.print Format.str_formatter path;
     Format.flush_str_formatter ()
 end
+
+module Predef = struct
+  include Predef
+
+  let type_abstract =
+    Ctype.newty (Tconstr (Pident (Ident.create_predef "abstract"), [], ref Types.Mnil))
+end

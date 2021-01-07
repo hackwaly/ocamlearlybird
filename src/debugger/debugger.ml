@@ -323,9 +323,9 @@ let start agent =
     in
     let step_out = wrap_run internal_step_out in
     let internal_step_over () =
-      let%lwt stack_pos1, pc1 = Debugcom.get_frame conn in
+      let%lwt stack_pos1, pc1 = Debugcom_basic.get_frame conn in
       let%lwt step_in_status = internal_step_in () in
-      let%lwt stack_pos2, pc2 = Debugcom.get_frame conn in
+      let%lwt stack_pos2, pc2 = Debugcom_basic.get_frame conn in
       let ev1 = find_event agent pc1 in
       let ev2 = find_event agent pc2 in
       (* tailcallopt case *)

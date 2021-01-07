@@ -1,9 +1,11 @@
-include Debugcom_basic
+include Debugcom_types
 
 type conn =
   < Debugcom_basic.conn
   ; symbols : Symbols.t
   ; lock : 'a. (conn -> 'a Lwt.t) -> 'a Lwt.t >
+
+type remote_value = Local of Obj.t | Remote of Debugcom_basic.remote_value
 
 let make_conn protocol_version symbols fd =
   let module L = struct
@@ -48,59 +50,93 @@ let make_conn protocol_version symbols fd =
   in
   (new L.c r :> conn)
 
-[@@@ocamlformat "disable"]
+let get_pid (conn : conn) = conn#lock (fun conn -> Debugcom_basic.get_pid conn)
 
-let get_pid (conn : conn) = conn#lock (fun conn -> Debugcom_basic.get_pid conn )
+let set_event (conn : conn) pc =
+  conn#lock (fun conn -> Debugcom_basic.set_event conn pc)
 
-let set_event (conn : conn) pc = conn#lock (fun conn -> Debugcom_basic.set_event conn pc )
+let set_breakpoint (conn : conn) pc =
+  conn#lock (fun conn -> Debugcom_basic.set_breakpoint conn pc)
 
-let set_breakpoint (conn : conn) pc = conn#lock (fun conn -> Debugcom_basic.set_breakpoint conn pc )
+let reset_instr (conn : conn) pc =
+  conn#lock (fun conn -> Debugcom_basic.reset_instr conn pc)
 
-let reset_instr (conn : conn) pc = conn#lock (fun conn -> Debugcom_basic.reset_instr conn pc )
+let checkpoint (conn : conn) =
+  conn#lock (fun conn -> Debugcom_basic.checkpoint conn)
 
-let checkpoint (conn : conn) = conn#lock (fun conn -> Debugcom_basic.checkpoint conn )
+let stop (conn : conn) = conn#lock (fun conn -> Debugcom_basic.stop conn)
 
-let stop (conn : conn) =  conn#lock (fun conn -> Debugcom_basic.stop conn )
+let wait (conn : conn) = conn#lock (fun conn -> Debugcom_basic.wait conn)
 
-let wait (conn : conn) =  conn#lock (fun conn -> Debugcom_basic.wait conn )
+let set_trap_barrier (conn : conn) pos =
+  conn#lock (fun conn -> Debugcom_basic.set_trap_barrier conn pos)
 
-let set_trap_barrier (conn : conn) pos = conn#lock (fun conn -> Debugcom_basic.set_trap_barrier conn pos )
+let get_local (conn : conn) index =
+  conn#lock (fun conn ->
+      let%lwt rv = Debugcom_basic.get_local conn index in
+      Lwt.return (Remote rv))
 
-let get_local (conn : conn) index = conn#lock (fun conn -> Debugcom_basic.get_local conn index )
+let get_environment (conn : conn) index =
+  conn#lock (fun conn ->
+      let%lwt rv = Debugcom_basic.get_environment conn index in
+      Lwt.return (Remote rv))
 
-let get_environment (conn : conn) index = conn#lock (fun conn -> Debugcom_basic.get_environment conn index )
+let get_global (conn : conn) index =
+  conn#lock (fun conn ->
+      let%lwt rv = Debugcom_basic.get_global conn index in
+      Lwt.return (Remote rv))
 
-let get_global (conn : conn) index = conn#lock (fun conn -> Debugcom_basic.get_global conn index )
+let get_accu (conn : conn) =
+  conn#lock (fun conn ->
+      let%lwt rv = Debugcom_basic.get_accu conn in
+      Lwt.return (Remote rv))
 
-let get_accu (conn : conn) = conn#lock (fun conn -> Debugcom_basic.get_accu conn )
+let get_field (conn : conn) rv index =
+  match rv with
+  | Local v ->
+      let v = Obj.field v index in
+      Lwt.return (Local v)
+  | Remote rv ->
+      conn#lock (fun conn ->
+          match%lwt Debugcom_basic.get_field conn rv index with
+          | rv -> Lwt.return (Remote rv)
+          | exception Debugcom_basic.Float_field v ->
+              Lwt.return (Local (Obj.repr v)))
 
-let get_header (conn : conn) rv = conn#lock (fun conn -> Debugcom_basic.get_header conn rv )
+let marshal_obj (conn : conn) rv =
+  match rv with
+  | Local v -> Lwt.return (Obj.magic v)
+  | Remote rv -> conn#lock (fun conn -> Debugcom_basic.marshal_obj conn rv)
 
-let get_field (conn : conn) rv index = conn#lock (fun conn -> Debugcom_basic.get_field conn rv index )
+let get_closure_code (conn : conn) rv =
+  match rv with
+  | Local _ -> [%lwt assert false]
+  | Remote rv -> conn#lock (fun conn -> Debugcom_basic.get_closure_code conn rv)
 
-let marshal_obj (conn : conn) rv = conn#lock (fun conn -> Debugcom_basic.marshal_obj conn rv )
-
-let get_closure_code (conn : conn) rv = conn#lock (fun conn -> Debugcom_basic.get_closure_code conn rv )
-
-let set_fork_mode (conn : conn) mode = conn#lock (fun conn -> Debugcom_basic.set_fork_mode conn mode )
-
-[@@@ocamlformat "enable"]
+let set_fork_mode (conn : conn) mode =
+  conn#lock (fun conn -> Debugcom_basic.set_fork_mode conn mode)
 
 let get_tag (conn : conn) rv =
-  conn#lock (fun conn ->
-      let%lwt hdr = Debugcom_basic.get_header conn rv in
-      let tag = hdr land 0xff in
-      Lwt.return tag)
+  match rv with
+  | Local v -> Lwt.return (Obj.tag v)
+  | Remote rv ->
+      conn#lock (fun conn ->
+          let%lwt hdr = Debugcom_basic.get_header conn rv in
+          let tag = hdr land 0xff in
+          Lwt.return tag)
 
 let get_size (conn : conn) rv =
-  conn#lock (fun conn ->
-      let%lwt hdr = Debugcom_basic.get_header conn rv in
-      let size =
-        if hdr land 0xff = Obj.double_array_tag && Sys.word_size = 32 then
-          hdr lsr 11
-        else hdr lsr 10
-      in
-      Lwt.return size)
+  match rv with
+  | Local v -> Lwt.return (Obj.size v)
+  | Remote rv ->
+      conn#lock (fun conn ->
+          let%lwt hdr = Debugcom_basic.get_header conn rv in
+          let size =
+            if hdr land 0xff = Obj.double_array_tag && Sys.word_size = 32 then
+              hdr lsr 11
+            else hdr lsr 10
+          in
+          Lwt.return size)
 
 let is_block rv = Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
 
@@ -110,8 +146,7 @@ let go (conn : conn) n =
       ( match Symbols.find_event conn#symbols report.rep_program_pointer with
       | event ->
           Log.debug (fun m ->
-              m "Report: %s\nEvent: %s"
-                (Debugcom_basic.show_report report)
+              m "Report: %s\nEvent: %s" (show_report report)
                 (Debuginfo.show_event event))
       | exception Not_found -> Lwt.return () );%lwt
       Lwt.return report)

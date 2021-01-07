@@ -1,4 +1,4 @@
-type protocol_version = OCaml_400 | OCaml_410 [@@deriving show]
+open Debugcom_types
 
 type conn =
   < io_in : Lwt_io.input_channel
@@ -33,34 +33,10 @@ let reset_instr conn pc =
   Lwt_io.write_char conn#io_out 'i';%lwt
   write_pc conn pc
 
-exception Checkpoint_failure
-
 let checkpoint conn =
   assert (not Sys.win32);
   let%lwt pid = Lwt_io.BE.read_int conn#io_in in
   if pid = -1 then Lwt.fail Checkpoint_failure else Lwt.return pid
-
-type debug_info = { eventlists : Instruct.debug_event list array [@opaque] }
-[@@deriving show]
-
-type execution_summary =
-  | Event
-  | Breakpoint
-  | Exited
-  | Trap
-  | Uncaught_exc
-  | Code_debug_info of debug_info
-  | Code_loaded of int
-  | Code_unloaded of int
-[@@deriving show]
-
-type report = {
-  rep_type : execution_summary;
-  rep_event_count : int64;
-  rep_stack_pointer : int;
-  rep_program_pointer : Pc.t;
-}
-[@@deriving show]
 
 let go conn n =
   Lwt_io.write_char conn#io_out 'g';%lwt
@@ -199,8 +175,6 @@ let get_closure_code conn rv =
   write_remote_value conn rv;%lwt
   let%lwt pc = read_pc conn in
   Lwt.return pc
-
-type fork_mode = Fork_child | Fork_parent [@@deriving show]
 
 let set_fork_mode conn mode =
   Lwt_io.write_char conn#io_out 'K';%lwt
