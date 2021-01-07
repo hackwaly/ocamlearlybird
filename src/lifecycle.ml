@@ -4,6 +4,7 @@ let run ~launch_args ~terminate ~agent rpc =
   let promise, resolver = Lwt.task () in
   Lwt.pause ();%lwt
   let send_initialize_event () =
+    Debugger.ready agent;%lwt
     Debug_rpc.send_event rpc (module Initialized_event) ()
   in
   Debug_rpc.set_command_handler rpc

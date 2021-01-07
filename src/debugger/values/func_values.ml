@@ -7,8 +7,6 @@ module Function_value = struct
   let extension_constructor =
     Obj.Extension_constructor.of_val (Function (Obj.magic ()))
 
-  let is_named_container = true
-
   let is_indexed_container = false
 
   let adopt conn env ty rv =

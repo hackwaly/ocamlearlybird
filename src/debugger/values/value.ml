@@ -8,6 +8,7 @@ open Tuple_values
 open Record_values
 open Func_values
 open Object_values
+open Variant_values
 
 let modules =
   [
@@ -32,6 +33,7 @@ let modules =
     (module Record_value : VALUE);
     (module Object_value : VALUE);
     (module Raw_string_value : VALUE);
+    (module Variant_value : VALUE);
   ]
 
 (* Orders sensitive *)
@@ -74,32 +76,6 @@ let adopt conn env ty rv =
            Value.adopt conn env ty rv)
   with Not_found -> Lwt.return Unknown_value.Unknown
 
-let to_short_string ?(hex = false) v =
-  let (module Value : VALUE) = find_module v in
-  Value.to_short_string ~hex v
-
-let is_named_container v =
-  let (module Value : VALUE) = find_module v in
-  Value.is_named_container
-
-let is_indexed_container v =
-  let (module Value : VALUE) = find_module v in
-  Value.is_indexed_container
-
-let get_indexed v index =
-  let (module Value : VALUE) = find_module v in
-  Value.get_indexed v index
-
-let num_indexed v =
-  let (module Value : VALUE) = find_module v in
-  Value.num_indexed v
-
-let num_named v =
-  let (module Value : VALUE) = find_module v in
-  Value.num_named v
-
-let list_named v =
-  let (module Value : VALUE) = find_module v in
-  Value.list_named v
-
-let () = rec_adopt := adopt
+let () =
+  rec_adopt := adopt;
+  rec_find_module := find_module

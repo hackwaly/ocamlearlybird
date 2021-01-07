@@ -125,9 +125,10 @@ let run ~launch_args ~terminate ~agent rpc =
         match Hashtbl.find handle_tbl arg.variables_reference with
         | handle_desc ->
             let alloc_variable (ident, value) =
+              let num_named = Value.num_named value in
               let handle =
                 if
-                  Value.is_named_container value
+                  num_named > 0
                   || Value.is_indexed_container value
                 then (
                   let handle = alloc_handle () in
@@ -143,8 +144,8 @@ let run ~launch_args ~terminate ~agent rpc =
               Variable.make ~name:(Ident.name ident)
                 ~value:(Value.to_short_string ~hex value)
                 ~named_variables:
-                  ( if Value.is_named_container value then
-                    Some (Value.num_named value)
+                  ( if num_named > 0 then
+                    Some num_named
                   else None )
                 ~indexed_variables:
                   ( if Value.is_indexed_container value then

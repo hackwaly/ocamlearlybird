@@ -6,8 +6,6 @@ module Lazy_value = struct
   let extension_constructor =
     Obj.Extension_constructor.of_val (Lazy (Obj.magic ()))
 
-  let is_named_container = true
-
   let is_indexed_container = false
 
   let to_short_string ?(hex = false) v =
@@ -51,8 +49,6 @@ module Lazy_fourced_value = struct
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (Forced (Obj.magic ()))
-
-  let is_named_container = true
 
   let is_indexed_container = false
 

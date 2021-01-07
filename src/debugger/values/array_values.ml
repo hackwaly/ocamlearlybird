@@ -15,8 +15,6 @@ module Array_value = struct
   let extension_constructor =
     Obj.Extension_constructor.of_val (Array (Obj.magic ()))
 
-  let is_named_container = true
-
   let is_indexed_container = true
 
   let to_short_string ?(hex = false) v =

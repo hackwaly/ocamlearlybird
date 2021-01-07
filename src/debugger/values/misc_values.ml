@@ -5,8 +5,6 @@ module Unknown_value = struct
 
   let extension_constructor = Obj.Extension_constructor.of_val Unknown
 
-  let is_named_container = false
-
   let is_indexed_container = false
 
   let adopt conn env ty rv =
@@ -42,8 +40,6 @@ module Raw_string_value = struct
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (Raw_string (Obj.magic ()))
-
-  let is_named_container = false
 
   let is_indexed_container = false
 

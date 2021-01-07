@@ -1,5 +1,4 @@
 open Value_basic
-open Misc_values
 
 module type SIMPLE_VALUE = sig
   include VALUE
@@ -18,8 +17,6 @@ let make_simple_value_module (type v) ?num_indexed ?get_indexed ?num_named
 
     let extension_constructor =
       Obj.Extension_constructor.of_val (Value (Obj.magic ()))
-
-    let is_named_container = list_named |> Option.is_some
 
     let is_indexed_container = get_indexed |> Option.is_some
 
@@ -74,10 +71,13 @@ module Int_value =
         ~to_hex_string:(fun v -> Format.sprintf "%0#x" v)
         Predef.type_int Int.to_string )
 
-module Char_value = (val make_simple_value_module Predef.type_char Char.escaped)
+module Char_value =
+( val make_simple_value_module Predef.type_char (fun c ->
+          "\'" ^ Char.escaped c ^ "\'") )
 
 module String_value =
-(val make_simple_value_module Predef.type_string String.escaped)
+( val make_simple_value_module Predef.type_string (fun s ->
+          "\"" ^ String.escaped s ^ "\"") )
 
 module Bytes_value = ( val make_simple_value_module Predef.type_bytes
                              ~num_indexed:(fun b -> Bytes.length b)
@@ -106,20 +106,8 @@ module Int64_value =
 
 module Extension_constructor_value = ( val make_simple_value_module
                                              Predef.type_extension_constructor
-                                             ~num_named:(fun _ -> 2)
-                                             ~list_named:(fun v ->
-                                               [
-                                                 ( Ident.create_local "*name",
-                                                   Raw_string_value.Raw_string
-                                                     (Obj.Extension_constructor
-                                                      .name v) );
-                                                 ( Ident.create_local "*id",
-                                                   Int_value.Value
-                                                     (Obj.Extension_constructor
-                                                      .id v) );
-                                               ])
-                                             (fun _ ->
-                                               "«extension constructor»")
+                                             (fun v ->
+                                               Obj.Extension_constructor.name v)
                                          : SIMPLE_VALUE
                                          with type v = Obj.Extension_constructor
                                                        .t )
