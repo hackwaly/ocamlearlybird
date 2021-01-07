@@ -13,3 +13,11 @@ module Debug_event = struct
   let is_pseudo ev =
     match ev.Instruct.ev_kind with Event_pseudo -> true | _ -> false
 end
+
+module Path = struct
+  include Path
+
+  let to_string path =
+    Path.print Format.str_formatter path;
+    Format.flush_str_formatter ()
+end

@@ -94,10 +94,11 @@ let exec_in_loop agent f =
   agent.pendings <-
     (fun conn ->
       try%lwt
-        let%lwt r = f conn in
+        let%lwt r = conn#lock f in
         Lwt.wakeup_later resolver r;
         Lwt.return ()
       with e ->
+        Log.debug (fun m -> m "%s" (Printexc.get_backtrace ()));%lwt
         Lwt.wakeup_later_exn resolver e;
         Lwt.return ())
     :: agent.pendings;
@@ -171,26 +172,28 @@ let start agent =
           report.Debugcom.rep_stack_pointer = stack_pos
           && report.rep_program_pointer = pc
     in
-    let rec skip_pseudo_event report =
+    let rec stop_on_event report =
       let is_at_pseudo_event () =
         let event =
           Symbols.find_event agent.symbols report.Debugcom.rep_program_pointer
         in
         Debug_event.is_pseudo event.ev
       in
-      match report.Debugcom.rep_type with
-      | Event | Breakpoint | Trap ->
-          if is_at_pseudo_event () then (
-            Log.debug (fun m -> m "Pseudo event skipped");%lwt
-            let%lwt report = Debugcom.go conn 1 in
-            skip_pseudo_event report )
-          else Lwt.return report
-      | _ -> Lwt.return report
+      let has_pc =
+        match report.Debugcom.rep_type with
+        | Exited | Uncaught_exc -> false
+        | _ -> true
+      in
+      if has_pc && is_at_pseudo_event () then (
+        Log.debug (fun m -> m "Pseudo event skipped");%lwt
+        let%lwt report = Debugcom.go conn 1 in
+        stop_on_event report )
+      else Lwt.return report
     in
     let check_stop report0 =
       [%lwt assert (is_running agent)];%lwt
       sync ();%lwt
-      let%lwt report = skip_pseudo_event report0 in
+      let%lwt report = stop_on_event report0 in
       match report0.Debugcom.rep_type with
       | Breakpoint ->
           let met_temporary_trap_barrier_and_breakpoint =
@@ -274,7 +277,7 @@ let start agent =
     let run = wrap_run internal_run in
     let internal_step_in () =
       let%lwt report = Debugcom.go conn 1 in
-      let%lwt report = skip_pseudo_event report in
+      let%lwt report = stop_on_event report in
       Lwt.return
         ( report,
           match report.rep_type with

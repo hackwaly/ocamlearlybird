@@ -8,7 +8,7 @@ let iter_seq_s f seq =
 let find_map_seq_s f seq =
   let rec aux seq =
     match seq () with
-    | Seq.Nil -> Lwt.fail Not_found
+    | Seq.Nil -> raise Not_found
     | Seq.Cons (it, seq) -> (
         match%lwt f it with Some r -> Lwt.return r | None -> aux seq )
   in

@@ -160,7 +160,7 @@ let load frag file =
        Path.print Format.str_formatter path;
        let path_str = Format.flush_str_formatter () in
        Log.warn (fun m -> m "load_env fail: Module_not_found path %s" path_str);%lwt
-       Lwt.fail exc
+       raise exc
    in
    let%lwt modules =
      eventlists |> CCList.to_iter

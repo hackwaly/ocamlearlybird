@@ -102,22 +102,18 @@ let get_size (conn : conn) rv =
       in
       Lwt.return size)
 
-let is_block rv =
-  Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
+let is_block rv = Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
 
 let go (conn : conn) n =
   conn#lock (fun conn ->
       let%lwt report = Debugcom_basic.go conn n in
-      ( match report.rep_type with
-      | Uncaught_exc | Exited -> Lwt.return ()
-      | _ ->
-          let event =
-            Symbols.find_event conn#symbols report.rep_program_pointer
-          in
+      ( match Symbols.find_event conn#symbols report.rep_program_pointer with
+      | event ->
           Log.debug (fun m ->
               m "Report: %s\nEvent: %s"
                 (Debugcom_basic.show_report report)
-                (Debuginfo.show_event event)) );%lwt
+                (Debuginfo.show_event event))
+      | exception Not_found -> Lwt.return () );%lwt
       Lwt.return report)
 
 let initial_frame (conn : conn) =
@@ -134,19 +130,26 @@ let initial_frame (conn : conn) =
 
 let up_frame (conn : conn) frame =
   conn#lock (fun conn ->
-      match%lwt
-        Debugcom_basic.up_frame conn frame.Frame.event.ev.Instruct.ev_stacksize
-      with
+      let%lwt stack_pos0, _ = Debugcom_basic.get_frame conn in
+      Debugcom_basic.set_frame conn frame.Frame.stack_pos;%lwt
+      ( match%lwt
+          Debugcom_basic.up_frame conn
+            frame.Frame.event.ev.Instruct.ev_stacksize
+        with
       | None -> Lwt.return None
-      | Some (stack_pos, pc) ->
-          let frame' =
-            {
-              Frame.index = frame.index + 1;
-              stack_pos;
-              event = Symbols.find_event conn#symbols pc;
-            }
-          in
-          Lwt.return (Some frame'))
+      | Some (stack_pos, pc) -> (
+          Log.debug (fun m -> m "up_frame %s" (Pc.show pc));%lwt
+          try%lwt
+            let frame' =
+              {
+                Frame.index = frame.index + 1;
+                stack_pos;
+                event = Symbols.find_event conn#symbols pc;
+              }
+            in
+            Lwt.return (Some frame')
+          with Not_found -> Lwt.return None ) )
+        [%finally Debugcom_basic.set_frame conn stack_pos0])
 
 let set_frame (conn : conn) frame =
   conn#lock (fun conn -> Debugcom_basic.set_frame conn frame.Frame.stack_pos)

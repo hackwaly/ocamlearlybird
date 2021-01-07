@@ -72,7 +72,7 @@ let run ~launch_args ~terminate ~agent rpc =
                   | Some frame' -> walk frame'
                   | None -> Lwt.return () )
             in
-            (walk frame0) [%finally Debugger.set_frame agent frame0];%lwt
+            walk frame0;%lwt
             let frames = List.rev !frames in
             Lwt.return frames
         | _ -> Lwt.return []
