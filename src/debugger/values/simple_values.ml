@@ -1,4 +1,5 @@
 open Value_basic
+open Misc_values
 
 module type SIMPLE_VALUE = sig
   include VALUE
@@ -109,7 +110,7 @@ module Extension_constructor_value = ( val make_simple_value_module
                                              ~list_named:(fun v ->
                                                [
                                                  ( Ident.create_local "name",
-                                                   String_value.Value
+                                                   Raw_string_value.Raw_string
                                                      (Obj.Extension_constructor
                                                       .name v) );
                                                  ( Ident.create_local "id",

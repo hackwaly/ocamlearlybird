@@ -36,3 +36,29 @@ module Unknown_value = struct
     ignore v;
     Lwt.return []
 end
+
+module Raw_string_value = struct
+  type t += Raw_string of string
+
+  let extension_constructor =
+    Obj.Extension_constructor.of_val (Raw_string (Obj.magic ()))
+
+  let is_named_container = false
+
+  let is_indexed_container = false
+
+  let adopt _ _ _ _ = Lwt.return None
+
+  let to_short_string ?(hex=false) v =
+    ignore hex;
+    let[@warning "-8"] (Raw_string str) = (v [@warning "+8"]) in
+    str
+
+  let num_indexed _ = 0
+
+  let num_named _ = 0
+
+  let get_indexed _ _ = assert%lwt false
+
+  let list_named _ = Lwt.return []
+end

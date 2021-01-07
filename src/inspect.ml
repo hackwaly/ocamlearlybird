@@ -175,7 +175,6 @@ let run ~launch_args ~terminate ~agent rpc =
                   let num_indexed = Value.num_indexed value in
                   match arg.filter with
                   | None ->
-                    Log.debug (fun m -> m "num_named %d num_indexed %d" num_named num_indexed);%lwt
                       [%lwt assert (arg.count |> Option.is_none)];%lwt
                       if num_named > 0 && num_indexed > 0 then
                         let%lwt named = Value.list_named value in

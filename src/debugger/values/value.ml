@@ -1,5 +1,5 @@
 include Value_basic
-open Unknown_values
+open Misc_values
 open Simple_values
 open Lazy_values
 open List_values
@@ -7,6 +7,7 @@ open Array_values
 open Tuple_values
 open Record_values
 open Func_values
+open Object_values
 
 let modules =
   [
@@ -29,6 +30,8 @@ let modules =
     (module Lazy_fourced_value : VALUE);
     (module Function_value : VALUE);
     (module Record_value : VALUE);
+    (module Object_value : VALUE);
+    (module Raw_string_value : VALUE);
   ]
 
 (* Orders sensitive *)
