@@ -41,7 +41,7 @@ module Lazy_value = struct
 
   let list_named v =
     let[@warning "-8"] (Lazy f) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "*fun", f) ]
+    Lwt.return [ (Ident.create_local "‹fun›", f) ]
 end
 
 module Lazy_fourced_value = struct
@@ -82,5 +82,5 @@ module Lazy_fourced_value = struct
 
   let list_named v =
     let[@warning "-8"] (Forced v) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "*val", v) ]
+    Lwt.return [ (Ident.create_local "‹val›", v) ]
 end

@@ -10,7 +10,7 @@ module List_nil_value = struct
   let to_short_string ?(hex = false) v =
     ignore hex;
     ignore v;
-    "«list.nil»"
+    "[]"
 
   let adopt conn env ty rv =
     ignore conn;
@@ -56,7 +56,7 @@ module List_cons_value = struct
   let to_short_string ?(hex = false) v =
     ignore hex;
     ignore v;
-    "«list»"
+    "‹hd› :: ‹tl›"
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
@@ -88,7 +88,7 @@ module List_cons_value = struct
       let%lwt value = !rec_adopt conn env ty rv in
       Lwt.return (name, value)
     in
-    let%lwt hd = make_variable "*hd" 0 elt_ty in
-    let%lwt tl = make_variable "*tl" 1 ty in
+    let%lwt hd = make_variable "‹hd›" 0 elt_ty in
+    let%lwt tl = make_variable "‹tl›" 1 ty in
     Lwt.return [ hd; tl ]
 end

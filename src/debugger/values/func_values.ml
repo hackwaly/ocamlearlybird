@@ -1,5 +1,4 @@
 open Value_basic
-open Misc_values
 
 module Function_value = struct
   type t += Function of Event.t option
@@ -36,19 +35,8 @@ module Function_value = struct
     ignore index;
     [%lwt assert false]
 
-  let num_named _ = 1
+  let num_named _ = 0
 
-  let list_named v =
-    let[@warning "-8"] (Function event) = (v [@warning "+8"]) in
-    let pos =
-      match event with
-      | Some event ->
-          let _, line, col =
-            event.ev.ev_loc.Location.loc_start |> Location.get_pos_info
-          in
-          let fname = event.module_.source |> Option.value ~default:"(none)" in
-          Printf.sprintf "%s:%d:%d" fname line col
-      | None -> "«no debug info»"
-    in
-    Lwt.return [ (Ident.create_local "*defined_at", Raw_string_value.Raw_string pos) ]
+  let list_named _ =
+    Lwt.return []
 end

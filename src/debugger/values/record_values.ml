@@ -20,7 +20,7 @@ module Record_value = struct
   let to_short_string ?(hex = false) v =
     ignore hex;
     ignore v;
-    "«record»"
+    "{…}"
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with

@@ -17,9 +17,7 @@ module Variant_value = struct
     ^
     match payload with
     | None -> ""
-    | Some (Record_value.Record _) -> " «record»"
-    | Some (Tuple_value.Tuple _) -> " «tuple»"
-    | _ -> assert false
+    | Some v -> " " ^ Value_basic.to_short_string v
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with

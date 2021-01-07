@@ -18,11 +18,6 @@ module Tuple_value = struct
 
   let is_indexed_container = false
 
-  let to_short_string ?(hex = false) v =
-    ignore hex;
-    ignore v;
-    "«tuple»"
-
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
     | Ttuple tys ->
@@ -43,20 +38,29 @@ module Tuple_value = struct
     let[@warning "-8"] (Tuple { tys; _ }) = (v [@warning "+8"]) in
     List.length tys
 
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    let n = num_named v in
+    if n = 0 then "()"
+    else if n = 1 then "‹1›"
+    else if n == 2 then "(‹1›, ‹2›)"
+    else if n == 3 then "(‹1›, ‹2›, ‹3›)"
+    else "(‹1›, ‹2›, …)"
+
   let list_named v =
     let[@warning "-8"] (Tuple { conn; env; tys; rv; pos; unboxed }) =
       (v [@warning "+8"])
     in
     if unboxed then
       let%lwt value = !rec_adopt conn env (List.hd tys) rv in
-      Lwt.return [ (Ident.create_local "*1", value) ]
+      Lwt.return [ (Ident.create_local "‹1›", value) ]
     else
       let rec build_values values pos idx tys =
         match tys with
         | [] -> Lwt.return values
         | ty :: tys ->
             let%lwt rv = Debugcom.get_field conn rv pos in
-            let ident = Ident.create_local ("*" ^ string_of_int (idx + 1)) in
+            let ident = Ident.create_local ("‹" ^ string_of_int (idx + 1) ^ "›") in
             let%lwt value = !rec_adopt conn env ty rv in
             build_values ((ident, value) :: values) (pos + 1) (idx + 1) tys
       in

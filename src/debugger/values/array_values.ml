@@ -17,11 +17,6 @@ module Array_value = struct
 
   let is_indexed_container = true
 
-  let to_short_string ?(hex = false) v =
-    ignore hex;
-    ignore v;
-    "«array»"
-
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
     | Tconstr (_, [ elt_ty ], _)
@@ -46,5 +41,15 @@ module Array_value = struct
 
   let list_named v =
     let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "*length", Int_value.Value len) ]
+    Lwt.return [ (Ident.create_local "‹length›", Int_value.Value len) ]
+
+
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    let n = num_indexed v in
+    if n = 0 then "[||]"
+    else if n = 1 then "[|‹1›|]"
+    else if n = 2 then "[|‹1›; ‹2›|]"
+    else if n = 3 then "[|‹1›; ‹2›; ‹3›|]"
+    else "[|‹1›; ‹2›; …|]"
 end
