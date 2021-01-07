@@ -72,50 +72,6 @@ module Unknown_value = struct
     Lwt.return []
 end
 
-module Function_value = struct
-  type t += Function of Event.t
-
-  let extension_constructor =
-    Obj.Extension_constructor.of_val (Function (Obj.magic ()))
-
-  let is_named_container = false
-
-  let is_indexed_container = false
-
-  let adopt conn env ty rv =
-    ignore env;
-    match (Ctype.repr ty).desc with
-    | Types.Tarrow _ ->
-        let%lwt pc = Debugcom.get_closure_code conn rv in
-        let event = Symbols.find_event conn#symbols pc in
-        Lwt.return (Some (Function event))
-    | _ -> Lwt.return None
-
-  let to_short_string ?(hex = false) v =
-    ignore hex;
-    let[@warning "-8"] (Function event) = (v [@warning "+8"]) in
-    let _, line, col =
-      event.ev.ev_loc.Location.loc_start |> Location.get_pos_info
-    in
-    let fname = event.module_.source |> Option.value ~default:"(none)" in
-    Printf.sprintf "«fun» @ %s:%d:%d" (Filename.basename fname) line col
-
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
-
-  let num_named _ = 0
-
-  let list_named v =
-    ignore v;
-    Lwt.return []
-end
-
 let make_simple_value_module (type v) ?num_indexed ?get_indexed ?num_named
     ?list_named ?to_hex_string type' to_string =
   ( module struct
@@ -534,41 +490,106 @@ module Lazy_fourced_value = struct
     Lwt.return [ (Ident.create_local "·val", v) ]
 end
 
+module Function_value = struct
+  type t += Function of Event.t
+
+  let extension_constructor =
+    Obj.Extension_constructor.of_val (Function (Obj.magic ()))
+
+  let is_named_container = false
+
+  let is_indexed_container = false
+
+  let adopt conn env ty rv =
+    ignore env;
+    match (Ctype.repr ty).desc with
+    | Types.Tarrow _ ->
+        let%lwt pc = Debugcom.get_closure_code conn rv in
+        let event = Symbols.find_event conn#symbols pc in
+        Lwt.return (Some (Function event))
+    | _ -> Lwt.return None
+
+  let to_short_string ?(hex = false) v =
+    ignore hex;
+    let[@warning "-8"] (Function event) = (v [@warning "+8"]) in
+    let _, line, col =
+      event.ev.ev_loc.Location.loc_start |> Location.get_pos_info
+    in
+    let fname = event.module_.source |> Option.value ~default:"(none)" in
+    Printf.sprintf "«fun» @ %s:%d:%d" (Filename.basename fname) line col
+
+  let num_indexed v =
+    ignore v;
+    0
+
+  let get_indexed v index =
+    ignore v;
+    ignore index;
+    [%lwt assert false]
+
+  let num_named _ = 0
+
+  let list_named v =
+    ignore v;
+    Lwt.return []
+end
+
 let modules =
+  [
+    (module Int_value : VALUE);
+    (module Char_value : VALUE);
+    (module String_value : VALUE);
+    (module Bytes_value : VALUE);
+    (module Float_value : VALUE);
+    (module Bool_value : VALUE);
+    (module Unit_value : VALUE);
+    (module Nativeint_value : VALUE);
+    (module Int32_value : VALUE);
+    (module Int64_value : VALUE);
+    (module Extension_constructor_value : VALUE);
+    (module Tuple_value : VALUE);
+    (module List_cons_value : VALUE);
+    (module List_nil_value : VALUE);
+    (module Array_value : VALUE);
+    (module Lazy_value : VALUE);
+    (module Lazy_fourced_value : VALUE);
+    (module Function_value : VALUE);
+  ] (* Orders sensitive *)
+
+let modules_tbl =
   Hashtbl.of_seq
-    ( [
-        (module Int_value : VALUE);
-        (module Char_value : VALUE);
-        (module String_value : VALUE);
-        (module Bytes_value : VALUE);
-        (module Float_value : VALUE);
-        (module Bool_value : VALUE);
-        (module Unit_value : VALUE);
-        (module Nativeint_value : VALUE);
-        (module Int32_value : VALUE);
-        (module Int64_value : VALUE);
-        (module Extension_constructor_value : VALUE);
-        (module Function_value : VALUE);
-        (module Tuple_value : VALUE);
-        (module List_cons_value : VALUE);
-        (module List_nil_value : VALUE);
-        (module Array_value : VALUE);
-        (module Lazy_value : VALUE);
-        (module Lazy_fourced_value : VALUE);
-      ]
-    |> List.to_seq
+    ( modules |> List.to_seq
     |> Seq.map (fun (module Value : VALUE) ->
            (Value.extension_constructor, (module Value : VALUE))) )
 
 let find_module v =
   try
     let ec = Obj.Extension_constructor.of_val v in
-    Hashtbl.find modules ec
+    Hashtbl.find modules_tbl ec
   with Not_found -> (module Unknown_value : VALUE)
 
 let adopt conn env ty rv =
+  let rec resolve_type ty =
+    match (Ctype.repr ty).desc with
+    | Tlink ty | Tsubst ty | Tpoly (ty, _) -> resolve_type ty
+    | Tconstr (path, ty_args, _) -> (
+        match Env.find_type path env with
+        | exception Not_found -> ty
+        | {
+         type_kind = Type_abstract;
+         type_manifest = Some body;
+         type_params;
+         _;
+        } -> (
+            match Ctype.apply env type_params body ty_args with
+            | ty -> resolve_type ty
+            | exception Ctype.Cannot_apply -> ty )
+        | _ -> ty )
+    | _ -> ty
+  in
+  let ty = resolve_type ty in
   try%lwt
-    modules |> Hashtbl.to_seq_values
+    modules |> List.to_seq
     |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
            Value.adopt conn env ty rv)
   with Not_found -> Lwt.return Unknown_value.Unknown
