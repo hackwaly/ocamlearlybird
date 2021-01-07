@@ -41,7 +41,7 @@ module Lazy_value = struct
 
   let list_named v =
     let[@warning "-8"] (Lazy f) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "‹fun›", f) ]
+    Lwt.return [ ("‹fun›", f) ]
 end
 
 module Lazy_fourced_value = struct
@@ -55,7 +55,7 @@ module Lazy_fourced_value = struct
   let to_short_string ?(hex = false) v =
     ignore hex;
     ignore v;
-    "«lazy.forced»"
+    "«lazy.is_val»"
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
@@ -82,5 +82,5 @@ module Lazy_fourced_value = struct
 
   let list_named v =
     let[@warning "-8"] (Forced v) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "‹val›", v) ]
+    Lwt.return [ ("‹val›", v) ]
 end

@@ -63,4 +63,4 @@ val set_frame : t -> Frame.t -> unit Lwt.t
 
 val start : t -> unit Lwt.t
 
-val frame_variables : t -> Frame.t -> [`Stack | `Heap] -> (Ident.t * Value.t) list Lwt.t
+val frame_variables : t -> Frame.t -> [`Stack | `Heap] -> (string * Value.t) list Lwt.t

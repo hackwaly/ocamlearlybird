@@ -397,7 +397,7 @@ let frame_variables agent frame kind =
           | valdesc ->
               let ty = Ctype.correct_levels valdesc.val_type in
               let%lwt value = Value.adopt conn env ty rv in
-              Lwt.return (Some (id, value))
+              Lwt.return (Some (Ident.name id, value))
         in
         Iter.to_list iter
         |> List.fast_sort (Compare.by (fun (_, pos) -> pos))

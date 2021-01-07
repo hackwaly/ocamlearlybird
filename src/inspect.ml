@@ -124,13 +124,10 @@ let run ~launch_args ~terminate ~agent rpc =
       let%lwt variables =
         match Hashtbl.find handle_tbl arg.variables_reference with
         | handle_desc ->
-            let alloc_variable (ident, value) =
+            let alloc_variable (name, value) =
               let num_named = Value.num_named value in
               let handle =
-                if
-                  num_named > 0
-                  || Value.is_indexed_container value
-                then (
+                if num_named > 0 || Value.is_indexed_container value then (
                   let handle = alloc_handle () in
                   Hashtbl.replace handle_tbl handle (Value value);
                   handle )
@@ -141,12 +138,9 @@ let run ~launch_args ~terminate ~agent rpc =
                 | None -> false
                 | Some format -> format.hex |> Option.value ~default:false
               in
-              Variable.make ~name:(Ident.name ident)
+              Variable.make ~name
                 ~value:(Value.to_short_string ~hex value)
-                ~named_variables:
-                  ( if num_named > 0 then
-                    Some num_named
-                  else None )
+                ~named_variables:(if num_named > 0 then Some num_named else None)
                 ~indexed_variables:
                   ( if Value.is_indexed_container value then
                     Some (Value.num_indexed value)
@@ -167,8 +161,7 @@ let run ~launch_args ~terminate ~agent rpc =
                     let values = List.rev !values in
                     let variables =
                       values
-                      |> List.mapi (fun i v ->
-                             (Ident.create_local (string_of_int (start + i)), v))
+                      |> List.mapi (fun i v -> (string_of_int (start + i), v))
                     in
                     Lwt.return variables
                   in

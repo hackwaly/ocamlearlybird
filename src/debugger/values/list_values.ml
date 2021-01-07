@@ -84,7 +84,6 @@ module List_cons_value = struct
     in
     let make_variable name pos ty =
       let%lwt rv = Debugcom.get_field conn rv pos in
-      let name = Ident.create_local name in
       let%lwt value = !rec_adopt conn env ty rv in
       Lwt.return (name, value)
     in

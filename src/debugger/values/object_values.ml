@@ -73,11 +73,10 @@ module Object_value = struct
       field_tys
       |> Lwt_list.map_s (fun (name, ty) ->
              let ty = Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, ty, Cok)) in
-             let ident = Ident.create_local name in
              let%lwt meth = find_method name in
              let%lwt value = !rec_adopt conn env ty meth in
              Log.debug (fun m -> m "9");%lwt
-             Lwt.return (ident, value))
+             Lwt.return (name, value))
     in
     Lwt.return variables
 end

@@ -13,4 +13,4 @@ val num_indexed : t -> int
 
 val num_named : t -> int
 
-val list_named : t -> (Ident.t * t) list Lwt.t
+val list_named : t -> (string * t) list Lwt.t

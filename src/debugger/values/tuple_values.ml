@@ -1,6 +1,5 @@
 open Value_basic
 
-
 module Tuple_value = struct
   type v = {
     conn : Debugcom.conn;
@@ -53,16 +52,16 @@ module Tuple_value = struct
     in
     if unboxed then
       let%lwt value = !rec_adopt conn env (List.hd tys) rv in
-      Lwt.return [ (Ident.create_local "‹1›", value) ]
+      Lwt.return [ ("‹1›", value) ]
     else
       let rec build_values values pos idx tys =
         match tys with
         | [] -> Lwt.return values
         | ty :: tys ->
             let%lwt rv = Debugcom.get_field conn rv pos in
-            let ident = Ident.create_local ("‹" ^ string_of_int (idx + 1) ^ "›") in
+            let name = "‹" ^ string_of_int (idx + 1) ^ "›" in
             let%lwt value = !rec_adopt conn env ty rv in
-            build_values ((ident, value) :: values) (pos + 1) (idx + 1) tys
+            build_values ((name, value) :: values) (pos + 1) (idx + 1) tys
       in
       let%lwt values = build_values [] pos 0 tys in
       let values = List.rev values in

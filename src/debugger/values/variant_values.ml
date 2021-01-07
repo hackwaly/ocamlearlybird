@@ -24,6 +24,34 @@ module Variant_value = struct
     | Tconstr (path, ty_args, _) -> (
         match Env.find_type path env with
         | exception Not_found -> Lwt.return None
+        | { type_kind = Type_open; _ } ->
+            let%lwt tag = Debugcom.get_tag conn rv in
+            let%lwt slot =
+              if tag <> 0 then Lwt.return rv else Debugcom.get_field conn rv 0
+            in
+            let%lwt id = Debugcom.get_field conn slot 0 in
+            let%lwt id = Debugcom.marshal_obj conn id in
+            let longid = Parse.longident (Lexing.from_string id) in
+            let%lwt payload =
+              match Env.find_constructor_by_name longid env with
+              | cstr_decl ->
+                  Lwt.return
+                    (Some
+                       (Tuple_value.Tuple
+                          {
+                            conn;
+                            env;
+                            rv;
+                            pos = 1;
+                            tys = cstr_decl.cstr_args;
+                            unboxed = cstr_decl.cstr_inlined |> Option.is_some;
+                          }))
+              | exception Not_found -> Lwt.return None
+            in
+            Lwt.return (Some (Variant {
+              name = id;
+              payload;
+            }))
         | {
          type_kind = Type_variant constr_list;
          type_unboxed = { unboxed; _ };
@@ -66,7 +94,7 @@ module Variant_value = struct
                                      ty_args
                                  with Ctype.Cannot_apply -> lbl.ld_type
                                in
-                               (id, ty))
+                               (Ident.name id, ty))
                       in
                       Lwt.return
                         (Some

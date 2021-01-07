@@ -41,8 +41,7 @@ module Array_value = struct
 
   let list_named v =
     let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "‹length›", Int_value.Value len) ]
-
+    Lwt.return [ ("‹length›", Int_value.Value len) ]
 
   let to_short_string ?(hex = false) v =
     ignore hex;

@@ -7,7 +7,7 @@ module Record_value = struct
     unboxed : bool;
     rv : Debugcom.remote_value;
     pos : int;
-    labels : (Ident.t * Types.type_expr) list;
+    labels : (string * Types.type_expr) list;
   }
 
   type t += Record of desc
@@ -39,7 +39,7 @@ module Record_value = struct
                        try Ctype.apply env type_params lbl.ld_type ty_args
                        with Ctype.Cannot_apply -> lbl.ld_type
                      in
-                     (id, ty))
+                     (Ident.name id, ty))
             in
             Lwt.return (Some (Record { conn; env; unboxed; rv; pos; labels }))
         | _ | (exception Not_found) -> Lwt.return None )

@@ -20,7 +20,7 @@ module type VALUE = sig
 
   val num_named : t -> int
 
-  val list_named : t -> (Ident.t * t) list Lwt.t
+  val list_named : t -> (string * t) list Lwt.t
 end
 
 let rec_adopt : (Debugcom.conn -> Env.t -> Types.type_expr -> Debugcom.remote_value -> t Lwt.t) ref = ref (fun _ -> assert false)
