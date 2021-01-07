@@ -3,7 +3,7 @@ open Tuple_values
 open Record_values
 
 module Variant_value = struct
-  type v = { name : string; payload : t option }
+  type v = { name : string; payload : t option; embed : bool }
 
   type t += Variant of v
 
@@ -12,15 +12,56 @@ module Variant_value = struct
 
   let to_short_string ?(hex = false) v =
     ignore hex;
-    let[@warning "-8"] (Variant { name; payload }) = (v [@warning "+8"]) in
-    name
-    ^
-    match payload with
-    | None -> ""
-    | Some v -> " " ^ Value_basic.to_short_string v
+    let[@warning "-8"] (Variant { name; payload; embed }) =
+      (v [@warning "+8"])
+    in
+    let payload_str =
+      match payload with
+      | None -> ""
+      | Some v ->
+          " " ^ if embed then Value_basic.to_short_string v else "‹1›"
+    in
+    name ^ payload_str
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
+    | Tvariant row -> (
+        let row = Btype.row_repr row in
+        if Debugcom.is_block rv then
+          let%lwt tag = Debugcom.get_field conn rv 0 in
+          let%lwt tag = Debugcom.marshal_obj conn tag in
+          let rec find = function
+            | (l, f) :: fields ->
+                if Btype.hash_variant l = tag then
+                  match Btype.row_field_repr f with
+                  | Rpresent (Some ty) | Reither (_, [ ty ], _, _) ->
+                      Some (l, ty)
+                  | _ -> find fields
+                else find fields
+            | [] -> None
+          in
+          match find row.row_fields with
+          | Some (l, ty') ->
+              let%lwt rv' = Debugcom.get_field conn rv 1 in
+              let%lwt payload = !rec_adopt conn env ty' rv' in
+              Lwt.return
+                (Some
+                   (Variant
+                      { name = "`" ^ l; payload = Some payload; embed = false }))
+          | None -> Lwt.return None
+        else
+          let%lwt tag = Debugcom.marshal_obj conn rv in
+          let rec find = function
+            | (l, _) :: fields ->
+                if Btype.hash_variant l = tag then Some l else find fields
+            | [] -> None
+          in
+          match find row.row_fields with
+          | Some l ->
+              Lwt.return
+                (Some
+                   (Variant { name = "`" ^ l; payload = None; embed = false }))
+          | None -> Lwt.return None )
     | Tconstr (path, ty_args, _) -> (
         match Env.find_type path env with
         | exception Not_found -> Lwt.return None
@@ -50,7 +91,7 @@ module Variant_value = struct
                             }))
               | exception Not_found -> Lwt.return None
             in
-            Lwt.return (Some (Variant { name = id; payload }))
+            Lwt.return (Some (Variant { name = id; payload; embed = true }))
         | {
          type_kind = Type_variant constr_list;
          type_unboxed = { unboxed; _ };
@@ -101,7 +142,13 @@ module Variant_value = struct
                               { conn; env; rv; pos = 0; labels; unboxed }))
                 in
                 Lwt.return
-                  (Some (Variant { name = Ident.name constr.cd_id; payload }))
+                  (Some
+                     (Variant
+                        {
+                          name = Ident.name constr.cd_id;
+                          payload;
+                          embed = true;
+                        }))
             | exception Datarepr.Constr_not_found -> Lwt.return None )
         | _ -> Lwt.return None )
     | _ -> Lwt.return None
@@ -116,15 +163,19 @@ module Variant_value = struct
     [%lwt assert false]
 
   let num_named v =
-    let[@warning "-8"] (Variant { payload; _ }) = (v [@warning "+8"]) in
-    match payload with
-    | Some payload -> Value_basic.num_named payload
-    | None -> 0
+    let[@warning "-8"] (Variant { payload; embed; _ }) = (v [@warning "+8"]) in
+    if embed then
+      match payload with
+      | Some payload -> Value_basic.num_named payload
+      | None -> 0
+    else 1
 
   let list_named v =
-    let[@warning "-8"] (Variant { payload; _ }) = (v [@warning "+8"]) in
+    let[@warning "-8"] (Variant { payload; embed; _ }) = (v [@warning "+8"]) in
     match payload with
-    | Some payload -> Value_basic.list_named payload
+    | Some payload ->
+        if embed then Value_basic.list_named payload
+        else Lwt.return [ ("‹1›", payload) ]
     | None -> Lwt.return []
 
   let is_indexed_container = false
