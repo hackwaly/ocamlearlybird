@@ -35,23 +35,22 @@ module Variant_value = struct
             let%lwt payload =
               match Env.find_constructor_by_name longid env with
               | cstr_decl ->
-                  Lwt.return
-                    (Some
-                       (Tuple_value.Tuple
-                          {
-                            conn;
-                            env;
-                            rv;
-                            pos = 1;
-                            tys = cstr_decl.cstr_args;
-                            unboxed = cstr_decl.cstr_inlined |> Option.is_some;
-                          }))
+                  if cstr_decl.cstr_args = [] then Lwt.return None
+                  else
+                    Lwt.return
+                      (Some
+                         (Tuple_value.Tuple
+                            {
+                              conn;
+                              env;
+                              rv;
+                              pos = 1;
+                              tys = cstr_decl.cstr_args;
+                              unboxed = cstr_decl.cstr_inlined |> Option.is_some;
+                            }))
               | exception Not_found -> Lwt.return None
             in
-            Lwt.return (Some (Variant {
-              name = id;
-              payload;
-            }))
+            Lwt.return (Some (Variant { name = id; payload }))
         | {
          type_kind = Type_variant constr_list;
          type_unboxed = { unboxed; _ };
