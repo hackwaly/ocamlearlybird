@@ -52,5 +52,5 @@ module Function_value = struct
           Printf.sprintf "%s:%d:%d" fname line col
       | None -> "«no debug info»"
     in
-    Lwt.return [ (Ident.create_local "·defined_at", Raw_string_value.Raw_string pos) ]
+    Lwt.return [ (Ident.create_local "*defined_at", Raw_string_value.Raw_string pos) ]
 end

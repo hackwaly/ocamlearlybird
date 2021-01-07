@@ -92,7 +92,7 @@ module List_cons_value = struct
       let%lwt value = !rec_adopt conn env ty rv in
       Lwt.return (name, value)
     in
-    let%lwt hd = make_variable "·hd" 0 elt_ty in
-    let%lwt tl = make_variable "·tl" 1 ty in
+    let%lwt hd = make_variable "*hd" 0 elt_ty in
+    let%lwt tl = make_variable "*tl" 1 ty in
     Lwt.return [ hd; tl ]
 end

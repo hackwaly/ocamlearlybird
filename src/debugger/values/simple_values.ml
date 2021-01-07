@@ -109,11 +109,11 @@ module Extension_constructor_value = ( val make_simple_value_module
                                              ~num_named:(fun _ -> 2)
                                              ~list_named:(fun v ->
                                                [
-                                                 ( Ident.create_local "name",
+                                                 ( Ident.create_local "*name",
                                                    Raw_string_value.Raw_string
                                                      (Obj.Extension_constructor
                                                       .name v) );
-                                                 ( Ident.create_local "id",
+                                                 ( Ident.create_local "*id",
                                                    Int_value.Value
                                                      (Obj.Extension_constructor
                                                       .id v) );

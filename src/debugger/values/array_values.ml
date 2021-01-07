@@ -48,5 +48,5 @@ module Array_value = struct
 
   let list_named v =
     let[@warning "-8"] (Array { len; _ }) = (v [@warning "+8"]) in
-    Lwt.return [ (Ident.create_local "·length", Int_value.Value len) ]
+    Lwt.return [ (Ident.create_local "*length", Int_value.Value len) ]
 end
