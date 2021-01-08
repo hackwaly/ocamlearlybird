@@ -381,12 +381,9 @@ let global_variables agent frame =
   let globals =
     globals |> Ident.Map.to_seq
     |> Seq.filter_map (fun (id, pos) ->
-           (* Without this guard debuggee will terminate unexpectly at that case *)
-           if Ident.name id = frame.event.module_.id then None
-           else
-             match env |> Env.find_module (Path.Pident id) with
-             | decl -> Some (id, pos, decl)
-             | exception Not_found -> None)
+           match env |> Env.find_module (Path.Pident id) with
+           | decl -> Some (id, pos, decl)
+           | exception Not_found -> None)
   in
   exec_in_loop agent (fun conn ->
       let%lwt variables =
