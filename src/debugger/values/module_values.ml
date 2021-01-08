@@ -39,33 +39,24 @@ module Module_value = struct
     if not (Debugcom.is_block rv) then Lwt.return []
     else
       let mid = Ident.create_persistent "Temp_ywwofnzftu" in
-      Log.debug (fun m -> m "1");%lwt
       let env' = Env.empty |> Env.add_module mid Types.Mp_present modtype in
-      Log.debug (fun m -> m "2");%lwt
       let val_names =
         env' |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
       in
-      Log.debug (fun m -> m "3");%lwt
       let%lwt variables =
         val_names
         |> Lwt_list.filter_map_s (fun name ->
                try%lwt
                  let path = Path.Pdot (Path.Pident mid, name) in
-                 Log.debug (fun m -> m "4");%lwt
                  let decl = env' |> Env.find_value path in
-                 Log.debug (fun m -> m "5");%lwt
                  let addr = env' |> Env.find_value_address path in
-                 Log.debug (fun m -> m "6");%lwt
                  let pos =
                    match addr with
                    | Adot (Aident id, pos) when Ident.same id mid -> pos
                    | _ -> raise Not_found
                  in
-                 Log.debug (fun m -> m "7 pos: %d" pos);%lwt
                  let%lwt rv' = Debugcom.get_field conn rv pos in
-                 Log.debug (fun m -> m "8");%lwt
                  let%lwt value = !rec_adopt conn env decl.val_type rv' in
-                 Log.debug (fun m -> m "9");%lwt
                  Lwt.return (Some (name, value))
                with Not_found -> Lwt.return None)
       in
