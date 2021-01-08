@@ -8,6 +8,7 @@ module Module_value = struct
     conn : Debugcom.conn;
     env : Env.t;
     rv : Debugcom.remote_value;
+    path : Path.t option;
     modtype : Types.module_type;
   }
 
@@ -25,7 +26,8 @@ module Module_value = struct
     match (Ctype.repr ty).desc with
     | Tpackage (path, [], []) -> (
         match env |> Env.find_modtype_expansion path with
-        | modtype -> Lwt.return (Some (Module { conn; env; rv; modtype }))
+        | modtype ->
+            Lwt.return (Some (Module { conn; env; rv; path = None; modtype }))
         | exception _ -> Lwt.return None )
     | _ -> Lwt.return None
 
@@ -33,28 +35,24 @@ module Module_value = struct
 
   (* WTF: Env.fold_values Not exposed *)
   let list_named v =
-    let[@warning "-8"] (Module { conn; env; modtype; rv }) =
+    let[@warning "-8"] (Module { conn; env; modtype; path; rv }) =
       (v [@warning "+8"])
     in
     if not (Debugcom.is_block rv) then Lwt.return []
     else
-      let mid = Ident.create_persistent "Temp_ywwofnzftu" in
-      let env' = Env.empty |> Env.add_module mid Types.Mp_present modtype in
-      let val_names =
-        env' |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
+      let val_pos_list, env' = Util.Env.list_value_pos modtype in
+      let env' = match path with Some _ -> env | None -> env' in
+      let make_path name =
+        match path with
+        | Some path -> Path.Pdot (path, name)
+        | None -> Path.Pdot (Path.Pident Util.Env.dummy_module_id, name)
       in
       let%lwt variables =
-        val_names
-        |> Lwt_list.filter_map_s (fun name ->
+        val_pos_list
+        |> Lwt_list.filter_map_s (fun (name, pos) ->
                try%lwt
-                 let path = Path.Pdot (Path.Pident mid, name) in
+                 let path = make_path name in
                  let decl = env' |> Env.find_value path in
-                 let addr = env' |> Env.find_value_address path in
-                 let pos =
-                   match addr with
-                   | Adot (Aident id, pos) when Ident.same id mid -> pos
-                   | _ -> raise Not_found
-                 in
                  let%lwt rv' = Debugcom.get_field conn rv pos in
                  let%lwt value = !rec_adopt conn env decl.val_type rv' in
                  Lwt.return (Some (name, value))

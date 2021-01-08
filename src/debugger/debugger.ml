@@ -392,7 +392,7 @@ let global_variables agent frame =
                let%lwt rv = Debugcom.get_global conn pos in
                let value =
                  Module_value.Module
-                   { conn; env; rv; modtype = decl.Types.md_type }
+                   { conn; env; rv; modtype = decl.Types.md_type; path = Some (Path.Pident id) }
                in
                Lwt.return (Ident.name id, value))
       in

@@ -1,6 +1,6 @@
 type t = ..
 
-type t += Unknown
+type t += Opaque
 
 module type VALUE = sig
   val extension_constructor : Obj.Extension_constructor.t

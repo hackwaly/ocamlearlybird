@@ -36,6 +36,7 @@ let modules =
     (module Raw_string_value : VALUE);
     (module Variant_value : VALUE);
     (module Module_value : VALUE);
+    (module Abstract_value : VALUE);
   ]
 
 (* Orders sensitive *)
@@ -50,7 +51,7 @@ let find_module v =
   try
     let ec = Obj.Extension_constructor.of_val v in
     Hashtbl.find modules_tbl ec
-  with Not_found -> (module Unknown_value : VALUE)
+  with Not_found -> (module Opaque_value : VALUE)
 
 let adopt conn env ty rv =
   let rec resolve_type ty =
@@ -76,7 +77,7 @@ let adopt conn env ty rv =
     modules |> List.to_seq
     |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
            Value.adopt conn env ty rv)
-  with Not_found -> Lwt.return Unknown
+  with Not_found -> Lwt.return Opaque
 
 let () =
   rec_adopt := adopt;

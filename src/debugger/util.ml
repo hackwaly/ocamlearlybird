@@ -20,4 +20,36 @@ module Path = struct
   let to_string path =
     Path.print Format.str_formatter path;
     Format.flush_str_formatter ()
+
+  let rec to_longident path =
+    match path with
+    | Pident id -> Longident.Lident (Ident.name id)
+    | Pdot (p, d) -> Longident.Ldot (to_longident p, d)
+    | Papply (p1, p2) -> Longident.Lapply (to_longident p1, to_longident p2)
+end
+
+module Env = struct
+  include Env
+
+  let dummy_module_id = Ident.create_persistent "Temp_ywwofnzftu"
+
+  let list_value_pos modtype =
+    let mid = dummy_module_id in
+    let env = Env.empty |> Env.add_module mid Types.Mp_present modtype in
+    let names =
+      env |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
+    in
+    ( names
+      |> List.filter_map (fun name ->
+             try
+               let path = Path.Pdot (Path.Pident mid, name) in
+               let addr = env |> Env.find_value_address path in
+               let pos =
+                 match addr with
+                 | Adot (Aident id, pos) when Ident.same id mid -> pos
+                 | _ -> raise Not_found
+               in
+               Some (name, pos)
+             with Not_found -> None),
+      env )
 end
