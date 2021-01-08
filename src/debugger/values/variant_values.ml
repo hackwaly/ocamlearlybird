@@ -3,9 +3,11 @@ open Tuple_values
 open Record_values
 
 module Variant_value = struct
-  type v = { name : string; payload : t option; embed : bool }
+  include Impl_base_value
 
-  type t += Variant of v
+  type desc = { name : string; payload : t option; embed : bool }
+
+  type t += Variant of desc
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (Variant (Obj.magic ()))
@@ -153,15 +155,6 @@ module Variant_value = struct
         | _ -> Lwt.return None )
     | _ -> Lwt.return None
 
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
-
   let num_named v =
     let[@warning "-8"] (Variant { payload; embed; _ }) = (v [@warning "+8"]) in
     if embed then
@@ -177,6 +170,4 @@ module Variant_value = struct
         if embed then Value_basic.list_named payload
         else Lwt.return [ ("‹1›", payload) ]
     | None -> Lwt.return []
-
-  let is_indexed_container = false
 end

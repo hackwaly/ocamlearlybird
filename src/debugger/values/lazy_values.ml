@@ -1,16 +1,15 @@
 open Value_basic
 
 module Lazy_value = struct
+  include Impl_base_value
+
   type t += Lazy of t
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (Lazy (Obj.magic ()))
 
-  let is_indexed_container = false
-
-  let to_short_string ?(hex = false) v =
+  let to_short_string ?(hex = false) _ =
     ignore hex;
-    ignore v;
     "«lazy»"
 
   let adopt conn env ty rv =
@@ -27,15 +26,6 @@ module Lazy_value = struct
           Lwt.return (Some (Lazy value))
         else Lwt.return None
     | _ -> Lwt.return None
-
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
 
   let num_named _ = 1
 

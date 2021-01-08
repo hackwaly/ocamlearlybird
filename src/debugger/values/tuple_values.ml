@@ -1,7 +1,9 @@
 open Value_basic
 
 module Tuple_value = struct
-  type v = {
+  include Impl_base_value
+
+  type desc = {
     conn : Debugcom.conn;
     env : Env.t;
     tys : Types.type_expr list;
@@ -10,12 +12,10 @@ module Tuple_value = struct
     unboxed : bool;
   }
 
-  type t += Tuple of v
+  type t += Tuple of desc
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (Tuple (Obj.magic ()))
-
-  let is_indexed_container = false
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
@@ -23,15 +23,6 @@ module Tuple_value = struct
         Lwt.return
           (Some (Tuple { conn; env; tys; rv; pos = 0; unboxed = false }))
     | _ -> Lwt.return None
-
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
 
   let num_named v =
     let[@warning "-8"] (Tuple { tys; _ }) = (v [@warning "+8"]) in

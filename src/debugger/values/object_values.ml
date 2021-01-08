@@ -1,6 +1,8 @@
 open Value_basic
 
 module Object_value = struct
+  include Impl_base_value
+
   type desc = {
     conn : Debugcom.conn;
     env : Env.t;
@@ -13,7 +15,6 @@ module Object_value = struct
   let extension_constructor =
     Obj.Extension_constructor.of_val (Object (Obj.magic ()))
 
-  let is_indexed_container = false
 
   let to_short_string ?(hex = false) v =
     ignore hex;
@@ -37,16 +38,9 @@ module Object_value = struct
         Lwt.return (Some (Object { conn; env; rv; field_tys }))
     | _ -> Lwt.return None
 
-  let num_indexed _ = 0
-
   let num_named v =
     let[@warning "-8"] (Object { field_tys; _ }) = (v [@warning "+8"]) in
     List.length field_tys
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
 
   let list_named v =
     let[@warning "-8"] (Object { conn; env; rv; field_tys; _ }) =

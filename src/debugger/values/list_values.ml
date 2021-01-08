@@ -1,15 +1,14 @@
 open Value_basic
 
 module List_nil_value = struct
+  include Impl_base_value
+
   type t += List_nil
 
   let extension_constructor = Obj.Extension_constructor.of_val List_nil
 
-  let is_indexed_container = false
-
-  let to_short_string ?(hex = false) v =
+  let to_short_string ?(hex = false) _ =
     ignore hex;
-    ignore v;
     "[]"
 
   let adopt conn env ty rv =
@@ -21,37 +20,22 @@ module List_nil_value = struct
            && not (Debugcom.is_block rv) ->
         Lwt.return (Some List_nil)
     | _ -> Lwt.return None
-
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
-
-  let num_named _ = 0
-
-  let list_named v =
-    ignore v;
-    Lwt.return []
 end
 
 module List_cons_value = struct
-  type v = {
+  include Impl_base_value
+
+  type desc = {
     conn : Debugcom.conn;
     env : Env.t;
     ty : Types.type_expr;
     rv : Debugcom.remote_value;
   }
 
-  type t += List of v
+  type t += List of desc
 
   let extension_constructor =
     Obj.Extension_constructor.of_val (List (Obj.magic ()))
-
-  let is_indexed_container = false
 
   let to_short_string ?(hex = false) v =
     ignore hex;
@@ -65,15 +49,6 @@ module List_cons_value = struct
       ->
         Lwt.return (Some (List { conn; env; ty; rv }))
     | _ -> Lwt.return None
-
-  let num_indexed v =
-    ignore v;
-    0
-
-  let get_indexed v index =
-    ignore v;
-    ignore index;
-    [%lwt assert false]
 
   let num_named _ = 2
 

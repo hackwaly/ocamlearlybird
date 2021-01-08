@@ -2,6 +2,8 @@ open Value_basic
 open Simple_values
 
 module Array_value = struct
+  include Impl_base_value
+
   type v = {
     conn : Debugcom.conn;
     env : Env.t;

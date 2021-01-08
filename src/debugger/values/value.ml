@@ -74,7 +74,7 @@ let adopt conn env ty rv =
     modules |> List.to_seq
     |> Lwt_util.find_map_seq_s (fun (module Value : VALUE) ->
            Value.adopt conn env ty rv)
-  with Not_found -> Lwt.return Unknown_value.Unknown
+  with Not_found -> Lwt.return Unknown
 
 let () =
   rec_adopt := adopt;
