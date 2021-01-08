@@ -1,4 +1,4 @@
-type t
+type t = Value_basic.t
 
 val adopt :
   Debugcom.conn -> Env.t -> Types.type_expr -> Debugcom.remote_value -> t Lwt.t

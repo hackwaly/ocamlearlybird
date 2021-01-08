@@ -1,7 +1,9 @@
 open Debugger
 open Debug_protocol_ex
 
-type handle = Scope of Frame.t * [ `Stack | `Heap ] | Value of Value.t
+type handle =
+  | Scope of Frame.t * [ `Stack | `Heap | `Global ]
+  | Value of Value.t
 
 let run ~launch_args ~terminate ~agent rpc =
   ignore launch_args;
@@ -110,11 +112,14 @@ let run ~launch_args ~terminate ~agent rpc =
               let handle = alloc_handle () in
               Hashtbl.replace handle_tbl handle (Scope (frame, kind));
               let name =
-                match kind with `Stack -> "Stack" | `Heap -> "Heap"
+                match kind with
+                | `Stack -> "Stack"
+                | `Heap -> "Heap"
+                | `Global -> "Global"
               in
               Scope.make ~name ~expensive:false ~variables_reference:handle ()
             in
-            [ alloc_scope `Stack; alloc_scope `Heap ]
+            [ alloc_scope `Stack; alloc_scope `Heap; alloc_scope `Global ]
         | exception Not_found -> []
       in
       Lwt.return Scopes_command.Result.(make ~scopes ()));
@@ -127,7 +132,7 @@ let run ~launch_args ~terminate ~agent rpc =
             let alloc_variable (name, value) =
               let num_named = Value.num_named value in
               let handle =
-                if num_named > 0 || Value.is_indexed_container value then (
+                if num_named <> 0 || Value.is_indexed_container value then (
                   let handle = alloc_handle () in
                   Hashtbl.replace handle_tbl handle (Value value);
                   handle )
@@ -149,7 +154,7 @@ let run ~launch_args ~terminate ~agent rpc =
             in
             let%lwt variables =
               match handle_desc with
-              | Scope (frame, kind) -> Debugger.frame_variables agent frame kind
+              | Scope (frame, kind) -> Debugger.list_variables agent frame kind
               | Value value -> (
                   let list_indexed start count =
                     let values = ref [] in
@@ -166,33 +171,35 @@ let run ~launch_args ~terminate ~agent rpc =
                     Lwt.return variables
                   in
                   let num_named = Value.num_named value in
-                  let num_indexed = Value.num_indexed value in
-                  match arg.filter with
-                  | None ->
-                      [%lwt assert (arg.count |> Option.is_none)];%lwt
-                      if num_named > 0 && num_indexed > 0 then
-                        let%lwt named = Value.list_named value in
-                        let%lwt indexed = list_indexed 0 num_indexed in
-                        Lwt.return (named @ indexed)
-                      else if num_named > 0 then
-                        let%lwt named = Value.list_named value in
-                        Lwt.return named
-                      else if num_indexed > 0 then
-                        let%lwt indexed = list_indexed 0 num_indexed in
+                  if num_named = -1 then Value.list_named value
+                  else
+                    let num_indexed = Value.num_indexed value in
+                    match arg.filter with
+                    | None ->
+                        [%lwt assert (arg.count |> Option.is_none)];%lwt
+                        if num_named > 0 && num_indexed > 0 then
+                          let%lwt named = Value.list_named value in
+                          let%lwt indexed = list_indexed 0 num_indexed in
+                          Lwt.return (named @ indexed)
+                        else if num_named > 0 then
+                          let%lwt named = Value.list_named value in
+                          Lwt.return named
+                        else if num_indexed > 0 then
+                          let%lwt indexed = list_indexed 0 num_indexed in
+                          Lwt.return indexed
+                        else Lwt.return []
+                    | Some Indexed ->
+                        let start, count =
+                          match (arg.start, arg.count) with
+                          | _, None -> (0, num_indexed)
+                          | start, Some count ->
+                              (start |> Option.value ~default:0, count)
+                        in
+                        let%lwt indexed = list_indexed start count in
                         Lwt.return indexed
-                      else Lwt.return []
-                  | Some Indexed ->
-                      let start, count =
-                        match (arg.start, arg.count) with
-                        | _, None -> (0, num_indexed)
-                        | start, Some count ->
-                            (start |> Option.value ~default:0, count)
-                      in
-                      let%lwt indexed = list_indexed start count in
-                      Lwt.return indexed
-                  | Some Named ->
-                      let%lwt named = Value.list_named value in
-                      Lwt.return named )
+                    | Some Named ->
+                        let%lwt named = Value.list_named value in
+                        Lwt.return named )
             in
             let variables = variables |> List.map alloc_variable in
             Lwt.return variables

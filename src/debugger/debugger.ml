@@ -1,5 +1,6 @@
 module Log = Log
 open Util
+open Module_values
 
 type pc = Pc.t = { frag : int; pos : int }
 
@@ -374,6 +375,32 @@ let start agent =
     done
   with Exit -> Lwt.return ()
 
+let global_variables agent frame =
+  let globals = Symbols.globals agent.symbols frame.Frame.event.module_.frag in
+  let%lwt env = Lazy.force frame.Frame.event.env in
+  let globals =
+    globals |> Ident.Map.to_seq
+    |> Seq.filter_map (fun (id, pos) ->
+           (* Without this guard debuggee will terminate unexpectly at that case *)
+           if Ident.name id = frame.event.module_.id then None
+           else
+             match env |> Env.find_module (Path.Pident id) with
+             | decl -> Some (id, pos, decl)
+             | exception Not_found -> None)
+  in
+  exec_in_loop agent (fun conn ->
+      let%lwt variables =
+        globals |> List.of_seq
+        |> Lwt_list.map_s (fun (id, pos, decl) ->
+               let%lwt rv = Debugcom.get_global conn pos in
+               let value =
+                 Module_value.Module
+                   { conn; env; rv; modtype = decl.Types.md_type }
+               in
+               Lwt.return (Ident.name id, value))
+      in
+      Lwt.return variables)
+
 let frame_variables agent frame kind =
   exec_in_loop agent (fun conn ->
       let%lwt frame0 = Debugcom.initial_frame conn in
@@ -403,3 +430,10 @@ let frame_variables agent frame kind =
         |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
         |> Lwt_list.filter_map_s to_value )
         [%finally Debugcom.set_frame conn frame0])
+
+type frame_scope_kind = [ `Stack | `Heap ]
+
+let list_variables agent frame kind =
+  match kind with
+  | `Global -> global_variables agent frame
+  | #frame_scope_kind as kind -> frame_variables agent frame kind

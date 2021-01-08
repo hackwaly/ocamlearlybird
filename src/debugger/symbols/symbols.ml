@@ -4,6 +4,7 @@ type t = {
   events_committed : (Pc.t, unit) Hashtbl.t;
   module_by_id : (string, Debuginfo.module_) Hashtbl.t;
   module_by_source : (string, Debuginfo.module_) Hashtbl.t;
+  globals_by_frag : (int, int Ident.Map.t) Hashtbl.t;
   did_update_e : unit Lwt_react.E.t;
   emit_did_update : unit -> unit;
 }
@@ -16,6 +17,7 @@ let create () =
     events_committed = Hashtbl.create 0;
     module_by_id = Hashtbl.create 0;
     module_by_source = Hashtbl.create 0;
+    globals_by_frag  = Hashtbl.create 0;
     did_update_e;
     emit_did_update;
   }
@@ -33,8 +35,12 @@ let find_module t id =
 let find_event t pc =
   Hashtbl.find t.event_by_pc pc
 
+let globals t frag =
+  Hashtbl.find t.globals_by_frag frag
+
 let load t frag file =
-  let%lwt modules = Debuginfo.load frag file in
+  let%lwt (modules, globals) = Debuginfo.load frag file in
+  Hashtbl.replace t.globals_by_frag frag globals;
   let add_event (event : Debuginfo.event) =
     Hashtbl.replace t.event_by_pc (Event.pc event) event;
     Hashtbl.replace t.events_commit_queue (Event.pc event) ()

@@ -12,6 +12,8 @@ val find_module : t -> string -> Debuginfo.module_
 
 val find_event : t -> Pc.t -> Debuginfo.event
 
+val globals : t -> int -> int Ident.Map.t
+
 val load : t -> int -> string -> unit Lwt.t
 
 val commit : t -> (Pc.t -> unit Lwt.t) -> (Pc.t ->unit Lwt.t) -> unit Lwt.t

@@ -13,5 +13,5 @@ and event = {
 }
 [@@deriving show]
 
-val load : int -> string -> module_ list Lwt.t
+val load : int -> string -> (module_ list * int Ident.Map.t) Lwt.t
 (** [load frag file] Load debug info from file *)

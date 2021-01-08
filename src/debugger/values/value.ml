@@ -9,6 +9,7 @@ open Record_values
 open Func_values
 open Object_values
 open Variant_values
+open Module_values
 
 let modules =
   [
@@ -34,6 +35,7 @@ let modules =
     (module Object_value : VALUE);
     (module Raw_string_value : VALUE);
     (module Variant_value : VALUE);
+    (module Module_value : VALUE);
   ]
 
 (* Orders sensitive *)

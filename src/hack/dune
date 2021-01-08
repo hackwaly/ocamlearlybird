@@ -1,0 +1,4 @@
+(library
+ (name hack)
+ (wrapped false)
+ (libraries compiler-libs))
