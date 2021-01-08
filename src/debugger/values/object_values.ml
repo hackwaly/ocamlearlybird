@@ -1,4 +1,5 @@
 open Value_basic
+open Misc_values
 
 module Object_value = struct
   include Impl_base_value

@@ -1,5 +1,25 @@
 open Value_basic
 
+module Impl_base_value = struct
+  let extension_constructor = Unknown
+
+  let is_indexed_container = false
+
+  let adopt _ _ _ _ = Lwt.return None
+
+  let to_short_string ?(hex = false) _ =
+    ignore hex;
+    [%lwt assert false]
+
+  let num_indexed _ = 0
+
+  let num_named _ = 0
+
+  let list_named _ = Lwt.return []
+
+  let get_indexed _ _ = [%lwt assert false]
+end
+
 module Unknown_value = struct
   include Impl_base_value
 

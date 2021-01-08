@@ -1,5 +1,6 @@
 open Value_basic
 open Simple_values
+open Misc_values
 
 module Array_value = struct
   include Impl_base_value
