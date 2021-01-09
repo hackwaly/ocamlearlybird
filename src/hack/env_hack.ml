@@ -3172,6 +3172,3 @@ let () =
       | _ ->
           None
     )
-
-let of_env env =
-  Obj.magic env
