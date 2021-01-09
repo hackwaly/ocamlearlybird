@@ -45,7 +45,7 @@ module Module_value = struct
 
   (* WTF: Env.fold_values Not exposed *)
   let list_named v =
-    let[@warning "-8"] (Module { conn; env; modtype; path; is_static; is_packaged; rv; _ }) =
+    let[@warning "-8"] (Module { conn; env; modtype; path; is_static; rv; _ }) =
       (v [@warning "+8"])
     in
     if not (Debugcom.is_block rv) then Lwt.return []
