@@ -35,9 +35,15 @@
       {
         "type": "ocaml-debugger",
         "label": "OCaml",
-        "program": "ocamlearlybird",
-        "args": [
-          "debug"
+        "runtime": "node",
+        "program": "adapter.js",
+        "initialConfigurations": [
+          {
+            "name": "${2:Launch file}",
+            "type": "ocaml-debugger",
+            "request": "launch",
+            "program": "^\"${1:\\${file}}\""
+          }
         ],
         "configurationSnippets": [
           {

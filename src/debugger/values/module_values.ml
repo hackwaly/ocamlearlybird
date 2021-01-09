@@ -34,7 +34,9 @@ module Module_value = struct
         | exception _ -> Lwt.return None )
     | _ -> Lwt.return None
 
-  let num_named _ = -1
+  let num_named v =
+    let[@warning "-8"] (Module { rv; _ }) = (v [@warning "+8"]) in
+    if Debugcom.is_block rv then -1 else 0
 
   (* WTF: Env.fold_values Not exposed *)
   let list_named v =
