@@ -18,3 +18,7 @@
    dap.types dap.rpc_lwt astring compiler-libs.common compiler-libs.bytecomp
    ppx_deriving_yojson.runtime react lwt_react debugger
    containers containers-data util))
+
+(install
+ (section bin)
+ (files (main.exe as ocamlearlybird)))
