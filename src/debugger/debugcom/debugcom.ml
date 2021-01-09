@@ -108,11 +108,6 @@ let marshal_obj (conn : conn) rv =
   | Local v -> Lwt.return (Obj.magic v)
   | Remote rv -> conn#lock (fun conn -> Debugcom_basic.marshal_obj conn rv)
 
-let get_closure_code (conn : conn) rv =
-  match rv with
-  | Local _ -> [%lwt assert false]
-  | Remote rv -> conn#lock (fun conn -> Debugcom_basic.get_closure_code conn rv)
-
 let set_fork_mode (conn : conn) mode =
   conn#lock (fun conn -> Debugcom_basic.set_fork_mode conn mode)
 
@@ -142,6 +137,19 @@ let is_block rv =
   match rv with
   | Local v -> Obj.is_block v
   | Remote rv -> Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
+
+let get_closure_code (conn : conn) rv =
+  match rv with
+  | Local _ -> [%lwt assert false]
+  | Remote rv ->
+      conn#lock (fun conn ->
+          if is_block (Remote rv) then
+            let%lwt pc = Debugcom_basic.get_closure_code conn rv in
+            Lwt.return
+              ( match Symbols.find_event conn#symbols pc with
+              | event -> Some event
+              | exception Not_found -> None )
+          else Lwt.return None)
 
 let go (conn : conn) n =
   conn#lock (fun conn ->
