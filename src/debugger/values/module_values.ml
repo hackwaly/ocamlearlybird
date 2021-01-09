@@ -10,6 +10,7 @@ module Module_value = struct
     rv : Debugcom.remote_value;
     path : Path.t;
     is_packaged : bool;
+    is_static : bool;
     modtype : Types.module_type;
   }
 
@@ -34,7 +35,7 @@ module Module_value = struct
         | modtype ->
             Lwt.return
               (Some
-                 (Module { conn; env; rv; path; is_packaged = true; modtype }))
+                 (Module { conn; env; rv; path; is_packaged = true; is_static = false; modtype }))
         | exception _ -> Lwt.return None )
     | _ -> Lwt.return None
 
@@ -44,7 +45,7 @@ module Module_value = struct
 
   (* WTF: Env.fold_values Not exposed *)
   let list_named v =
-    let[@warning "-8"] (Module { conn; env; modtype; is_packaged; path; rv }) =
+    let[@warning "-8"] (Module { conn; env; modtype; path; is_static; is_packaged; rv; _ }) =
       (v [@warning "+8"])
     in
     if not (Debugcom.is_block rv) then Lwt.return []
@@ -77,7 +78,8 @@ module Module_value = struct
                            rv;
                            modtype = decl.Types.md_type;
                            path = Path.Pdot (path, name);
-                           is_packaged;
+                           is_packaged = false;
+                           is_static;
                          }
                      in
                      Lwt.return (Some (name, value))

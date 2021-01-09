@@ -399,6 +399,7 @@ let global_variables agent frame =
                      modtype = decl.Types.md_type;
                      path = Path.Pident id;
                      is_packaged = false;
+                     is_static = true;
                    }
                in
                Lwt.return (Ident.name id, value))
