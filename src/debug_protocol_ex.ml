@@ -29,7 +29,6 @@ module Launch_command = struct
       arguments : string list; [@default []]
       console : Console.t; [@default Console.Internal_console]
       stop_on_entry : bool; [@default false] [@key "stopOnEntry"]
-      dot_merlins : string list; [@default []] [@key "dotMerlins"]
       __restart : Yojson.Safe.t option; [@default None]
     }
     [@@deriving yojson { strict = false }]

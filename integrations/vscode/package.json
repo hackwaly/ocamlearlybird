@@ -1,0 +1,111 @@
+{
+  "private": true,
+  "name": "ocaml-debugger",
+  "displayName": "OCaml Debugger",
+  "description": "OCaml debugger. Powered by ocamlearlybird.",
+  "version": "411.0.0",
+  "publisher": "hackwaly",
+  "engines": {
+    "vscode": "^1.52.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hackwaly/ocamlearlybird.git"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "main": "main.js",
+  "activationEvents": [
+    "onDebugResolve:ocaml"
+  ],
+  "contributes": {
+    "breakpoints": [
+      {
+        "language": "ocaml"
+      },
+      {
+        "language": "ocamllex"
+      },
+      {
+        "language": "menhir"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "ocaml-debugger",
+        "label": "OCaml",
+        "program": "ocamlearlybird",
+        "args": [
+          "debug"
+        ],
+        "configurationSnippets": [
+          {
+            "label": "OCaml: Launch program",
+            "description": "Debug the program",
+            "body": {
+              "name": "${2:Launch file}",
+              "type": "ocaml-debugger",
+              "request": "launch",
+              "program": "^\"${1:\\${file}}\""
+            }
+          }
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "noDebug": {
+                "type": "boolean",
+                "default": false
+              },
+              "cwd": {
+                "type": "string",
+                "description": "The working directory for debuggee program."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables passed to the debuggee program.",
+                "default": {}
+              },
+              "program": {
+                "type": "string",
+                "description": "The path of debuggee program."
+              },
+              "symbols": {
+                "type": "string",
+                "description": "The path to optional OCaml debug symbols .cds file."
+              },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The command-line arguments for the debuggee program."
+              },
+              "console": {
+                "enum": [
+                  "internalConsole",
+                  "integratedTerminal",
+                  "externalTerminal"
+                ],
+                "description": "Where to launch the debug target: internal console, integrated terminal, or external terminal.",
+                "default": "internalConsole"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": false
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}
