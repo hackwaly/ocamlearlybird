@@ -38,6 +38,7 @@ let run ~launch_args ~terminate ~agent rpc =
   Debug_rpc.set_command_handler rpc
     (module Loaded_sources_command)
     (fun () ->
+      Debugger.ready agent;%lwt
       let modules = Debugger.to_seq_modules agent |> List.of_seq in
       let sources =
         modules
