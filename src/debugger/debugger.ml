@@ -325,22 +325,38 @@ let start agent =
     in
     let step_out = wrap_run internal_step_out in
     let internal_step_over () =
+      Log.debug (fun m -> m "internal_step_over 1");%lwt
       let%lwt stack_pos1, pc1 = Debugcom_basic.get_frame conn in
+      Log.debug (fun m -> m "internal_step_over 2");%lwt
       let%lwt step_in_status = internal_step_in () in
-      let%lwt stack_pos2, pc2 = Debugcom_basic.get_frame conn in
-      let ev1 = find_event agent pc1 in
-      let ev2 = find_event agent pc2 in
-      (* tailcallopt case *)
-      let is_tco () =
-        if stack_pos2 - ev2.ev.ev_stacksize = stack_pos1 - ev1.ev.ev_stacksize
-        then ev2.ev.ev_info = Event_function
-        else false
-      in
-      let is_entered () =
-        stack_pos2 - ev2.ev.ev_stacksize > stack_pos1 - ev1.ev.ev_stacksize
-      in
-      if is_entered () || is_tco () then internal_step_out ()
-      else Lwt.return step_in_status
+      Log.debug (fun m -> m "internal_step_over 3");%lwt
+      match step_in_status with
+      | { Debugcom.rep_type = Uncaught_exc | Exited; _ }, _ ->
+          Lwt.return step_in_status
+      | _ ->
+          let%lwt stack_pos2, pc2 = Debugcom_basic.get_frame conn in
+          Log.debug (fun m -> m "internal_step_over 4");%lwt
+          let ev1 = find_event agent pc1 in
+          Log.debug (fun m -> m "internal_step_over 5");%lwt
+          let ev2 = find_event agent pc2 in
+          Log.debug (fun m -> m "internal_step_over 6");%lwt
+          (* tailcallopt case *)
+          let is_tco () =
+            if
+              stack_pos2 - ev2.ev.ev_stacksize
+              = stack_pos1 - ev1.ev.ev_stacksize
+            then ev2.ev.ev_info = Event_function
+            else false
+          in
+          let is_entered () =
+            stack_pos2 - ev2.ev.ev_stacksize > stack_pos1 - ev1.ev.ev_stacksize
+          in
+          if is_entered () || is_tco () then (
+            Log.debug (fun m -> m "internal_step_over 6");%lwt
+            internal_step_out () )
+          else (
+            Log.debug (fun m -> m "internal_step_over 7");%lwt
+            Lwt.return step_in_status )
     in
     let step_over = wrap_run internal_step_over in
     let stop () =
@@ -390,19 +406,21 @@ let global_variables agent frame =
   exec_in_loop agent (fun conn ->
       let%lwt variables =
         globals |> List.of_seq
-        |> Lwt_list.map_s (fun (id, pos) ->
+        |> Lwt_list.filter_map_s (fun (id, pos) ->
                let%lwt rv = Debugcom.get_global conn pos in
-               let value =
-                 Module_value.Module
-                   {
-                     conn;
-                     env;
-                     rv;
-                     path = Path.Pident id;
-                     is_packaged = None;
-                   }
-               in
-               Lwt.return (Ident.name id, value))
+               if Debugcom.is_block rv then
+                 let value =
+                   Module_value.Module
+                     {
+                       conn;
+                       env;
+                       rv;
+                       path = Path.Pident id;
+                       is_packaged = None;
+                     }
+                 in
+                 Lwt.return (Some (Ident.name id, value))
+               else Lwt.return None)
       in
       Lwt.return variables)
 
