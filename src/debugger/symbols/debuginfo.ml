@@ -1,36 +1,38 @@
 module String_set = CCSet.Make (CCString)
 
 type type_expr = Types.type_expr
+
 let pp_type_expr fmt _t = Format.pp_print_string fmt "<opaque>"
 
-type debug_event = Instruct.debug_event =
-  { mutable ev_pos: int;
-    ev_module: string;
-    ev_loc: Location.t;  [@opaque]
-    ev_kind: debug_event_kind;
-    ev_defname: string;
-    ev_info: debug_event_info;
-    ev_typenv: Env.summary;  [@opaque]
-    ev_typsubst: Subst.t;  [@opaque]
-    ev_compenv: Instruct.compilation_env;  [@opaque]
-    ev_stacksize: int;
-    ev_repr: debug_event_repr }
+type debug_event = Instruct.debug_event = {
+  mutable ev_pos : int;
+  ev_module : string;
+  ev_loc : Location.t; [@opaque]
+  ev_kind : debug_event_kind;
+  ev_defname : string;
+  ev_info : debug_event_info;
+  ev_typenv : Env.summary; [@opaque]
+  ev_typsubst : Subst.t; [@opaque]
+  ev_compenv : Instruct.compilation_env; [@opaque]
+  ev_stacksize : int;
+  ev_repr : debug_event_repr;
+}
 [@@deriving show]
 
 and debug_event_kind = Instruct.debug_event_kind =
-    Event_before
+  | Event_before
   | Event_after of type_expr
   | Event_pseudo
 [@@deriving show]
 
 and debug_event_info = Instruct.debug_event_info =
-    Event_function
+  | Event_function
   | Event_return of int
   | Event_other
 [@@deriving show]
 
 and debug_event_repr = Instruct.debug_event_repr =
-    Event_none
+  | Event_none
   | Event_parent of int ref
   | Event_child of int ref
 [@@deriving show]
@@ -95,7 +97,7 @@ let seek_section (pos, section_table) name =
     | [] -> raise Not_found
     | (name', len) :: rest ->
         let pos = Int64.sub pos (Int64.of_int len) in
-        if name' = name then pos else seek_sec pos rest
+        if name' = name then (pos, len) else seek_sec pos rest
   in
   seek_sec pos section_table
 
@@ -125,21 +127,27 @@ let resolve_source id dirs () =
   let%lwt source_paths = derive_source_paths id dirs in
   source_paths |> Lwt_list.find_s Lwt_unix.file_exists
 
-let read_global_table ic toc =
-  let pos = seek_section toc "SYMB" in
-  Lwt_io.set_position ic pos;%lwt
-  let module T = struct
-    type t = {
-      cnt : int;
-      tbl : int Ident.Map.t;
-    }
-  end in
-  let%lwt (global_table : T.t) = Lwt_io.read_value ic in
-  Lwt.return global_table.tbl
-
 let load frag file =
+  let read_dlls ic toc =
+    match seek_section toc "DLLS" with
+    | exception Not_found -> Lwt.return []
+    | pos, len -> (
+        Lwt_io.set_position ic pos;%lwt
+        let%lwt str = Lwt_util.read_to_string_exactly ic len in
+        let dlls = str |> String.split_on_char '\000' in
+        match dlls with [ "" ] -> Lwt.return [] | _ -> Lwt.return dlls )
+  in
+  let read_global_table ic toc =
+    let pos, _ = seek_section toc "SYMB" in
+    Lwt_io.set_position ic pos;%lwt
+    let module T = struct
+      type t = { cnt : int; tbl : int Ident.Map.t }
+    end in
+    let%lwt (global_table : T.t) = Lwt_io.read_value ic in
+    Lwt.return global_table.tbl
+  in
   let read_eventlists ic toc =
-    let pos = seek_section toc "DBUG" in
+    let pos, _ = seek_section toc "DBUG" in
     Lwt_io.set_position ic pos;%lwt
     let%lwt num_eventlists = Lwt_io.BE.read_int ic in
     let eventlists = ref [] in
@@ -156,6 +164,8 @@ let load frag file =
   in
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.input file in
   (let%lwt toc = read_toc ic in
+   let%lwt dlls = read_dlls ic toc in
+   Log.debug (fun m -> m "dlls: %s" ([%show: string list] dlls));%lwt
    let%lwt globals = read_global_table ic toc in
    let%lwt eventlists = read_eventlists ic toc in
    let all_dirs = ref String_set.empty in
