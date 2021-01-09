@@ -13,7 +13,7 @@
     {
       "label": "test",
       "type": "shell",
-      "command": "dune exec src/main.bc -- serve --verbosity=debug",
+      "command": "dune exec src/main.bc -- serve --port=4712 --verbosity=debug",
       "group": {
         "isDefault": true,
         "kind": "test"

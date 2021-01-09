@@ -36,26 +36,23 @@ end
 module Env = struct
   include Env
 
-  let dummy_module_id = Ident.create_persistent "Temp_ywwofnzftu"
-
-  let list_value_pos modtype =
-    let mid = dummy_module_id in
-    let env = Env.empty |> Env.add_module mid Types.Mp_present modtype in
+  let list_value_pos env path =
+    let longid = Path.to_longident path in
     let mod_names =
       env
-      |> Env.extract_modules (Some (Longident.Lident (Ident.name mid)))
+      |> Env.extract_modules (Some longid)
       |> List.map (fun name -> (`Module, name))
     in
     let val_names =
       env
-      |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
+      |> Env.extract_values (Some longid)
       |> List.map (fun name -> (`Value, name))
     in
     let names = mod_names @ val_names in
     ( names
       |> List.filter_map (fun (kind, name) ->
              try
-               let path = Path.Pdot (Path.Pident mid, name) in
+               let path = Path.Pdot (path, name) in
                let addr =
                  match kind with
                  | `Value -> env |> Env.find_value_address path
@@ -63,7 +60,7 @@ module Env = struct
                in
                let pos =
                  match addr with
-                 | Adot (Aident id, pos) when Ident.same id mid -> pos
+                 | Adot (_, pos) -> pos
                  | _ -> raise Not_found
                in
                Some (kind, name, pos)

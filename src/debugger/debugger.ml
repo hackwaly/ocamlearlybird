@@ -99,6 +99,7 @@ let exec_in_loop agent f =
         Lwt.wakeup_later resolver r;
         Lwt.return ()
       with e ->
+        (* TODO: Find a way to make Lwt delay backtrace *)
         Log.debug (fun m -> m "%s" (Printexc.get_backtrace ()));%lwt
         Lwt.wakeup_later_exn resolver e;
         Lwt.return ())
@@ -378,17 +379,18 @@ let start agent =
 let global_variables agent frame =
   let globals = Symbols.globals agent.symbols frame.Frame.event.module_.frag in
   let%lwt env = Lazy.force frame.Frame.event.env in
+  (* globals contains constructors not modules which we don't interested *)
   let globals =
     globals |> Ident.Map.to_seq
     |> Seq.filter_map (fun (id, pos) ->
            match env |> Env.find_module (Path.Pident id) with
-           | decl -> Some (id, pos, decl)
+           | _ -> Some (id, pos)
            | exception Not_found -> None)
   in
   exec_in_loop agent (fun conn ->
       let%lwt variables =
         globals |> List.of_seq
-        |> Lwt_list.map_s (fun (id, pos, decl) ->
+        |> Lwt_list.map_s (fun (id, pos) ->
                let%lwt rv = Debugcom.get_global conn pos in
                let value =
                  Module_value.Module
@@ -396,10 +398,8 @@ let global_variables agent frame =
                      conn;
                      env;
                      rv;
-                     modtype = decl.Types.md_type;
                      path = Path.Pident id;
-                     is_packaged = false;
-                     is_static = true;
+                     is_packaged = None;
                    }
                in
                Lwt.return (Ident.name id, value))
