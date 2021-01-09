@@ -8,7 +8,8 @@ module Module_value = struct
     conn : Debugcom.conn;
     env : Env.t;
     rv : Debugcom.remote_value;
-    path : Path.t option;
+    path : Path.t;
+    is_packaged : bool;
     modtype : Types.module_type;
   }
 
@@ -27,7 +28,9 @@ module Module_value = struct
     | Tpackage (path, [], []) -> (
         match env |> Env.find_modtype_expansion path with
         | modtype ->
-            Lwt.return (Some (Module { conn; env; rv; path = None; modtype }))
+            Lwt.return
+              (Some
+                 (Module { conn; env; rv; path; is_packaged = true; modtype }))
         | exception _ -> Lwt.return None )
     | _ -> Lwt.return None
 
@@ -35,27 +38,43 @@ module Module_value = struct
 
   (* WTF: Env.fold_values Not exposed *)
   let list_named v =
-    let[@warning "-8"] (Module { conn; env; modtype; path; rv }) =
+    let[@warning "-8"] (Module { conn; env; modtype; is_packaged; path; rv }) =
       (v [@warning "+8"])
     in
     if not (Debugcom.is_block rv) then Lwt.return []
     else
       let val_pos_list, env' = Util.Env.list_value_pos modtype in
-      let env' = match path with Some _ -> env | None -> env' in
+      let env' = if is_packaged then env' else env in
       let make_path name =
-        match path with
-        | Some path -> Path.Pdot (path, name)
-        | None -> Path.Pdot (Path.Pident Util.Env.dummy_module_id, name)
+        if is_packaged then
+          Path.Pdot (Path.Pident Util.Env.dummy_module_id, name)
+        else Path.Pdot (path, name)
       in
       let%lwt variables =
         val_pos_list
-        |> Lwt_list.filter_map_s (fun (name, pos) ->
+        |> Lwt_list.filter_map_s (fun (kind, name, pos) ->
                try%lwt
-                 let path = make_path name in
-                 let decl = env' |> Env.find_value path in
                  let%lwt rv' = Debugcom.get_field conn rv pos in
-                 let%lwt value = !rec_adopt conn env decl.val_type rv' in
-                 Lwt.return (Some (name, value))
+                 let path' = make_path name in
+                 match kind with
+                 | `Value ->
+                     let decl = env' |> Env.find_value path' in
+                     let%lwt value = !rec_adopt conn env decl.val_type rv' in
+                     Lwt.return (Some (name, value))
+                 | `Module ->
+                     let decl = env' |> Env.find_module path' in
+                     let value =
+                       Module
+                         {
+                           conn;
+                           env;
+                           rv;
+                           modtype = decl.Types.md_type;
+                           path = Path.Pdot (path, name);
+                           is_packaged;
+                         }
+                     in
+                     Lwt.return (Some (name, value))
                with Not_found -> Lwt.return None)
       in
       Lwt.return variables

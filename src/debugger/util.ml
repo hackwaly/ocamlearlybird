@@ -36,20 +36,32 @@ module Env = struct
   let list_value_pos modtype =
     let mid = dummy_module_id in
     let env = Env.empty |> Env.add_module mid Types.Mp_present modtype in
-    let names =
-      env |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
+    let mod_names =
+      env
+      |> Env.extract_modules (Some (Longident.Lident (Ident.name mid)))
+      |> List.map (fun name -> (`Module, name))
     in
+    let val_names =
+      env
+      |> Env.extract_values (Some (Longident.Lident (Ident.name mid)))
+      |> List.map (fun name -> (`Value, name))
+    in
+    let names = mod_names @ val_names in
     ( names
-      |> List.filter_map (fun name ->
+      |> List.filter_map (fun (kind, name) ->
              try
                let path = Path.Pdot (Path.Pident mid, name) in
-               let addr = env |> Env.find_value_address path in
+               let addr =
+                 match kind with
+                 | `Value -> env |> Env.find_value_address path
+                 | `Module -> env |> Env.find_module_address path
+               in
                let pos =
                  match addr with
                  | Adot (Aident id, pos) when Ident.same id mid -> pos
                  | _ -> raise Not_found
                in
-               Some (name, pos)
+               Some (kind, name, pos)
              with Not_found -> None),
       env )
 end
