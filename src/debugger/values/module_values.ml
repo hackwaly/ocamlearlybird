@@ -20,8 +20,12 @@ module Module_value = struct
 
   let to_short_string ?(hex = false) v =
     ignore hex;
-    let[@warning "-8"] (Module { rv; _ }) = (v [@warning "+8"]) in
+    let[@warning "-8"] (Module { rv; is_packaged; path; _ }) = (v [@warning "+8"]) in
+    if is_packaged then (
+      "(module " ^ Util.Path.to_string path ^ ")"
+    ) else (
     if Debugcom.is_block rv then "«module»" else "«module.unbound»"
+    )
 
   let adopt conn env ty rv =
     match (Ctype.repr ty).desc with
