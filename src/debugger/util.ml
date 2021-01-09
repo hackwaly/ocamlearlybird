@@ -18,8 +18,13 @@ module Path = struct
   include Path
 
   let to_string path =
-    Path.print Format.str_formatter path;
-    Format.flush_str_formatter ()
+    let rec aux path =
+      match path with
+      | Pident id -> Ident.name id
+      | Pdot (p, d) -> aux p ^ "." ^ d
+      | Papply (p1, p2) -> aux p1 ^ " (" ^ aux p2 ^ ")"
+    in
+    aux path
 
   let rec to_longident path =
     match path with
