@@ -51,9 +51,9 @@ module Module_value = struct
     if not (Debugcom.is_block rv) then Lwt.return []
     else
       let val_pos_list, env' = Util.Env.list_value_pos modtype in
-      let env' = if is_packaged then env' else env in
+      let env' = if not (is_static) then env' else env in
       let make_path name =
-        if is_packaged then
+        if not (is_static) then
           Path.Pdot (Path.Pident Util.Env.dummy_module_id, name)
         else Path.Pdot (path, name)
       in
