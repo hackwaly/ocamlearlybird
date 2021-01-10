@@ -3153,6 +3153,11 @@ let report_error ppf = function
         name
   | Lookup_error(loc, t, err) -> report_lookup_error loc t ppf err
 
+let is_structure_module path env =
+  match find_structure_components path env with
+  | _ -> true
+  | exception Not_found -> false
+
 let () =
   Location.register_error_of_exn
     (function

@@ -451,3 +451,5 @@ val print_address : Format.formatter -> address -> unit
 val extract_values : Longident.t option -> t -> string list
 
 val extract_modules : Longident.t option -> t -> string list
+
+val is_structure_module : Path.t -> t -> bool

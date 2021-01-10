@@ -41,6 +41,8 @@ module Env = struct
     let mod_names =
       env
       |> Env.extract_modules (Some longid)
+      |> List.filter (fun name ->
+             env |> Env.is_structure_module (Path.Pdot (path, name)))
       |> List.map (fun name -> (`Module, name))
     in
     let val_names =
