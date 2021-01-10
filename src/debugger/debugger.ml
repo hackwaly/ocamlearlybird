@@ -95,7 +95,7 @@ let exec_in_loop agent f =
   agent.pendings <-
     (fun conn ->
       try%lwt
-        let%lwt r = conn#lock f in
+        let%lwt r = f conn in
         Lwt.wakeup_later resolver r;
         Lwt.return ()
       with e ->
@@ -307,11 +307,14 @@ let start agent =
     in
     let step_in = wrap_run internal_step_in in
     let internal_step_out () =
-      let%lwt stack_pos, pc = Debugcom_basic.get_frame conn in
+      let%lwt stack_pos, pc =
+        conn#lock (fun conn -> Debugcom_basic.get_frame conn)
+      in
       let event = Symbols.find_event agent.symbols pc in
       match%lwt
-        (Debugcom_basic.up_frame conn event.ev.ev_stacksize)
-          [%finally Debugcom_basic.set_frame conn stack_pos]
+        conn#lock (fun conn ->
+            (Debugcom_basic.up_frame conn event.ev.ev_stacksize)
+              [%finally Debugcom_basic.set_frame conn stack_pos])
       with
       | None -> internal_run ()
       | Some (stack_pos, pc) ->
@@ -427,10 +430,8 @@ let global_variables agent frame =
   (* globals contains constructors not modules which we don't interested *)
   let globals =
     globals |> Ident.Map.to_seq
-    |> Seq.filter_map (fun (id, pos) ->
-           match env |> Env.find_module (Path.Pident id) with
-           | _ -> Some (id, pos)
-           | exception Not_found -> None)
+    |> Seq.filter (fun (id, _) ->
+           env |> Env.is_structure_module (Path.Pident id))
   in
   exec_in_loop agent (fun conn ->
       let%lwt variables =
@@ -455,21 +456,21 @@ let global_variables agent frame =
 
 let frame_variables agent frame kind =
   exec_in_loop agent (fun conn ->
-      let%lwt frame0 = Debugcom.initial_frame conn in
-      ( Debugcom.set_frame conn frame;%lwt
-        let%lwt env = Lazy.force frame.event.env in
-        let tbl =
-          match kind with
-          | `Stack -> frame.event.ev.ev_compenv.ce_stack
-          | `Heap -> frame.event.ev.ev_compenv.ce_heap
-        in
-        let get_rv pos =
-          match kind with
-          | `Stack -> Debugcom.get_local conn (frame.event.ev.ev_stacksize - pos)
-          | `Heap -> Debugcom.get_environment conn pos
-        in
-        let iter f = tbl |> Ident.iter (fun id pos -> f (id, pos)) in
-        let to_value (id, pos) =
+      let%lwt env = Lazy.force frame.Frame.event.env in
+      let tbl =
+        match kind with
+        | `Stack -> frame.event.ev.ev_compenv.ce_stack
+        | `Heap -> frame.event.ev.ev_compenv.ce_heap
+      in
+      let get_rv pos =
+        match kind with
+        | `Stack ->
+            Debugcom.within_frame conn frame (fun conn ->
+                Debugcom.get_local conn (frame.event.ev.ev_stacksize - pos))
+        | `Heap -> Debugcom.get_environment conn pos
+      in
+      let iter f = tbl |> Ident.iter (fun id pos -> f (id, pos)) in
+      let to_value (id, pos) =
           let%lwt rv = get_rv pos in
           match env |> Env.find_value (Path.Pident id) with
           | exception Not_found -> Lwt.return None
@@ -477,11 +478,10 @@ let frame_variables agent frame kind =
               let ty = Ctype.correct_levels valdesc.val_type in
               let%lwt value = Value.adopt conn env ty rv in
               Lwt.return (Some (Ident.name id, value))
-        in
-        Iter.to_list iter
-        |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
-        |> Lwt_list.filter_map_s to_value )
-        [%finally Debugcom.set_frame conn frame0])
+      in
+      Iter.to_list iter
+      |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
+      |> Lwt_list.filter_map_s to_value)
 
 type frame_scope_kind = [ `Stack | `Heap ]
 

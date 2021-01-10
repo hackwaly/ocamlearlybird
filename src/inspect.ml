@@ -9,12 +9,14 @@ let run ~launch_args ~terminate ~agent rpc =
   ignore launch_args;
   ignore terminate;
   let frame_tbl = Hashtbl.create 0 in
+  let alloc_frame_id = Unique_id.make_alloc 1 in
   let alloc_handle = Unique_id.make_alloc 1 in
   let handle_tbl = Hashtbl.create 0 in
   Lwt.pause ();%lwt
   let process_status_changes () =
     let process status =
       Hashtbl.reset frame_tbl;
+      Hashtbl.reset handle_tbl;
       match status with
       | Unstarted -> Lwt.return ()
       | Exited _ ->
@@ -64,7 +66,6 @@ let run ~launch_args ~terminate ~agent rpc =
             let%lwt frame0 = Debugger.initial_frame agent in
             let rec walk frame =
               frames := frame :: !frames;
-              Hashtbl.replace frame_tbl frame.Frame.index frame;
               match arg.levels with
               | Some levels when levels <> 0 && frame.Frame.index + 1 >= levels
                 ->
@@ -87,11 +88,13 @@ let run ~launch_args ~terminate ~agent rpc =
                let source =
                  Source.(make ~path:module_.Debugger.Module.source ())
                in
+               let id = alloc_frame_id () in
+               Hashtbl.replace frame_tbl id fr;
                let frame =
                  let loc = Frame.loc fr in
                  Stack_frame.(
-                   make ~id:fr.index ~name:(Frame.defname fr)
-                     ~source:(Some source) ~line:loc.loc_start.pos_lnum
+                   make ~id ~name:(Frame.defname fr) ~source:(Some source)
+                     ~line:loc.loc_start.pos_lnum
                      ~column:(loc.loc_start.pos_cnum - loc.loc_start.pos_bol + 1)
                      ~end_line:(Some loc.loc_end.pos_lnum)
                      ~end_column:

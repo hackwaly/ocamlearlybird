@@ -14,11 +14,13 @@ let make_conn protocol_version symbols fd =
       io_in : Lwt_io.input_channel;
       io_out : Lwt_io.output_channel;
       symbols : Symbols.t;
-      mutex : Lwt_mutex.t option;
+      mutex : Lwt_mutex.t;
     }
 
     class c r =
-      object (self)
+      object
+        val r = r
+
         method io_in = r.io_in
 
         method io_out = r.io_out
@@ -29,14 +31,9 @@ let make_conn protocol_version symbols fd =
 
         method lock : 'a. (conn -> 'a Lwt.t) -> 'a Lwt.t =
           fun f ->
-            match r.mutex with
-            | Some mutex ->
-                Lwt_mutex.lock mutex;%lwt
-                (f (new c { r with mutex = None }))
-                  [%finally
-                    Lwt_mutex.unlock mutex;
-                    Lwt.return ()]
-            | None -> f (self :> conn)
+            Lwt_mutex.with_lock r.mutex (fun () ->
+                Lwt_unix.with_timeout 1.0 (fun () ->
+                    f (new c { r with mutex = Lwt_mutex.create () })))
       end
   end in
   let r =
@@ -45,7 +42,7 @@ let make_conn protocol_version symbols fd =
       io_in = Lwt_io.(of_fd ~mode:input fd);
       io_out = Lwt_io.(of_fd ~mode:output fd);
       symbols;
-      mutex = None;
+      mutex = Lwt_mutex.create ();
     }
   in
   (new L.c r :> conn)
@@ -199,3 +196,9 @@ let up_frame (conn : conn) frame =
 
 let set_frame (conn : conn) frame =
   conn#lock (fun conn -> Debugcom_basic.set_frame conn frame.Frame.stack_pos)
+
+let within_frame (conn : conn) frame f =
+  conn#lock (fun conn ->
+      let%lwt stack_pos, _ = Debugcom_basic.get_frame conn in
+      Debugcom_basic.set_frame conn frame.Frame.stack_pos;%lwt
+      (f conn) [%finally Debugcom_basic.set_frame conn stack_pos])
