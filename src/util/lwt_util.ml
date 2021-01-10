@@ -118,7 +118,3 @@ let file_content_and_bols =
 let digest_file =
   memo ~weight:String.length ~cap:(64 * 1024) (fun _rec path ->
       Lwt_preemptive.detach (fun path -> Digest.file path) path)
-
-(* This function is needed while Lwt_mvar.take_available may results mvar is still full *)
-let take_mvar_nonblocking var =
-  if not (Lwt_mvar.is_empty var) then Lwt_mvar.take var else Lwt.return ()
