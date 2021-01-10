@@ -16,29 +16,23 @@ let source_content t =
 
 let source_line_start t line =
   [%lwt assert (line >= 1)];%lwt
-  let%lwt _, bols =
-    Lwt_util.file_content_and_bols (t.source |> Option.get)
-  in
+  let%lwt _, bols = Lwt_util.file_content_and_bols (t.source |> Option.get) in
   Lwt.return bols.(line - 1)
 
 let source_line_length t line =
   [%lwt assert (line >= 1)];%lwt
-  let%lwt _, bols =
-    Lwt_util.file_content_and_bols (t.source |> Option.get)
-  in
+  let%lwt _, bols = Lwt_util.file_content_and_bols (t.source |> Option.get) in
   Lwt.return (bols.(line) - bols.(line - 1))
 
 let line_column_to_cnum t line column =
-  let%lwt _, bols =
-    Lwt_util.file_content_and_bols (t.source |> Option.get)
-  in
+  let%lwt _, bols = Lwt_util.file_content_and_bols (t.source |> Option.get) in
   let bol = bols.(line - 1) in
   let cnum = bol + column - 1 in
   Lwt.return cnum
 
 let to_seq_events m = m.events |> Array.to_seq
 
-let find_event t line column =
+let find_event_by_cnum t cnum =
   let expand_to_equivalent_range code cnum =
     (* TODO: Support skip comments *)
     let is_whitespace_or_semicolon c =
@@ -69,10 +63,12 @@ let find_event t line column =
       | `At i -> events.(i)
       | _ -> raise Not_found )
   in
-  let%lwt code, bols =
-    Lwt_util.file_content_and_bols (t.source |> Option.get)
-  in
+  let%lwt code, _ = Lwt_util.file_content_and_bols (t.source |> Option.get) in
+  find code t.events cnum
+
+let find_event t line column =
+  let%lwt _, bols = Lwt_util.file_content_and_bols (t.source |> Option.get) in
   let bol = bols.(line - 1) in
   let cnum = bol + column - 1 in
-  let%lwt ev = find code t.events cnum in
+  let%lwt ev = find_event_by_cnum t cnum in
   Lwt.return ev
