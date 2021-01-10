@@ -174,6 +174,11 @@ let start agent =
           report.Debugcom.rep_stack_pointer = stack_pos
           && report.rep_program_pointer = pc
     in
+    let is_terminated_report report =
+      match report.Debugcom.rep_type with
+      | Exited | Uncaught_exc -> true
+      | _ -> false
+    in
     let rec skip_pseudo_event report =
       let is_at_pseudo_event () =
         match
@@ -182,24 +187,14 @@ let start agent =
         | event -> Debug_event.is_pseudo event.ev
         | exception Not_found -> false
       in
-      let has_pc =
-        match report.Debugcom.rep_type with
-        | Exited | Uncaught_exc -> false
-        | _ -> true
-      in
-      if has_pc && is_at_pseudo_event () then (
+      if (not (is_terminated_report report)) && is_at_pseudo_event () then (
         Log.debug (fun m -> m "Pseudo event skipped");%lwt
         let%lwt report = Debugcom.go conn 1 in
         skip_pseudo_event report )
       else Lwt.return report
     in
     let rec stop_on_event report =
-      let has_pc =
-        match report.Debugcom.rep_type with
-        | Exited | Uncaught_exc -> false
-        | _ -> true
-      in
-      if not has_pc then Lwt.return report
+      if is_terminated_report report then Lwt.return report
       else
         match
           Symbols.find_event agent.symbols report.Debugcom.rep_program_pointer
@@ -340,21 +335,17 @@ let start agent =
     in
     let step_out = wrap_run internal_step_out in
     let internal_step_over () =
-      Log.debug (fun m -> m "internal_step_over 1");%lwt
-      let%lwt stack_pos1, pc1 = Debugcom_basic.get_frame conn in
-      Log.debug (fun m -> m "internal_step_over 2");%lwt
+      let%lwt frame = Debugcom.initial_frame conn in
+      let stack_pos1 = frame.Frame.stack_pos in
+      let pc1 = Frame.pc frame in
       let%lwt step_in_status = internal_step_in () in
-      Log.debug (fun m -> m "internal_step_over 3");%lwt
       match step_in_status with
       | { Debugcom.rep_type = Uncaught_exc | Exited; _ }, _ ->
           Lwt.return step_in_status
       | _ ->
           let%lwt stack_pos2, pc2 = Debugcom_basic.get_frame conn in
-          Log.debug (fun m -> m "internal_step_over 4");%lwt
           let ev1 = find_event agent pc1 in
-          Log.debug (fun m -> m "internal_step_over 5");%lwt
           let ev2 = find_event agent pc2 in
-          Log.debug (fun m -> m "internal_step_over 6");%lwt
           (* tailcallopt case *)
           let is_tco () =
             if
@@ -366,12 +357,35 @@ let start agent =
           let is_entered () =
             stack_pos2 - ev2.ev.ev_stacksize > stack_pos1 - ev1.ev.ev_stacksize
           in
-          if is_entered () || is_tco () then (
-            Log.debug (fun m -> m "internal_step_over 6");%lwt
-            internal_step_out () )
-          else (
-            Log.debug (fun m -> m "internal_step_over 7");%lwt
-            Lwt.return step_in_status )
+          (* NOTE: Compiler may inline some primitive call. So step_in may enter a call at middle of inline code.
+             We need check that step_out is really returned into the same module of execution point before step_over.
+             This is a weak check, we should employ better mechanism to solve this problem.
+             One possible mechanism is: Find out next point in syntactic way and set breakpoint on there. *)
+          let check_same_module report =
+            if is_terminated_report report then true
+            else
+              let is_wrong_loc_event event =
+                let loc = Debug_event.lexing_position event.Event.ev in
+                loc.pos_cnum = -1
+              in
+              match
+                Symbols.find_event agent.symbols report.rep_program_pointer
+              with
+              | exception Not_found -> true
+              | event when not (is_wrong_loc_event event) ->
+                  event.module_.id = frame.event.module_.id
+              | _ -> false
+          in
+          if is_entered () || is_tco () then
+            let%lwt report, status = internal_step_out () in
+            let rec aux (report, status) =
+              if check_same_module report then Lwt.return (report, status)
+              else
+                let%lwt report, status = internal_step_in () in
+                aux (report, status)
+            in
+            aux (report, status)
+          else Lwt.return step_in_status
     in
     let step_over = wrap_run internal_step_over in
     let stop () =
