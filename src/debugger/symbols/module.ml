@@ -33,7 +33,7 @@ let line_column_to_cnum t line column =
     Lwt_util.file_content_and_bols (t.source |> Option.get)
   in
   let bol = bols.(line - 1) in
-  let cnum = bol + column in
+  let cnum = bol + column - 1 in
   Lwt.return cnum
 
 let to_seq_events m = m.events |> Array.to_seq
@@ -73,6 +73,6 @@ let find_event t line column =
     Lwt_util.file_content_and_bols (t.source |> Option.get)
   in
   let bol = bols.(line - 1) in
-  let cnum = bol + column in
+  let cnum = bol + column - 1 in
   let%lwt ev = find code t.events cnum in
   Lwt.return ev

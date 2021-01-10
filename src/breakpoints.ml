@@ -47,7 +47,7 @@ let run ~launch_args ~terminate ~agent rpc =
                else pos.pos_lnum ))
           ~column:
             ( if is_line_brekpoint then None
-            else Some (pos.pos_cnum - pos.pos_bol) )
+            else Some (pos.pos_cnum - pos.pos_bol + 1) )
           ())
     else Breakpoint.make ~id:(Some desc.id) ~verified:false ()
   in
@@ -59,7 +59,7 @@ let run ~launch_args ~terminate ~agent rpc =
       in
       let%lwt event =
         Module.find_event module_ desc.src_bp.line
-          (desc.src_bp.column |> Option.value ~default:0)
+          (desc.src_bp.column |> Option.value ~default:1)
       in
       desc.resolved <- Some (module_, event);
       Debugger.set_breakpoint agent
