@@ -59,11 +59,18 @@ module Env = struct
                  | `Module -> env |> Env.find_module_address path
                in
                let pos =
-                 match addr with
-                 | Adot (_, pos) -> pos
-                 | _ -> raise Not_found
+                 match addr with Adot (_, pos) -> pos | _ -> raise Not_found
                in
                Some (kind, name, pos)
              with Not_found -> None),
       env )
 end
+
+let parse_impl =
+  Lwt_util.memo ~cap:64 (fun _rec path ->
+      let%lwt source, _ = Lwt_util.file_content_and_bols path in
+      Lwt_preemptive.detach
+        (fun source ->
+          let lexbuf = Lexing.from_string source in
+          Parse.implementation lexbuf)
+        source)
