@@ -1,0 +1,9 @@
+(library
+ (name trivia_check)
+ (libraries menhirLib))
+
+(ocamllex
+ (modules trivia_lexer))
+
+(menhir
+ (modules trivia_parser))

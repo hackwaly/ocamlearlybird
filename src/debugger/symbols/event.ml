@@ -19,7 +19,7 @@ let find_next_event prev =
 
     type ctx = { cur_cnum : int }
 
-    let rec iter_expr ctx it e =
+    let iter_expr ctx it e =
       if e.Parsetree.pexp_loc.loc_start.pos_cnum = ctx.cur_cnum then
         raise (Found_expr e)
       else if e.Parsetree.pexp_loc.loc_end.pos_cnum = ctx.cur_cnum then

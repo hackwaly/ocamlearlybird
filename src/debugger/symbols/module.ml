@@ -33,38 +33,35 @@ let line_column_to_cnum t line column =
 let to_seq_events m = m.events |> Array.to_seq
 
 let find_event_by_cnum t cnum =
-  let expand_to_equivalent_range code cnum =
-    (* TODO: Support skip comments *)
-    let is_whitespace_or_semicolon c =
-      match c with ' ' | '\t' | '\r' | '\n' | ';' -> true | _ -> false
-    in
-    assert (cnum >= 0 && cnum < String.length code);
-    let c = code.[cnum] in
-    if is_whitespace_or_semicolon c then
-      let rec aux f n =
-        let n' = f n in
-        let c = code.[n'] in
-        if is_whitespace_or_semicolon c then aux f n' else Lwt.return n
-      in
-      let%lwt l = aux (fun x -> x - 1) cnum in
-      let%lwt r = aux (fun x -> x + 1) cnum in
-      Lwt.return (l, r + 1)
-    else Lwt.return (cnum, cnum)
-  in
   let find code events cnum =
-    let%lwt l, r = expand_to_equivalent_range code cnum in
-    assert (l <= r);
     let cmp ev () =
       let ev_cnum = (Debug_event.lexing_position ev.Debuginfo.ev).pos_cnum in
-      if ev_cnum < l then -1 else if ev_cnum > r then 1 else 0
+      if ev_cnum < cnum then -1 else if ev_cnum > cnum then 1 else 0
     in
-    Lwt.return
-      ( match events |> Array_util.bsearch ~cmp () with
-      | `At i -> events.(i)
-      | _ -> raise Not_found )
+    let check i =
+      if i < 0 || i >= Array.length events then None
+      else
+        let ev = events.(i) in
+        let cnum' = (Debug_event.lexing_position ev.Debuginfo.ev).pos_cnum in
+        if cnum' = -1 then None
+        else if cnum' = cnum then Some ev
+        else
+          let str =
+            if cnum' < cnum then String.sub code cnum' (cnum - cnum')
+            else String.sub code cnum (cnum' - cnum)
+          in
+          if Trivia_check.check str then Some ev else None
+    in
+    match events |> Array_util.bsearch ~cmp () with
+    | `At i -> check i
+    | `All_lower -> check (Array.length events - 1)
+    | `Just_after i -> [ i; i + 1 ] |> List.find_map check
+    | _ -> None
   in
   let%lwt code, _ = Lwt_util.file_content_and_bols (t.source |> Option.get) in
-  find code t.events cnum
+  match find code t.events cnum with
+  | Some ev -> Lwt.return ev
+  | None -> raise Not_found
 
 let find_event t line column =
   let%lwt _, bols = Lwt_util.file_content_and_bols (t.source |> Option.get) in
