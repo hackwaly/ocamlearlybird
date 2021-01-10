@@ -174,12 +174,13 @@ let start agent =
           report.Debugcom.rep_stack_pointer = stack_pos
           && report.rep_program_pointer = pc
     in
-    let rec stop_on_event report =
+    let rec skip_pseudo_event report =
       let is_at_pseudo_event () =
-        let event =
+        match
           Symbols.find_event agent.symbols report.Debugcom.rep_program_pointer
-        in
-        Debug_event.is_pseudo event.ev
+        with
+        | event -> Debug_event.is_pseudo event.ev
+        | exception Not_found -> false
       in
       let has_pc =
         match report.Debugcom.rep_type with
@@ -189,8 +190,24 @@ let start agent =
       if has_pc && is_at_pseudo_event () then (
         Log.debug (fun m -> m "Pseudo event skipped");%lwt
         let%lwt report = Debugcom.go conn 1 in
-        stop_on_event report )
+        skip_pseudo_event report )
       else Lwt.return report
+    in
+    let rec stop_on_event report =
+      let has_pc =
+        match report.Debugcom.rep_type with
+        | Exited | Uncaught_exc -> false
+        | _ -> true
+      in
+      if not has_pc then Lwt.return report
+      else
+        match
+          Symbols.find_event agent.symbols report.Debugcom.rep_program_pointer
+        with
+        | _ -> Lwt.return report
+        | exception Not_found ->
+            let%lwt report = Debugcom.go conn 1 in
+            stop_on_event report
     in
     let check_stop report0 =
       [%lwt assert (is_running agent)];%lwt
@@ -279,7 +296,7 @@ let start agent =
     let run = wrap_run internal_run in
     let internal_step_in () =
       let%lwt report = Debugcom.go conn 1 in
-      let%lwt report = stop_on_event report in
+      let%lwt report = skip_pseudo_event report in
       Lwt.return
         ( report,
           match report.rep_type with
@@ -295,16 +312,14 @@ let start agent =
     in
     let step_in = wrap_run internal_step_in in
     let internal_step_out () =
-      let promise, resolver = Lwt.task () in
-      Debugcom.exec_with_frame conn 1 (fun frame ->
-          Lwt.wakeup_later resolver frame;
-          Lwt.return ());%lwt
-      let%lwt frame = promise in
-      match frame with
+      let%lwt stack_pos, pc = Debugcom_basic.get_frame conn in
+      let event = Symbols.find_event agent.symbols pc in
+      match%lwt
+        (Debugcom_basic.up_frame conn event.ev.ev_stacksize)
+          [%finally Debugcom_basic.set_frame conn stack_pos]
+      with
       | None -> internal_run ()
-      | Some frame ->
-          let stack_pos = frame.stack_pos in
-          let pc = Frame.pc frame in
+      | Some (stack_pos, pc) ->
           temporary_trap_barrier_and_breakpoint := Some (stack_pos, pc);
           let cleanup () =
             temporary_trap_barrier_and_breakpoint := None;

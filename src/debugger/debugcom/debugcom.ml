@@ -199,17 +199,3 @@ let up_frame (conn : conn) frame =
 
 let set_frame (conn : conn) frame =
   conn#lock (fun conn -> Debugcom_basic.set_frame conn frame.Frame.stack_pos)
-
-let exec_with_frame (conn : conn) index f =
-  conn#lock (fun conn ->
-      assert (index >= 0);
-      let rec walk cur frame =
-        if cur = index then Lwt.return (Some frame)
-        else
-          match%lwt up_frame conn frame with
-          | None -> Lwt.return None
-          | Some frame -> walk (cur + 1) frame
-      in
-      let%lwt frame0 = initial_frame conn in
-      let%lwt frame = walk 0 frame0 in
-      (f frame) [%finally set_frame conn frame0])
