@@ -90,6 +90,8 @@ let remove_breakpoint agent pc =
   Breakpoints.remove agent.breakpoints pc;
   agent.emit_action `Wakeup
 
+exception Exception_with_backtrace of exn * Printexc.raw_backtrace
+
 let exec_in_loop agent f =
   let promise, resolver = Lwt.task () in
   agent.pendings <-
@@ -99,13 +101,13 @@ let exec_in_loop agent f =
         Lwt.wakeup_later resolver r;
         Lwt.return ()
       with e ->
-        (* TODO: Find a way to make Lwt delay backtrace *)
-        Log.debug (fun m -> m "%s" (Printexc.get_backtrace ()));%lwt
-        Lwt.wakeup_later_exn resolver e;
+        Lwt.wakeup_later_exn resolver
+          (Exception_with_backtrace (e, Printexc.get_raw_backtrace ()));
         Lwt.return ())
     :: agent.pendings;
   agent.emit_action `Wakeup;
-  promise
+  try promise
+  with Exception_with_backtrace (e, bt) -> Printexc.raise_with_backtrace e bt
 
 let initial_frame agent =
   exec_in_loop agent (fun conn -> Debugcom.initial_frame conn)
@@ -471,13 +473,13 @@ let frame_variables agent frame kind =
       in
       let iter f = tbl |> Ident.iter (fun id pos -> f (id, pos)) in
       let to_value (id, pos) =
-          let%lwt rv = get_rv pos in
-          match env |> Env.find_value (Path.Pident id) with
-          | exception Not_found -> Lwt.return None
-          | valdesc ->
-              let ty = Ctype.correct_levels valdesc.val_type in
-              let%lwt value = Value.adopt conn env ty rv in
-              Lwt.return (Some (Ident.name id, value))
+        let%lwt rv = get_rv pos in
+        match env |> Env.find_value (Path.Pident id) with
+        | exception Not_found -> Lwt.return None
+        | valdesc ->
+            let ty = Ctype.correct_levels valdesc.val_type in
+            let%lwt value = Value.adopt conn env ty rv in
+            Lwt.return (Some (Ident.name id, value))
       in
       Iter.to_list iter
       |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
