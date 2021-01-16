@@ -35,6 +35,7 @@ let reset_instr conn pc =
 
 let checkpoint conn =
   assert (not Sys.win32);
+  Lwt_io.write_char conn#io_out 'c';%lwt
   let%lwt pid = Lwt_io.BE.read_int conn#io_in in
   if pid = -1 then Lwt.fail Checkpoint_failure else Lwt.return pid
 
