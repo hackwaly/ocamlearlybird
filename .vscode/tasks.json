@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "problemMatcher": [
+        "$ocamlc"
+      ],
+      "group": {
+        "isDefault": true,
+        "kind": "build"
+      },
+      "command": [
+        "dune",
+        "build"
+      ]
+    },
+    {
+      "label": "run main.bc",
+      "type": "shell",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "command": "dune exec src/main/main.bc -- serve --verbosity=debug --port=4712"
+    }
+  ]
+}

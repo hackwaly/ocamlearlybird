@@ -1,0 +1,8 @@
+(include_subdirs unqualified)
+
+(library
+ (name debugger)
+ (preprocess
+  (pps lwt_ppx ppx_deriving.show ppx_deriving.make))
+ (modules_without_implementation debug_types)
+ (libraries ground compiler-libs.common typenv trivia_check lwt lwt.unix lwt_react path_glob str iter))

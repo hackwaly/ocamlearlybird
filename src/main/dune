@@ -1,0 +1,17 @@
+(executable
+ (name main)
+ (modes byte native)
+ (preprocess
+  (pps lwt_ppx))
+ (libraries
+  ground
+  adapter
+  logs
+  logs.fmt
+  logs.cli
+  fmt
+  fmt.tty
+  fmt.cli
+  lwt
+  lwt.unix
+  cmdliner))

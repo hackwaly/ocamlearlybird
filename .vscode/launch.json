@@ -1,0 +1,22 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OCaml Debug",
+      "type": "ocaml",
+      "request": "launch",
+      "program": "${workspaceRoot}/_build/default/src/main/main.bc",
+      "arguments": [
+        "serve",
+        "--port=4711",
+        "--verbosity=debug"
+      ],
+      "stopOnEntry": false,
+      "yieldSteps": 4096,
+      "onlyDebugGlob": "<${workspaceRoot}/**/*>"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+(library
+ (name adapter)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson))
+ (libraries ground debugger dap.rpc_lwt lwt lwt.unix))

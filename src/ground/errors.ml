@@ -1,0 +1,5 @@
+exception Operation_system_unsupported
+
+exception Index_out_of_bound
+
+exception Invalid_state

@@ -1,0 +1,9 @@
+{
+  "[ocaml]": {
+    "editor.codeLens": false
+  },
+  "ocaml.sandbox": {
+    "kind": "opam",
+    "switch": "4.11.1"
+  }
+}
