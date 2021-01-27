@@ -6,6 +6,15 @@
 2. Install earlybird-411 and make sure ocamlearlybird in your PATH.
 3. Install vscode extension hackwaly/ocamlearlybird
 
+## How to install
+
+```
+git clone https://github.com/hackwaly/ocamlearlybird.git
+cd ocamlearlybird
+git checkout 411
+opam pin add .
+```
+
 ## Example launch configuration
 
 Used to debug utop examples.

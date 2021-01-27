@@ -20,6 +20,7 @@
     (ppx_deriving_yojson (>= 3.6.1))
     (menhir (and (>= 20201216) :build))
     (menhirLib (>= 20201216))
+    (iter (>= 1.2.1))
     (lwt (>= 5.4.0))
     (lwt_ppx (>= 2.0.1))
     (lwt_react (>= 1.1.3))
