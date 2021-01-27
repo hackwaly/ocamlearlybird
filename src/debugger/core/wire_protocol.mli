@@ -8,7 +8,7 @@ type execution_summary = [
   | `Exited
   | `Trap_barrier
   | `Uncaught_exc
-  | `Debug_info of (Instruct.debug_event list * string list) list
+  | `Debug_info of int Ident.Map.t * (Instruct.debug_event list * string list) list
   | `Code_loaded of int
   | `Code_unloaded of int
 ]

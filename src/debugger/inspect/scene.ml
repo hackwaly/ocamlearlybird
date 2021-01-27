@@ -42,7 +42,6 @@ let _get_frame symbols index (stack_pos, pc) =
   let typenv =
     Lazy.from_fun (fun () ->
         let event = event |> Option.get in
-        let symbols = symbols in
         let get_search_dirs module_id =
           let frag_num, _ = pc in
           let frag = Symbols.find_fragment symbols frag_num in
@@ -51,7 +50,22 @@ let _get_frame symbols index (stack_pos, pc) =
         in
         Typenv.from_summary ~get_search_dirs event.ev_typenv event.ev_typsubst)
   in
-  { Frame.index; stack_pos; pc; event; loc; typenv }
+  let globals =
+    Lazy.from_fun (fun () ->
+        let typenv = Lazy.force typenv in
+        let frag_num, _ = pc in
+        let frag = Symbols.find_fragment symbols frag_num in
+        frag.globals
+        |> Ident.Map.to_seq
+        |> Seq.filter (fun (name, _) ->
+               try
+                 typenv
+                 |> Typenv.is_structure_module
+                      (Path.Pident name)
+               with _ -> false)
+        |> List.of_seq)
+  in
+  { Frame.index; stack_pos; pc; event; loc; typenv; globals }
 
 let top_frame (c, time) =
   if time = _0 || c.dead then Lwt.return None
@@ -167,4 +181,7 @@ let get_closure_code (c, time) rv =
   match rv with
   | Local _ -> raise (Invalid_argument "rv")
   | Remote rv ->
-      _lock_conn (c, time) (fun conn -> Wire_protocol.get_closure_code conn rv)
+      _lock_conn (c, time) (fun conn ->
+          let%lwt pc = Wire_protocol.get_closure_code conn rv in
+          let event = Symbols.find_event_opt c.symbols pc in
+          Lwt.return (pc, event))

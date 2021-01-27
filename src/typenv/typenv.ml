@@ -26,10 +26,31 @@ let find_module_address path { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Env_hack.find_module_address path env
 
-let type_apply {env; get_search_dirs} =
+let find_modtype_expansion path { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Env_hack.find_modtype_expansion path env
+
+let is_structure_module path { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Env_hack.is_structure_module path env
+
+let add_module ?arg id presence mty { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  let env' = Env_hack.add_module ?arg id presence mty env in
+  { env = env'; get_search_dirs }
+
+let extract_modules path { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Env_hack.extract_modules path env
+
+let extract_values path { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Env_hack.extract_values path env
+
+let type_apply { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Ctype_hack.apply (Obj.magic env)
 
-let type_matches {env; get_search_dirs} =
+let type_matches { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Ctype_hack.matches (Obj.magic env)

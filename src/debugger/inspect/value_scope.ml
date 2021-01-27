@@ -2,35 +2,27 @@ open Ground
 open Value_basic
 open Frame
 
-class virtual scope_value scene frame =
-  object (self)
+class virtual scope_value =
+  object
     inherit value
 
     method to_short_string = "«scope»"
 
-    method virtual get_slot : int -> Scene.obj Lwt.t
-
-    method virtual variables : (string * Types.type_expr * int) array
-
-    method! num_named = Array.length self#variables
-
-    method! list_named =
-      let typenv = Lazy.force frame.typenv in
-      self#variables |> Array.to_seq |> List.of_seq
-      |> Lwt_list.map_s (fun (id, ty, pos) ->
-             let%lwt rv = self#get_slot pos in
-             let%lwt obj = adopt scene typenv rv ty in
-             Lwt.return (id, obj))
+    method! num_named = -1
   end
 
-class local_scope_value scene frame =
+class local_scope_value ~scene ~frame ~kind () =
   let variables =
     Lazy.from_fun (fun () ->
         match frame.event with
         | None -> [||]
         | Some event ->
             let typenv = Lazy.force frame.typenv in
-            let compenv = event.ev_compenv.ce_stack in
+            let compenv =
+              match kind with
+              | `Stack -> event.ev_compenv.ce_stack
+              | `Heap -> event.ev_compenv.ce_heap
+            in
             let iter f = compenv |> Ident.iter (fun id pos -> f (id, pos)) in
             Iter.to_list iter
             |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
@@ -44,9 +36,37 @@ class local_scope_value scene frame =
             |> Array.of_seq)
   in
   object
-    inherit scope_value scene frame
+    inherit scope_value
 
-    method get_slot i = Scene.get_local scene frame i
+    method! num_named = Lazy.force variables |> Array.length
 
-    method variables = Lazy.force variables
+    method! list_named =
+      let typenv = Lazy.force frame.typenv in
+      Lazy.force variables |> Array.to_list
+      |> Lwt_list.map_s (fun (id, ty, pos) ->
+             let%lwt rv =
+               match kind with
+               | `Stack -> Scene.get_local scene frame pos
+               | `Heap -> Scene.get_environment scene pos
+             in
+             let%lwt obj = adopt scene typenv rv ty in
+             Lwt.return (id, obj))
+  end
+
+class global_scope_value ~scene ~frame () =
+  object
+    inherit scope_value
+
+    method! list_named =
+      let typenv = Lazy.force frame.typenv in
+      Lazy.force frame.globals
+      |> Lwt_list.filter_map_s (fun (id, pos) ->
+             let%lwt obj = Scene.get_global scene pos in
+             if Scene.is_block obj then
+               Lwt.return
+                 (Some
+                    ( Ident.name id,
+                      new Value_module.module_value
+                        ~scene ~typenv ~obj ~path:(Path.Pident id) () ))
+             else Lwt.return None)
   end

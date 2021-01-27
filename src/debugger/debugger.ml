@@ -106,7 +106,9 @@ let get_frames ?start ?count t =
           _frame = frame;
           scopes =
             [
-              ("local", Inspect.local_scope scene frame);
+              ("Stack", Inspect.scope scene frame `Stack);
+              ("Heap", Inspect.scope scene frame `Heap);
+              ("Global", Inspect.scope scene frame `Global);
             ];
         }
       in

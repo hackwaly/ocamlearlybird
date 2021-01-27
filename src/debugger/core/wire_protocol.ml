@@ -46,16 +46,16 @@ let checkpoint conn =
       let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
       if pid = -1 then assert false else Lwt.return pid)
 
-type execution_summary = [
-  | `Event
+type execution_summary =
+  [ `Event
   | `Breakpoint
   | `Exited
   | `Trap_barrier
   | `Uncaught_exc
-  | `Debug_info of (Instruct.debug_event list * string list) list
+  | `Debug_info of
+    int Ident.Map.t * (Instruct.debug_event list * string list) list
   | `Code_loaded of int
-  | `Code_unloaded of int
-]
+  | `Code_unloaded of int ]
 
 let go conn steps =
   Lwt_conn.atomic conn (fun conn ->
@@ -72,12 +72,12 @@ let go conn steps =
             let%lwt (evls : Instruct.debug_event list array) =
               Lwt_io.read_value conn.io.in_
             in
-            let debug_info =
+            let evls =
               evls |> Array.to_seq
               |> Seq.map (fun evl -> (evl, []))
               |> List.of_seq
             in
-            Lwt.return (`Debug_info debug_info)
+            Lwt.return (`Debug_info (Ident.Map.empty, evls))
         | 'L' ->
             let%lwt frag_num = Lwt_io.BE.read_int conn.io.in_ in
             Lwt.return (`Code_loaded frag_num)
@@ -92,7 +92,7 @@ let go conn steps =
       Lwt.return
         ( executed_steps,
           summary,
-          (match (sp, pc) with 0, (-1, 0) -> None | _ -> Some (sp, pc)) ))
+          match (sp, pc) with 0, (-1, 0) -> None | _ -> Some (sp, pc) ))
 
 let wait conn =
   Lwt_conn.atomic conn (fun conn -> Lwt_io.write_char conn.io.out 'w')

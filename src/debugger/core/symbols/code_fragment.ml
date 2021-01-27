@@ -5,12 +5,14 @@ type t = {
   num : int;
   module_tbl : (string, Code_module.t) Hashtbl.t;
   event_tbl : (int, Instruct.debug_event) Hashtbl.t;
+  globals : int Ident.Map.t;
 }
 
 let make frag_num debug_info =
   let module_tbl = Hashtbl.create 0 in
   let event_tbl = Hashtbl.create 0 in
-  let frag = { num = frag_num; module_tbl; event_tbl } in
+  let globals, evls = debug_info in
+  let frag = { num = frag_num; module_tbl; event_tbl; globals } in
   let process_evl (evl, search_dirs) =
     let module_eq = Compare.by (fun ev -> ev.ev_module) |> Compare.to_equal in
     let process_module_evl evl =
@@ -35,7 +37,7 @@ let make frag_num debug_info =
     in
     evl |> List.group_consecutive module_eq |> List.iter process_module_evl
   in
-  debug_info |> List.iter process_evl;
+  evls |> List.iter process_evl;
   frag
 
 let find_module t module_id = Hashtbl.find t.module_tbl module_id

@@ -34,6 +34,15 @@ let load_debuginfo file =
     in
     seek_sec pos section_table
   in
+  let read_global_table ic toc =
+    let pos, _ = seek_section toc "SYMB" in
+    Lwt_io.set_position ic pos;%lwt
+    let module T = struct
+      type t = { cnt : int; tbl : int Ident.Map.t }
+    end in
+    let%lwt (global_table : T.t) = Lwt_io.read_value ic in
+    Lwt.return global_table.tbl
+  in
   let relocate_event orig ev =
     ev.Instruct.ev_pos <- orig + ev.Instruct.ev_pos;
     match ev.ev_repr with Event_parent repr -> repr := ev.ev_pos | _ -> ()
@@ -56,6 +65,7 @@ let load_debuginfo file =
   in
   let%lwt ic = Lwt_io.open_file ~mode:Lwt_io.input file in
   (let%lwt toc = read_toc ic in
+   let%lwt globals = read_global_table ic toc in
    let%lwt eventlists = read_eventlists ic toc in
-   Lwt.return eventlists)
+   Lwt.return (globals, eventlists))
     [%finally Lwt_io.close ic]
