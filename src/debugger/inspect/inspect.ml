@@ -7,7 +7,7 @@ type t =
   ; get_indexed : int -> t Lwt.t
   ; list_named : (string * t) list Lwt.t >
 
-let () = Value_basic.adopters := [ Value_simple.adopter ]
+let () = Value_basic.adopters := [ Value_simple.adopter; Value_struct.adopter ]
 
 let local_scope scene frame =
   (new Value_scope.local_scope_value scene frame :> t)

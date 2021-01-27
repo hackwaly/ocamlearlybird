@@ -130,6 +130,7 @@ let run ~launch_args ~dbg rpc =
                  num_indexed > 0 || num_named > 0 || num_named = -1
                in
                let handle = if is_complex then alloc_handle () else 0 in
+               Hashtbl.replace value_tbl handle value;
                Variable.make ~name ~value:value#to_short_string
                  ~variables_reference:handle
                  ~named_variables:

@@ -56,6 +56,6 @@ val get_header : Lwt_conn.t -> remote_value -> int Lwt.t
 
 val get_field : Lwt_conn.t -> remote_value -> int -> remote_value Lwt.t
 
-val marshal_obj : Lwt_conn.t -> remote_value -> Obj.t Lwt.t
+val marshal_obj : Lwt_conn.t -> remote_value -> 'a Lwt.t
 
 val get_closure_code : Lwt_conn.t -> remote_value -> pc Lwt.t

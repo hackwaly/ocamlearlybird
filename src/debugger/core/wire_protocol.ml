@@ -194,14 +194,10 @@ let get_field conn rv index =
 
 let marshal_obj conn rv =
   Lwt_conn.atomic conn (fun conn ->
-    Log.debug (fun m -> m "marshal_obj 1");
       Lwt_io.write_char conn.io.out 'M';%lwt
-    Log.debug (fun m -> m "marshal_obj 2");
       _write_remote_value conn rv;%lwt
-    Log.debug (fun m -> m "marshal_obj 3");
       let%lwt v = Lwt_io.read_value conn.io.in_ in
-    Log.debug (fun m -> m "marshal_obj 4");
-      Lwt.return (Obj.repr v))
+      Lwt.return v)
 
 let get_closure_code conn rv =
   Lwt_conn.atomic conn (fun conn ->

@@ -1,6 +1,7 @@
 type t = { env : Env_hack.t; get_search_dirs : string -> string list }
 
 let from_summary ~get_search_dirs summary subst =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
   Envaux_hack.reset_cache ();
   let env = Envaux_hack.env_from_summary summary subst in
   { env; get_search_dirs }

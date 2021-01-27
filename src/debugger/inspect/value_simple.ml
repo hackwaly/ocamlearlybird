@@ -12,7 +12,7 @@ class char_value v =
   object
     inherit value
 
-    method to_short_string = "'" ^ Char.escaped v ^ "^"
+    method to_short_string = "'" ^ Char.escaped v ^ "'"
   end
 
 class string_value v =
