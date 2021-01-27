@@ -89,7 +89,9 @@ let set_breakpoint t pc =
 
 let remove_breakpoint t pc =
   Wire_protocol.reset_instr t.conn pc;%lwt
-  Wire_protocol.set_event t.conn pc
+  Wire_protocol.set_event t.conn pc;%lwt
+  t.breakpoints <- PcSet_.remove pc t.breakpoints;
+  Lwt.return ()
 
 let stop ?(gracefully = false) t =
   if t.dead then Lwt.return ()

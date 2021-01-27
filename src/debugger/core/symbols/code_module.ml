@@ -49,20 +49,20 @@ let _find_event_index_by_cnum t cnum =
   in
   let content = _get_content t in
   match find content t.events cnum with
-  | Some i -> Lwt.return i
+  | Some i -> i
   | None -> raise Not_found
 
 let find_event t ~line ?(column = 1) () =
-  try%lwt
+  try
     let bols = _get_bols t in
     let bol = bols.(line - 1) in
     let cnum = bol + column - 1 in
-    let%lwt i = _find_event_index_by_cnum t cnum in
-    Lwt.return t.events.(i)
+    let i = _find_event_index_by_cnum t cnum in
+    t.events.(i)
   with No_source -> raise Not_found
 
 let find_events t ~line ?(column = 1) ?end_line ?end_column () =
-  try%lwt
+  try
     let bols = _get_bols t in
     let end_line = end_line |> Option.value ~default:line in
     let end_column =
@@ -76,5 +76,5 @@ let find_events t ~line ?(column = 1) ?end_line ?end_column () =
       |> Array.Sorted.slice_bs ~cmp (line, column) (end_line, end_column)
       |> Array.to_seq |> List.of_seq
     in
-    Lwt.return evl
+    evl
   with No_source -> raise Not_found

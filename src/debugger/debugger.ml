@@ -4,6 +4,7 @@ open Int64ops
 open Instruct
 open Frame
 module PcSet_ = Set.Make (Ordered_type.Make_tuple2 (Int) (Int))
+module IntMap_ = Map.Make (Int)
 
 type pc = int * int
 
@@ -30,11 +31,14 @@ type reason = Entry | Step | Breakpoint | Pause | Exited | Uncaught_exc
 
 type state = Running | Stopped of reason
 
-type breakpoint = {
+type source_breakpoint = {
   bp_id : int;
-  bp_loc : source_position;
-  bp_active : bool Lwt_react.S.t;
-  bp_set_active : bool -> unit;
+  mutable bp_loc : source_position;
+  mutable bp_resolved_loc : source_position;
+  mutable bp_pc : pc option;
+  mutable bp_active : bool;
+  mutable bp_version : int;
+  mutable bp_on_change : source_breakpoint -> unit Lwt.t;
 }
 
 type t = {
@@ -43,10 +47,11 @@ type t = {
   mutable interupt_flag : bool;
   state : state Lwt_react.S.t;
   set_state : state -> unit;
-  last_sync_symver : int;
-  mutable next_bp_id : int;
-  mutable breakpoints : breakpoint list;
-  mutable pending_breakpoints : breakpoint list;
+  mutable source_breakpoints : (int, source_breakpoint) Hashtbl.t;
+  mutable breakpoints : PcSet_.t;
+  mutable pc_to_bp : (pc, source_breakpoint) Hashtbl.t;
+  mutable bp_used_symver : int;
+  mutable bp_sync_requested : bool;
   mutable scene : Scene.t option;
 }
 
@@ -78,10 +83,11 @@ let init opts =
       interupt_flag = false;
       state;
       set_state;
-      last_sync_symver = -1;
-      next_bp_id = 0;
-      breakpoints = [];
-      pending_breakpoints = [];
+      source_breakpoints = Hashtbl.create 0;
+      breakpoints = PcSet_.empty;
+      pc_to_bp = Hashtbl.create 0;
+      bp_used_symver = -1;
+      bp_sync_requested = false;
       scene = None;
     }
 
@@ -145,27 +151,89 @@ let pause t =
   t.interupt_flag <- true;
   Lwt.return ()
 
-let _next_bp_id t =
-  let id = t.next_bp_id in
-  t.next_bp_id <- id + 1;
-  id
+let rec _sync_breakpoints t =
+  if t.bp_used_symver <> t.c.symbols.version then (
+    t.source_breakpoints |> Hashtbl.to_seq_values |> Seq.iter (_resolve_bp t);
+    t.bp_used_symver <- t.c.symbols.version );
+  let to_set = PcSet_.diff t.breakpoints t.c.breakpoints in
+  let to_unset = PcSet_.diff t.c.breakpoints t.breakpoints in
+  let set_bp pc =
+    Controller.set_breakpoint t.c pc;%lwt
+    let bp = Hashtbl.find t.pc_to_bp pc in
+    bp.bp_active <- true;
+    bp.bp_version <- bp.bp_version + 1;
+    bp.bp_on_change bp
+  in
+  let unset_bp pc =
+    Controller.remove_breakpoint t.c pc;%lwt
+    let bp = Hashtbl.find t.pc_to_bp pc in
+    bp.bp_active <- false;
+    bp.bp_version <- bp.bp_version + 1;
+    bp.bp_on_change bp
+  in
+  Log.debug (fun m ->
+      m "%s"
+        ([%show: (int * int) list] (to_unset |> PcSet_.to_seq |> List.of_seq)));
+  to_unset |> PcSet_.to_seq |> Lwt_seq.iter_s unset_bp;%lwt
+  to_set |> PcSet_.to_seq |> Lwt_seq.iter_s set_bp;%lwt
+  Lwt.return ()
 
-let set_breakpoint t source line column =
-  let bp_active, bp_set_active = Lwt_react.S.create false in
+and _schedule_sync_breakpoints t =
+  if not t.bp_sync_requested then (
+    t.bp_sync_requested <- true;
+    Lwt.async (fun () ->
+        t.bp_sync_requested <- false;
+        Lwt.pause ();%lwt
+        _sync_breakpoints t) )
+
+and _resolve_bp t bp =
+  match bp.bp_pc with
+  | Some ((frag_num, _) as pc) ->
+      if not (t.c.symbols.frags |> IntMap_.mem frag_num) then
+        t.breakpoints <- t.breakpoints |> PcSet_.remove pc
+  | None -> (
+      try
+        let module_ =
+          t.c.symbols |> Symbols.find_source_module bp.bp_loc.source
+        in
+        let line, column = bp.bp_loc.pos in
+        let event = Code_module.find_event module_ ~line ~column () in
+        let pc = (module_.frag, event.ev_pos) in
+        Hashtbl.replace t.pc_to_bp pc bp;
+        bp.bp_pc <- Some pc;
+        bp.bp_resolved_loc <- { bp.bp_loc with pos = Util.Debug_event.line_column event };
+        bp.bp_version <- bp.bp_version + 1;
+        bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
+        t.breakpoints <- t.breakpoints |> PcSet_.add pc;
+        _schedule_sync_breakpoints t
+      with _ -> () )
+
+let set_breakpoint t ~id ~source ~line ?(column = 0)
+    ?(on_change = fun _ -> Lwt.return ()) () =
+  let loc = { source; pos = (line, column); end_ = () } in
   let bp =
     {
-      bp_id = _next_bp_id t;
-      bp_loc = { source; pos = (line, column); end_ = () };
-      bp_active;
-      bp_set_active;
+      bp_id = id;
+      bp_loc = loc;
+      bp_resolved_loc = loc;
+      bp_pc = None;
+      bp_active = false;
+      bp_version = 0;
+      bp_on_change = on_change;
     }
   in
-  t.pending_breakpoints <- bp :: t.pending_breakpoints;
-  Lwt.return bp
+  Hashtbl.replace t.source_breakpoints id bp;
+  _resolve_bp t bp;
+  bp
 
-let _sync_breakpoints t =
-  ignore t;
-  Lwt.return ()
+let remove_breakpoint t bp =
+  ( match bp.bp_pc with
+  | Some pc ->
+      t.breakpoints <- t.breakpoints |> PcSet_.remove pc;
+      Hashtbl.remove t.pc_to_bp pc;
+      _schedule_sync_breakpoints t
+  | _ -> () );
+  Hashtbl.remove t.source_breakpoints bp.bp_id
 
 let _summary_to_reason summary =
   match summary with
