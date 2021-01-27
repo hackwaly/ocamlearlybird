@@ -14,6 +14,13 @@ class virtual value =
     method list_named : (string * value) list Lwt.t = Lwt.return []
   end
 
+let uninitialized_value =
+  object
+    inherit value
+
+    method to_short_string = "«uninitialized»"
+  end
+
 let unknown_value =
   object
     inherit value

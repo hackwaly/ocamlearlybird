@@ -50,17 +50,19 @@ class local_scope_value ~scene ~frame ~kind () =
                | `Heap -> Scene.get_environment scene frame pos
              in
              match val_kind with
-             | Types.Val_ivar (_, cl_num) ->
-                 let p0, _ =
-                   Typenv.find_value_by_name
-                     (Longident.Lident ("self-" ^ cl_num))
-                     typenv
-                 in
-                 let%lwt v = Eval.value_path scene frame p0 in
-                 let%lwt i = Scene.marshal_obj scene rv in
-                 let%lwt rv' = Scene.get_field scene v i in
-                 let%lwt obj = adopt scene typenv rv' ty in
-                 Lwt.return (id, obj)
+             | Types.Val_ivar (_, cl_num) -> (
+                 try
+                   let p0, _ =
+                     Typenv.find_value_by_name
+                       (Longident.Lident ("self-" ^ cl_num))
+                       typenv
+                   in
+                   let%lwt v = Eval.value_path scene frame p0 in
+                   let%lwt i = Scene.marshal_obj scene rv in
+                   let%lwt rv' = Scene.get_field scene v i in
+                   let%lwt obj = adopt scene typenv rv' ty in
+                   Lwt.return (id, obj)
+                 with _ -> Lwt.return (id, uninitialized_value) )
              | _ ->
                  let%lwt obj = adopt scene typenv rv ty in
                  Lwt.return (id, obj))
