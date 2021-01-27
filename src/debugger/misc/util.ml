@@ -17,7 +17,7 @@ module Debug_event = struct
 end
 
 module Source_resolver = struct
-  let default module_id search_dirs =
+  let resolve ?(filter = fun _ -> true) module_id search_dirs =
     let derive_source_ids id =
       let id' = Str.split (Str.regexp "__") id |> List.rev |> List.hd in
       if id' <> id then [ id; id' ] else [ id ]
@@ -35,25 +35,26 @@ module Source_resolver = struct
                         dir ^ "/" ^ id ^ ".ml";
                         dir ^ "/" ^ id ^ ".re";
                       ]))
-      |> List.of_seq |> Lwt.return
+      |> Seq.filter filter |> List.of_seq |> Lwt.return
     in
     let%lwt source_paths = derive_source_paths module_id search_dirs in
     match%lwt source_paths |> Lwt_list.find_s Lwt_unix.file_exists with
     | source -> Lwt.return (Some source)
     | exception Not_found -> Lwt.return None
 
-  let make ?only_debug_glob () =
-    let check_debug_glob source =
+  let default module_id search_dirs = resolve module_id search_dirs
+
+  let make ?(source_dirs = []) ?only_debug_glob () =
+    let filter source =
       match only_debug_glob with
       | None -> true
       | Some glob -> Glob.eval glob source
     in
-    let resolve module_id search_dirs =
-      match%lwt default module_id search_dirs with
-      | Some source when check_debug_glob source -> Lwt.return (Some source)
-      | _ -> Lwt.return None
+    let resolver module_id search_dirs =
+      let search_dirs = (search_dirs @ source_dirs) |> List.uniq in
+      resolve ~filter module_id search_dirs
     in
-    resolve
+    resolver
 end
 
 module Path = struct

@@ -91,6 +91,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
          ~symbols_file:
            (launch_args.symbols |> Option.value ~default:launch_args.program)
          ?yield_steps:launch_args.yield_steps
+         ~source_dirs:launch_args.source_dirs
          ~only_debug_glob:
            ( match launch_args.only_debug_glob with
            | Some only_debug_glob -> (

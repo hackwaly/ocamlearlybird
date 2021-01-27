@@ -36,3 +36,7 @@ let group_consecutive p l =
   let dummy = Acc.dummy () in
   loop dummy l;
   dummy.tl
+
+let uniq_cons x xs = if List.mem x xs then xs else x :: xs
+
+let uniq xs = List.fold_right uniq_cons xs []

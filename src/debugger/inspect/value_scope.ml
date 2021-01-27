@@ -30,9 +30,9 @@ class local_scope_value ~scene ~frame ~kind () =
             |> Seq.filter_map (fun (id, pos) ->
                    match typenv |> Typenv.find_value (Path.Pident id) with
                    | exception Not_found -> None
-                   | { val_type; _ } ->
+                   | { val_type; val_kind; _ } ->
                        let ty = Ctype.correct_levels val_type in
-                       Some (Ident.name id, ty, pos))
+                       Some (Ident.name id, val_kind, ty, pos))
             |> Array.of_seq)
   in
   object
@@ -43,14 +43,27 @@ class local_scope_value ~scene ~frame ~kind () =
     method! list_named =
       let typenv = Lazy.force frame.typenv in
       Lazy.force variables |> Array.to_list
-      |> Lwt_list.map_s (fun (id, ty, pos) ->
+      |> Lwt_list.map_s (fun (id, val_kind, ty, pos) ->
              let%lwt rv =
                match kind with
                | `Stack -> Scene.get_local scene frame pos
-               | `Heap -> Scene.get_environment scene pos
+               | `Heap -> Scene.get_environment scene frame pos
              in
-             let%lwt obj = adopt scene typenv rv ty in
-             Lwt.return (id, obj))
+             match val_kind with
+             | Types.Val_ivar (_, cl_num) ->
+                 let p0, _ =
+                   Typenv.find_value_by_name
+                     (Longident.Lident ("self-" ^ cl_num))
+                     typenv
+                 in
+                 let%lwt v = Eval.value_path scene frame p0 in
+                 let%lwt i = Scene.marshal_obj scene rv in
+                 let%lwt rv' = Scene.get_field scene v i in
+                 let%lwt obj = adopt scene typenv rv' ty in
+                 Lwt.return (id, obj)
+             | _ ->
+                 let%lwt obj = adopt scene typenv rv ty in
+                 Lwt.return (id, obj))
   end
 
 class global_scope_value ~scene ~frame () =
@@ -59,7 +72,11 @@ class global_scope_value ~scene ~frame () =
 
     method! list_named =
       let typenv = Lazy.force frame.typenv in
-      Lazy.force frame.globals
+      Lazy.force frame.globals |> Ident.Map.to_seq
+      |> Seq.filter (fun (name, _) ->
+             try typenv |> Typenv.is_structure_module (Path.Pident name)
+             with _ -> false)
+      |> List.of_seq
       |> Lwt_list.filter_map_s (fun (id, pos) ->
              let%lwt obj = Scene.get_global scene pos in
              if Scene.is_block obj then

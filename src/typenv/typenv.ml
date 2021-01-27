@@ -10,6 +10,10 @@ let find_value path { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Env_hack.find_value path env
 
+let find_value_by_name name { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Env_hack.find_value_by_name name env
+
 let find_type path { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Env_hack.find_type path env

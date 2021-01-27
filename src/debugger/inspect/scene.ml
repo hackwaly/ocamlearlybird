@@ -52,14 +52,9 @@ let _get_frame symbols index (stack_pos, pc) =
   in
   let globals =
     Lazy.from_fun (fun () ->
-        let typenv = Lazy.force typenv in
         let frag_num, _ = pc in
         let frag = Symbols.find_fragment symbols frag_num in
-        frag.globals |> Ident.Map.to_seq
-        |> Seq.filter (fun (name, _) ->
-               try typenv |> Typenv.is_structure_module (Path.Pident name)
-               with _ -> false)
-        |> List.of_seq)
+        frag.globals)
   in
   { Frame.index; stack_pos; pc; event; loc; typenv; globals }
 
@@ -120,9 +115,14 @@ let get_local (c, time) frame index =
       in
       Lwt.return (Remote rv))
 
-let get_environment (c, time) index =
+let get_environment (c, time) frame index =
   _lock_conn (c, time) (fun conn ->
-      let%lwt rv = Wire_protocol.get_environment conn index in
+      let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
+      let%lwt rv =
+        ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
+          Wire_protocol.get_environment conn index)
+          [%finally Wire_protocol.set_frame conn stack_pos0]
+      in
       Lwt.return (Remote rv))
 
 let get_global (c, time) index =

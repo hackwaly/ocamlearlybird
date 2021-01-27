@@ -23,6 +23,7 @@ type options = {
   symbols_file : string;
   follow_fork_mode : [ `Fork_parent | `Fork_child ]; [@default `Fork_child]
   yield_steps : int; [@default Int.max_int]
+  source_dirs : string list; [@default []]
   only_debug_glob : Glob.globber option; [@default None]
 }
 [@@deriving make]

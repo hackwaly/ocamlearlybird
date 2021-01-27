@@ -5,7 +5,7 @@ class virtual struct_value ~scene ~typenv ~obj ~pos ~unboxed ~members =
   object
     inherit value
 
-    method! num_named = List.length members
+    method! num_named = if Scene.is_block obj then List.length members else 0
 
     method! list_named =
       if unboxed then

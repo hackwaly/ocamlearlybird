@@ -102,12 +102,10 @@ let run ~launch_args ~dbg rpc =
         | None -> Lwt.return []
         | Some value -> (
             match arg.filter with
-            | None | Some Named ->
-                assert (
-                  value#num_indexed = 0
-                  && arg.start |> Option.is_none
-                  && arg.count |> Option.is_none );
+            | None ->
+                assert (value#num_indexed = 0);
                 value#list_named
+            | Some Named -> value#list_named
             | Some Indexed ->
                 let start = arg.start |> Option.value ~default:0 in
                 let end_ =

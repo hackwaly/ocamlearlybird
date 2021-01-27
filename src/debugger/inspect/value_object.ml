@@ -27,7 +27,7 @@ class object_value ~scene ~typenv ~obj ~members () =
         Lwt.return method'
       in
       members
-      |> Lwt_list.map_s (fun (name, ty) ->
+      |> Lwt_list.map_s (fun (name, _, ty) ->
              let ty =
                Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, ty, Cok))
              in
@@ -39,13 +39,6 @@ class object_value ~scene ~typenv ~obj ~members () =
 let adopter scene typenv obj ty =
   match (Ctype.repr ty).desc with
   | Tobject (fields_ty, _) ->
-      let rec aux r fields_ty =
-        match fields_ty.Types.desc with
-        | Types.Tfield (name, _, ty', fields_ty) ->
-            aux ((name, ty') :: r) fields_ty
-        | Tnil -> r
-        | _ -> assert false
-      in
-      let members = aux [] fields_ty in
+      let members, _ = Ctype.flatten_fields fields_ty in
       Lwt.return (Some (new object_value ~scene ~typenv ~obj ~members ()))
   | _ -> Lwt.return None
