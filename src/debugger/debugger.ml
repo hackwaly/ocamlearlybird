@@ -171,9 +171,6 @@ let rec _sync_breakpoints t =
     bp.bp_version <- bp.bp_version + 1;
     bp.bp_on_change bp
   in
-  Log.debug (fun m ->
-      m "%s"
-        ([%show: (int * int) list] (to_unset |> PcSet_.to_seq |> List.of_seq)));
   to_unset |> PcSet_.to_seq |> Lwt_seq.iter_s unset_bp;%lwt
   to_set |> PcSet_.to_seq |> Lwt_seq.iter_s set_bp;%lwt
   Lwt.return ()
