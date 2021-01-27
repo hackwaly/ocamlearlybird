@@ -55,13 +55,9 @@ let _get_frame symbols index (stack_pos, pc) =
         let typenv = Lazy.force typenv in
         let frag_num, _ = pc in
         let frag = Symbols.find_fragment symbols frag_num in
-        frag.globals
-        |> Ident.Map.to_seq
+        frag.globals |> Ident.Map.to_seq
         |> Seq.filter (fun (name, _) ->
-               try
-                 typenv
-                 |> Typenv.is_structure_module
-                      (Path.Pident name)
+               try typenv |> Typenv.is_structure_module (Path.Pident name)
                with _ -> false)
         |> List.of_seq)
   in
@@ -184,4 +180,4 @@ let get_closure_code (c, time) rv =
       _lock_conn (c, time) (fun conn ->
           let%lwt pc = Wire_protocol.get_closure_code conn rv in
           let event = Symbols.find_event_opt c.symbols pc in
-          Lwt.return (pc, event))
+          Lwt.return (event |> Option.map (fun event -> (fst pc, event))))

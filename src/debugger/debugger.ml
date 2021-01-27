@@ -166,10 +166,12 @@ let rec _sync_breakpoints t =
   in
   let unset_bp pc =
     Controller.remove_breakpoint t.c pc;%lwt
-    let bp = Hashtbl.find t.pc_to_bp pc in
-    bp.bp_active <- false;
-    bp.bp_version <- bp.bp_version + 1;
-    bp.bp_on_change bp
+    match Hashtbl.find_opt t.pc_to_bp pc with
+    | Some bp ->
+        bp.bp_active <- false;
+        bp.bp_version <- bp.bp_version + 1;
+        bp.bp_on_change bp
+    | None -> Lwt.return ()
   in
   to_unset |> PcSet_.to_seq |> Lwt_seq.iter_s unset_bp;%lwt
   to_set |> PcSet_.to_seq |> Lwt_seq.iter_s set_bp;%lwt
@@ -198,7 +200,8 @@ and _resolve_bp t bp =
         let pc = (module_.frag, event.ev_pos) in
         Hashtbl.replace t.pc_to_bp pc bp;
         bp.bp_pc <- Some pc;
-        bp.bp_resolved_loc <- { bp.bp_loc with pos = Util.Debug_event.line_column event };
+        bp.bp_resolved_loc <-
+          { bp.bp_loc with pos = Util.Debug_event.line_column event };
         bp.bp_version <- bp.bp_version + 1;
         bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
         t.breakpoints <- t.breakpoints |> PcSet_.add pc;
@@ -231,6 +234,17 @@ let remove_breakpoint t bp =
       _schedule_sync_breakpoints t
   | _ -> () );
   Hashtbl.remove t.source_breakpoints bp.bp_id
+
+let breakpoint_locations t source ~line ?column ?end_line ?end_column () =
+  try
+    let module_ = t.c.symbols |> Symbols.find_source_module source in
+    let events =
+      Code_module.find_events module_ ~line ?column ?end_line ?end_column ()
+    in
+    events
+    |> List.map (fun event ->
+           { source; pos = Util.Debug_event.line_column event; end_ = () })
+  with Not_found -> []
 
 let _summary_to_reason summary =
   match summary with

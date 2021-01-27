@@ -32,6 +32,25 @@ let adopters =
         list )
 
 let adopt scene typenv obj ty =
+  let rec resolve_type ty =
+    match (Ctype.repr ty).desc with
+    | Tlink ty | Tsubst ty | Tpoly (ty, _) -> resolve_type ty
+    | Tconstr (path, ty_args, _) -> (
+        match Typenv.find_type path typenv with
+        | exception Not_found -> ty
+        | {
+         type_kind = Type_abstract;
+         type_manifest = Some body;
+         type_params;
+         _;
+        } -> (
+            match Typenv.type_apply typenv type_params body ty_args with
+            | ty -> resolve_type ty
+            | exception Ctype.Cannot_apply -> ty )
+        | _ -> ty )
+    | _ -> ty
+  in
+  let ty = resolve_type ty in
   try%lwt
     !adopters |> List.to_seq
     |> Lwt_seq.find_map_s (fun adopter -> adopter scene typenv obj ty)

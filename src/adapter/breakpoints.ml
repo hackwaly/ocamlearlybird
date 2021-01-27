@@ -81,6 +81,18 @@ let run ~launch_args ~dbg rpc =
   Debug_rpc.set_command_handler rpc
     (module Breakpoint_locations_command)
     (fun arg ->
-      ignore arg;
-      Lwt.return Breakpoint_locations_command.Result.(make ~breakpoints:[] ()));
+      let breakpoints =
+        Debugger.breakpoint_locations dbg
+          (arg.source.path |> Option.get)
+          ~line:arg.line ?column:arg.column ?end_line:arg.end_line
+          ?end_column:arg.end_column ()
+      in
+      let breakpoints =
+        breakpoints
+        |> List.map (fun loc ->
+               Breakpoint_location.make ~line:(fst loc.pos)
+                 ~column:(Some (snd loc.pos))
+                 ())
+      in
+      Lwt.return Breakpoint_locations_command.Result.(make ~breakpoints ()));
   Lwt.join []
