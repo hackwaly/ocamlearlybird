@@ -15,6 +15,10 @@ git checkout 411
 opam pin add .
 ```
 
+## Quick debug
+
+You can select context menu "Start an OCaml Debug Session" on bytecode file in vscode explorer to quickly start an debug session.
+
 ## Example launch configuration
 
 Used to debug utop examples.
