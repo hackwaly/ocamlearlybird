@@ -72,9 +72,16 @@ type frame = {
 }
 
 let init opts =
-  let { only_debug_glob; debug_sock; symbols_file; _ } = opts in
-  let source_resolver = Util.Source_resolver.make ?only_debug_glob () in
-  let%lwt c = Controller.root ~source_resolver debug_sock symbols_file in
+  let { source_dirs; debug_sock; symbols_file; _ } = opts in
+  let source_resolver = Util.Source_resolver.make ~source_dirs () in
+  let debug_filter source =
+    match opts.only_debug_glob with
+    | Some globber -> Glob.eval globber source
+    | None -> true
+  in
+  let%lwt c =
+    Controller.root ~source_resolver ~debug_filter debug_sock symbols_file
+  in
   Controller.set_follow_fork_mode c opts.follow_fork_mode;%lwt
   let state, set_state = Lwt_react.S.create (Stopped Entry) in
   Lwt.return
@@ -187,27 +194,28 @@ and _schedule_sync_breakpoints t =
         _sync_breakpoints t) )
 
 and _resolve_bp t bp =
-  match bp.bp_pc with
-  | Some ((frag_num, _) as pc) ->
-      if not (t.c.symbols.frags |> IntMap_.mem frag_num) then
-        t.breakpoints <- t.breakpoints |> PcSet_.remove pc
-  | None -> (
-      try
-        let module_ =
-          t.c.symbols |> Symbols.find_source_module bp.bp_loc.source
-        in
-        let line, column = bp.bp_loc.pos in
-        let event = Code_module.find_event module_ ~line ~column () in
-        let pc = (module_.frag, event.ev_pos) in
-        Hashtbl.replace t.pc_to_bp pc bp;
-        bp.bp_pc <- Some pc;
-        bp.bp_resolved_loc <-
-          { bp.bp_loc with pos = Util.Debug_event.line_column event };
-        bp.bp_version <- bp.bp_version + 1;
-        bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
-        t.breakpoints <- t.breakpoints |> PcSet_.add pc;
-        _schedule_sync_breakpoints t
-      with _ -> () )
+  if t.c.symbols.debug_filter bp.bp_loc.source then
+    match bp.bp_pc with
+    | Some ((frag_num, _) as pc) ->
+        if not (t.c.symbols.frags |> IntMap_.mem frag_num) then
+          t.breakpoints <- t.breakpoints |> PcSet_.remove pc
+    | None -> (
+        try
+          let module_ =
+            t.c.symbols |> Symbols.find_source_module bp.bp_loc.source
+          in
+          let line, column = bp.bp_loc.pos in
+          let event = Code_module.find_event module_ ~line ~column () in
+          let pc = (module_.frag, event.ev_pos) in
+          Hashtbl.replace t.pc_to_bp pc bp;
+          bp.bp_pc <- Some pc;
+          bp.bp_resolved_loc <-
+            { bp.bp_loc with pos = Util.Debug_event.line_column event };
+          bp.bp_version <- bp.bp_version + 1;
+          bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
+          t.breakpoints <- t.breakpoints |> PcSet_.add pc;
+          _schedule_sync_breakpoints t
+        with _ -> () )
 
 let set_breakpoint t ~id ~source ~line ?(column = 0)
     ?(on_change = fun _ -> Lwt.return ()) () =

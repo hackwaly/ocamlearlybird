@@ -7,12 +7,14 @@ type t = {
   conn : Lwt_conn.t;
   symbols : Symbols.t;
   mutable breakpoints : Set.Make(Ordered_type.Make_tuple2(Int)(Int)).t;
+  mutable debug_modules : Set.Make(Ordered_type.Make_tuple2(Int)(String)).t;
   mutable time : int64;
   mutable dead : bool;
 }
 
 val root :
   ?source_resolver:(string -> string list -> string option Lwt.t) ->
+  ?debug_filter:(string -> bool) ->
   Lwt_unix.file_descr ->
   string ->
   t Lwt.t

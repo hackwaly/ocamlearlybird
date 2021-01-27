@@ -2,6 +2,7 @@ open Ground
 
 type t = {
   source_resolver : string -> string list -> string option Lwt.t;
+  debug_filter : string -> bool;
   mutable frags : Code_fragment.t Map.Make(Int).t;
   mutable source_modules : Code_module.t Map.Make(String).t;
   mutable version : int;
@@ -11,9 +12,11 @@ type t = {
 module IntMap_ = Map.Make (Int)
 module StringMap_ = Map.Make (String)
 
-let create ?(source_resolver = Util.Source_resolver.default) () =
+let create ?(source_resolver = Util.Source_resolver.default)
+    ?(debug_filter = fun _ -> true) () =
   {
     source_resolver;
+    debug_filter;
     frags = IntMap_.empty;
     source_modules = StringMap_.empty;
     version = 0;
@@ -26,7 +29,8 @@ let add_fragment t frag =
   let resolve_module (module_ : Code_module.t) =
     match%lwt t.source_resolver module_.module_id module_.search_dirs with
     | Some source_path ->
-        t.source_modules <- t.source_modules |> StringMap_.add source_path module_;
+        t.source_modules <-
+          t.source_modules |> StringMap_.add source_path module_;
         let%lwt source = Source.from_path source_path in
         module_.source <- Some source;
         Lwt.return ()
@@ -54,8 +58,7 @@ let find_event t (frag_num, code_pos) =
   let frag = find_fragment t frag_num in
   Hashtbl.find frag.event_tbl code_pos
 
-let find_event_opt t pc =
-  try Some (find_event t pc) with Not_found -> None
+let find_event_opt t pc = try Some (find_event t pc) with Not_found -> None
 
 let to_fragments_seq t = t.frags |> IntMap_.to_seq |> Seq.map snd
 

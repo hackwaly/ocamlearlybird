@@ -4,6 +4,7 @@ open Int64ops
 open Instruct
 module StringMap_ = Map.Make (String)
 module PcSet_ = Set.Make (Ordered_type.Make_tuple2 (Int) (Int))
+module FragModuleIdSet_ = Set.Make (Ordered_type.Make_tuple2 (Int) (String))
 
 type t = {
   parent : t option;
@@ -11,6 +12,7 @@ type t = {
   conn : Lwt_conn.t;
   symbols : Symbols.t;
   mutable breakpoints : PcSet_.t;
+  mutable debug_modules : FragModuleIdSet_.t;
   mutable time : int64;
   mutable dead : bool;
 }
@@ -23,14 +25,24 @@ type execution_summary =
   | `Uncaught_exc
   | `Yield_stop of int ]
 
-let _set_frag_events conn frag =
-  frag |> Code_fragment.to_source_modules_seq
+let _set_frag_events symbols conn frag =
+  let debug_modules =
+    frag |> Code_fragment.to_source_modules_seq
+    |> Seq.filter (fun it ->
+           symbols.Symbols.debug_filter
+             (it.Code_module.source |> Option.get).path)
+  in
+  debug_modules
   |> Seq.flat_map (fun (module_ : Code_module.t) ->
          module_.events |> Array.to_seq
          |> Seq.map (fun it -> (module_.frag, it.ev_pos)))
-  |> Lwt_seq.iter_s (Wire_protocol.set_event conn)
+  |> Lwt_seq.iter_s (Wire_protocol.set_event conn);%lwt
+  Lwt.return
+    ( debug_modules
+    |> Seq.map (fun (it : Code_module.t) -> (it.frag, it.module_id))
+    |> FragModuleIdSet_.of_seq )
 
-let root ?source_resolver debug_sock symbols_file =
+let root ?source_resolver ?debug_filter debug_sock symbols_file =
   let%lwt fd, _ = Lwt_unix.accept debug_sock in
   let conn = Lwt_conn.of_fd fd in
   let%lwt neg1 = Lwt_io.BE.read_int conn.io.in_ in
@@ -38,9 +50,9 @@ let root ?source_resolver debug_sock symbols_file =
   let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
   let%lwt debug_info = Bytecode.load_debuginfo symbols_file in
   let frag = Code_fragment.make 0 debug_info in
-  let symbols = Symbols.create ?source_resolver () in
+  let symbols = Symbols.create ?source_resolver ?debug_filter () in
   Symbols.add_fragment symbols frag;%lwt
-  _set_frag_events conn frag;%lwt
+  let%lwt debug_modules = _set_frag_events symbols conn frag in
   Lwt.return
     {
       parent = None;
@@ -48,6 +60,7 @@ let root ?source_resolver debug_sock symbols_file =
       conn;
       symbols;
       breakpoints = PcSet_.empty;
+      debug_modules;
       time = _0;
       dead = false;
     }
@@ -72,6 +85,7 @@ let fork t debug_sock =
       conn;
       symbols = Symbols.dup t.symbols;
       breakpoints = t.breakpoints;
+      debug_modules = t.debug_modules;
       time = t.time;
       dead = false;
     }
@@ -139,10 +153,15 @@ let execute ?(yield_steps = Int.max_int)
         last_debug_info := None;
         let frag = Code_fragment.make frag_num debug_info in
         Symbols.add_fragment t.symbols frag;%lwt
-        _set_frag_events t.conn frag;%lwt
+        let%lwt debug_modules = _set_frag_events t.symbols t.conn frag in
+        t.debug_modules <- FragModuleIdSet_.union t.debug_modules debug_modules;
         exec_dynlink remaining_steps
     | `Code_unloaded frag_num ->
         Symbols.remove_fragment t.symbols frag_num;
+        t.debug_modules <-
+          t.debug_modules
+          |> FragModuleIdSet_.filter (fun (frag_num', _) ->
+                 frag_num' <> frag_num);
         exec_dynlink remaining_steps
     | #execution_summary as summary ->
         Lwt.return (summary, remaining_steps, sp_pc)
