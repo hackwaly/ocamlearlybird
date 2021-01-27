@@ -16,6 +16,8 @@ let () =
       Value_array.adopter;
       Value_func.adopter;
       Value_module.adopter;
+      Value_object.adopter;
+      Value_lazy.adopter;
     ]
 
 let scope scene frame kind =

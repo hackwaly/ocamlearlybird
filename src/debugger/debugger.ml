@@ -105,11 +105,14 @@ let get_frames ?start ?count t =
           loc = frame.loc;
           _frame = frame;
           scopes =
-            [
-              ("Stack", Inspect.scope scene frame `Stack);
-              ("Heap", Inspect.scope scene frame `Heap);
-              ("Global", Inspect.scope scene frame `Global);
-            ];
+            ( match frame.event with
+            | Some _ ->
+                [
+                  ("Stack", Inspect.scope scene frame `Stack);
+                  ("Heap", Inspect.scope scene frame `Heap);
+                  ("Global", Inspect.scope scene frame `Global);
+                ]
+            | None -> [] );
         }
       in
       let frames = Scene.frames scene |> Lwt_stream.map repr_frame in
