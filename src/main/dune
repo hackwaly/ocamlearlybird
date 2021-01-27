@@ -15,3 +15,7 @@
   lwt
   lwt.unix
   cmdliner))
+
+(install
+ (section bin)
+ (files (main.exe as ocamlearlybird)))
