@@ -1,0 +1,166 @@
+{
+  "private": true,
+  "name": "ocamlearlybird",
+  "displayName": "OCaml Debugger",
+  "description": "OCaml debugger. Powered by ocamlearlybird.",
+  "version": "1.0.0",
+  "publisher": "hackwaly",
+  "engines": {
+    "vscode": "^1.52.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hackwaly/ocamlearlybird.git"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "main": "extension.js",
+  "activationEvents": [
+    "onDebugResolve:ocaml",
+    "onDebugInitialConfigurations",
+    "onDebugDynamicConfigurations",
+    "onCommand:ocamlDebugger.startDebug",
+    "onCustomEditor:ocamlDebugger.bytecode"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "ocamlDebugger.bytecode",
+        "displayName": "OCaml Bytecode",
+        "selector": [
+          {
+            "filenamePattern": "*.bc"
+          },
+          {
+            "filenamePattern": "a.out"
+          },
+          {
+            "filenamePattern": "*.d.byte"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "ocamlDebugger.startDebug",
+        "title": "Start an OCaml Debug Session"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceExtname =~ /.bc$|a.out$|.d.byte$/",
+          "command": "ocamlDebugger.startDebug"
+        }
+      ]
+    },
+    "breakpoints": [
+      {
+        "language": "ocaml"
+      },
+      {
+        "language": "reason"
+      },
+      {
+        "language": "ocamllex"
+      },
+      {
+        "language": "menhir"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "ocaml",
+        "label": "OCaml 4.11+",
+        "runtime": "node",
+        "program": "debug.js",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "noDebug": {
+                "type": "boolean",
+                "default": false
+              },
+              "cwd": {
+                "type": "string",
+                "description": "The working directory for debuggee program."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables passed to the debuggee program.",
+                "default": {}
+              },
+              "program": {
+                "type": "string",
+                "description": "The path of debuggee program."
+              },
+              "symbols": {
+                "type": "string",
+                "description": "The path to optional OCaml debug symbols .cds file."
+              },
+              "source_dirs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The path to search sources.",
+                "default": []
+              },
+              "onlyDebugGlob": {
+                "type": "string",
+                "description": "Only debug sources which match `onlyDebugGlob`.",
+                "default": "true"
+              },
+              "followForkMode": {
+                "enum": [
+                  "forkChild",
+                  "forkParent"
+                ],
+                "description": "Set which process the debugger follows on fork.",
+                "default": "forkParent"
+              },
+              "yieldSteps": {
+                "type": "number",
+                "description": "Max steps to execute in batch. Debugger can not response other requests when executing steps in batch.",
+                "default": 4096
+              },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The command-line arguments for the debuggee program.",
+                "default": []
+              },
+              "console": {
+                "enum": [
+                  "internalConsole",
+                  "integratedTerminal",
+                  "externalTerminal"
+                ],
+                "description": "Where to launch the debug target: internal console, integrated terminal, or external terminal.",
+                "default": "internalConsole"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": false
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.22",
+    "@types/vscode": "^1.52.0"
+  }
+}

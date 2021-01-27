@@ -92,6 +92,10 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
            (launch_args.symbols |> Option.value ~default:launch_args.program)
          ?yield_steps:launch_args.yield_steps
          ~source_dirs:launch_args.source_dirs
+         ~follow_fork_mode:
+           ( match launch_args.follow_fork_mode with
+           | Fork_parent -> `Fork_parent
+           | Fork_child -> `Fork_child )
          ~only_debug_glob:
            ( match launch_args.only_debug_glob with
            | Some only_debug_glob -> (
