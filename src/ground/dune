@@ -2,4 +2,4 @@
  (name ground)
  (preprocess
   (pps lwt_ppx))
- (libraries logs global lru))
+ (libraries logs global))

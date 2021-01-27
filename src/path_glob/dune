@@ -1,0 +1,8 @@
+(ocamllex lexer)
+
+(library
+ (name path_glob)
+ (synopsis "Globbing for path names"))
+
+(documentation
+ (mld_files index))

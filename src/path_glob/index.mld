@@ -1,0 +1,40 @@
+{0 Path_glob: checking glob patterns on paths.}
+
+[Path_glob] is a small library to match strings (in particular
+filesystem paths) against glob-style patterns, or boolean combinations
+of patterns.
+
+{[
+open Path_glob
+
+(* paths starting with 'foo/' or ending with a '.ml' extension *)
+let globber = Glob.parse "<foo/**> or <**/*.ml>"
+
+let () =
+    assert (Glob.eval globber "foo/blah" = true);
+    assert (Glob.eval globber "bar/blah/baz" = false);
+    assert (Glob.eval globber "bar/blah/baz.ml" = true);
+]}
+
+[Path_glob] was extracted from the
+{{:https://github.com/ocaml/ocamlbuild}ocamlbuild} sources. In
+ocamlbuild it is used in _tags file, to apply tags on files based on
+a globbing pattern, for example:
+
+{v
+<**/*.ml> or <**/*.mli>: warn_L, warn_R, warn_Z, annot
+"src/discard_printf.ml": rectypes
+<**/*.byte> or <**/*.native> or <**/*.top>: use_unix
+<**/*.cmx>: for-pack(Ocamlbuild_pack)
+<**/{ocamlbuild_{pack,unix_plugin,plugin,executor},ppcache}{,.p}.cmx>: -for-pack(Ocamlbuild_pack)
+v}
+
+Modules:
+{ul
+  {- {!Path_glob.Glob}: the main entry point of the module,
+    which includes a documentation of the glob pattern syntax.}
+  {- {!Path_glob.Ast}: abstract syntax trees for glob patterns [<...>].}
+  {- {!Path_glob.Formula}: boolean combinations of glob patterns
+      ([true], [false], [and], [or], [not]).}
+  {- {!Path_glob.Lexer}: a lexer function for glob formulas. }
+}
