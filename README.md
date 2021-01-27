@@ -12,7 +12,7 @@
 git clone https://github.com/hackwaly/ocamlearlybird.git
 cd ocamlearlybird
 git checkout 411
-opam pin add .
+opam install .
 ```
 
 ## Quick debug
