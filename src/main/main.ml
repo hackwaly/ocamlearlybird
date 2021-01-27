@@ -33,7 +33,7 @@ let setup_log =
 
 let debug_command =
   let debug () = Lwt_main.run (debug ()) in
-  Term.(const debug $ setup_log, info "debug")
+  Term.(const debug $ const (), info "debug")
 
 let serve_command =
   let port_arg = Arg.(value & opt int 4711 & info [ "port" ]) in
