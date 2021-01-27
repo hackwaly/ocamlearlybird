@@ -2,6 +2,7 @@ open Ground
 open Path_glob
 open Int64ops
 open Instruct
+open Frame
 module PcSet_ = Set.Make (Ordered_type.Make_tuple2 (Int) (Int))
 
 type pc = int * int
@@ -96,11 +97,11 @@ let get_frames ?start ?count t =
       let repr_frame frame =
         let name =
           let open Option in
-          let* event = frame.Frame.event in
+          let* event = frame.event in
           return event.ev_defname
         in
         {
-          index = frame.Frame.index;
+          index = frame.index;
           name;
           loc = frame.loc;
           _frame = frame;
@@ -263,11 +264,35 @@ let next t =
         is_entered || is_tco
       in
       match (frame0, frame1) with
-      | ( Some { stack_pos = stack_pos1; event = Some e1; _ },
+      | ( Some ({ stack_pos = stack_pos1; event = Some e1; _ } as frame0),
           Some ({ stack_pos = stack_pos2; event = Some e2; _ } as frame1) )
         when should_go_out (stack_pos1, e1) (stack_pos2, e2) -> (
           let%lwt frame2 = Scene.next_frame (t.c, t.c.time) frame1 in
           match frame2 with
-          | Some frame2 -> _go_out t (frame2.stack_pos, frame2.pc)
+          | Some frame2 ->
+              (* NOTE: Compiler may inline some primitive call. So step_in may enter a call at middle of inline code.
+                 We need check that step_out is really returned into the same module of execution point before step_over.
+                 This is a weak check, we could employ better mechanism to solve this problem.
+                 One possible mechanism is: Find out next point in syntactic way and set breakpoint on there. *)
+              let rec goto_same_module frame0 summary =
+                let is_same_module frame1 frame2 =
+                  match (frame1, frame2) with
+                  | ( { pc = frag1, _; Frame.event = Some e1; _ },
+                      { pc = frag2, _; Frame.event = Some e2; _ } ) ->
+                      frag1 = frag2 && e1.ev_module = e2.ev_module
+                  | _ -> false
+                in
+                match summary with
+                | `Event -> (
+                    match%lwt Scene.top_frame (t.c, t.c.time) with
+                    | Some frame when is_same_module frame0 frame ->
+                        Lwt.return summary
+                    | _ ->
+                        let%lwt summary, _, _ = Controller.execute t.c _1 in
+                        goto_same_module frame0 summary )
+                | _ -> Lwt.return summary
+              in
+              let%lwt summary = _go_out t (frame2.stack_pos, frame2.pc) in
+              goto_same_module frame0 summary
           | None -> Lwt.return summary )
       | _ -> Lwt.return summary)
