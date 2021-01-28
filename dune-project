@@ -12,7 +12,8 @@
 
 (package
   (name earlybird-411)
-  (synopsis "OCaml debug adapter for OCaml 4.11")
+  (synopsis "Debug adapter for OCaml 4.11")
+  (description "Debug adapter for OCaml 4.11.")
   (depends
     (ocaml (and (>= 4.11.0) (< 4.12.0)))
     (ppx_deriving (>= 5.1))
