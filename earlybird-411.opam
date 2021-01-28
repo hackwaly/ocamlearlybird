@@ -37,3 +37,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
+dev-repo: "git+https://github.com/hackwaly/ocamlearlybird.git"
