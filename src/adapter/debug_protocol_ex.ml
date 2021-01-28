@@ -49,6 +49,7 @@ module Launch_command = struct
       follow_fork_mode : Follow_fork_mode.t; [@default Follow_fork_mode.Fork_parent] [@key "followForkMode"]
       only_debug_glob : string option; [@default None] [@key "onlyDebugGlob"]
       yield_steps : int option; [@default None] [@key "yieldSteps"]
+      _debug_log : string option; [@default None] [@key "_debugLog"]
     }
     [@@deriving yojson { strict = false }]
   end

@@ -32,12 +32,8 @@ let setup_log =
   Term.(const setup_log $ Fmt_cli.style_renderer () $ Logs_cli.level ())
 
 let debug_command =
-  Logs.set_level (Some Debug);
-  let file = open_out "/Users/wenyuxiang/Sandbox/debug-ocaml/debug.log" in
-  let fmt = Format.formatter_of_out_channel file in
-  Logs.set_reporter (Logs_fmt.reporter ~app:fmt ~dst:fmt ());
   let debug () = Lwt_main.run (debug ()) in
-  Term.(const debug $ const (), info "debug")
+  Term.(const debug $ setup_log, info "debug")
 
 let serve_command =
   let port_arg = Arg.(value & opt int 4711 & info [ "port" ]) in
