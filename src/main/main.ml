@@ -32,7 +32,7 @@ let setup_log =
   Term.(const setup_log $ Fmt_cli.style_renderer () $ Logs_cli.level ())
 
 let debug_command =
-  Logs.set_level None;
+  Logs.set_reporter Logs.nop_reporter;
   let debug () = Lwt_main.run (debug ()) in
   Term.(const debug $ const (), info "debug")
 
