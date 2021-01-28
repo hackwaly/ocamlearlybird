@@ -3,7 +3,7 @@
   "name": "ocamlearlybird",
   "displayName": "OCaml Debugger",
   "description": "OCaml debugger. Powered by ocamlearlybird.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "hackwaly",
   "engines": {
     "vscode": "^1.52.0"
@@ -17,30 +17,13 @@
   ],
   "main": "extension.js",
   "activationEvents": [
-    "onDebugResolve:ocaml",
+    "onDebugResolve:ocamlearlybird",
     "onDebugInitialConfigurations",
     "onDebugDynamicConfigurations",
     "onCommand:ocamlDebugger.startDebug",
     "onCustomEditor:ocamlDebugger.bytecode"
   ],
   "contributes": {
-    "customEditors": [
-      {
-        "viewType": "ocamlDebugger.bytecode",
-        "displayName": "OCaml Bytecode",
-        "selector": [
-          {
-            "filenamePattern": "*.bc"
-          },
-          {
-            "filenamePattern": "a.out"
-          },
-          {
-            "filenamePattern": "*.d.byte"
-          }
-        ]
-      }
-    ],
     "commands": [
       {
         "command": "ocamlDebugger.startDebug",
@@ -71,12 +54,10 @@
     ],
     "debuggers": [
       {
-        "type": "ocaml",
-        "label": "OCaml 4.11+",
-        "program": "/Users/wenyuxiang/.opam/4.11.1/bin/ocamlearlybird",
-        "args": [
-          "debug"
-        ],
+        "type": "ocamlearlybird",
+        "label": "OCaml 4.11",
+        "runtime": "node",
+        "program": "./extension.js",
         "configurationAttributes": {
           "launch": {
             "required": [
@@ -102,10 +83,6 @@
               "program": {
                 "type": "string",
                 "description": "The path of debuggee program."
-              },
-              "symbols": {
-                "type": "string",
-                "description": "The path to optional OCaml debug symbols .cds file."
               },
               "source_dirs": {
                 "type": "array",
@@ -154,6 +131,10 @@
                 "type": "boolean",
                 "description": "Automatically stop after launch.",
                 "default": false
+              },
+              "_debugLog": {
+                "type": "string",
+                "description": "File to Log debug messages."
               }
             }
           }

@@ -35,7 +35,6 @@ module Launch_command = struct
     end
 
     type t = {
-      no_debug : bool; [@default false] [@key "noDebug"]
       __restart : Yojson.Safe.t option; [@default None]
       name : string option; [@default None]
       cwd : string option; [@default None]
@@ -43,7 +42,6 @@ module Launch_command = struct
       stop_on_entry : bool; [@default false] [@key "stopOnEntry"]
       program : string;
       arguments : string list; [@default []]
-      symbols : string option; [@default None]
       console : Console.t; [@default Console.Integrated_terminal]
       source_dirs : string list; [@default []]
       follow_fork_mode : Follow_fork_mode.t; [@default Follow_fork_mode.Fork_parent] [@key "followForkMode"]

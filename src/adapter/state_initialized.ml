@@ -94,8 +94,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
   let%lwt dbg =
     Debugger.init
       (Debugger.make_options ~debug_sock
-         ~symbols_file:
-           (launch_args.symbols |> Option.value ~default:launch_args.program)
+         ~symbols_file:launch_args.program
          ?yield_steps:launch_args.yield_steps
          ~source_dirs:launch_args.source_dirs
          ~follow_fork_mode:
