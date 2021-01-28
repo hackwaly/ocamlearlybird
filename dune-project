@@ -2,7 +2,6 @@
 (using menhir 2.1)
 
 (name earlybird-411)
-(version 1.0.0)
 
 (generate_opam_files true)
 (authors hackwaly@qq.com)
