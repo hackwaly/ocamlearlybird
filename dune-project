@@ -6,6 +6,7 @@
 (generate_opam_files true)
 (authors hackwaly@qq.com)
 (maintainers hackwaly@qq.com)
+(source (github hackwaly/ocamlearlybird))
 
 (homepage https://github.com/hackwaly/ocamlearlybird)
 (bug_reports https://github.com/hackwaly/ocamlearlybird/issues)
