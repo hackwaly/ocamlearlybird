@@ -73,8 +73,10 @@
       {
         "type": "ocaml",
         "label": "OCaml 4.11+",
-        "runtime": "node",
-        "program": "debug.js",
+        "program": "/Users/wenyuxiang/.opam/4.11.1/bin/ocamlearlybird",
+        "args": [
+          "debug"
+        ],
         "configurationAttributes": {
           "launch": {
             "required": [
