@@ -268,6 +268,7 @@ let _wrap_run t f =
   if Controller.is_busy t.c || t.c.dead then Lwt.return ()
   else (
     Lwt.async (fun () ->
+        Lwt.pause ();%lwt
         _sync_breakpoints t;%lwt
         t.scene <- None;
         t.set_state Running;
