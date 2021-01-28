@@ -120,7 +120,7 @@ let get_environment (c, time) frame index =
       let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
       let%lwt rv =
         ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
-          Wire_protocol.get_environment conn index)
+          Wire_protocol.get_environment conn index )
           [%finally Wire_protocol.set_frame conn stack_pos0]
       in
       Lwt.return (Remote rv))
@@ -130,7 +130,13 @@ let get_global (c, time) index =
       let%lwt rv = Wire_protocol.get_global conn index in
       Lwt.return (Remote rv))
 
+let is_block rv =
+  match rv with
+  | Local v -> Obj.is_block v
+  | Remote rv -> Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
+
 let get_field (c, time) rv index =
+  if not (is_block rv) then failwith "get_field";
   match rv with
   | Local v -> Lwt.return (Local (Obj.field v index))
   | Remote rv ->
@@ -139,11 +145,6 @@ let get_field (c, time) rv index =
           | rv' -> Lwt.return (Remote rv')
           | exception Wire_protocol.Float_field v ->
               Lwt.return (Local (Obj.repr v)))
-
-let is_block rv =
-  match rv with
-  | Local v -> Obj.is_block v
-  | Remote rv -> Obj.is_block (Array.unsafe_get (Obj.magic rv : Obj.t array) 0)
 
 let get_tag (c, time) rv =
   match rv with
