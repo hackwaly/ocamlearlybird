@@ -265,16 +265,17 @@ let _summary_to_reason summary =
   | `Uncaught_exc -> Uncaught_exc
 
 let _wrap_run t f =
-  assert ((not (Controller.is_busy t.c)) && not t.c.dead);
-  Lwt.async (fun () ->
-      _sync_breakpoints t;%lwt
-      t.scene <- None;
-      t.set_state Running;
-      let%lwt summary = f () in
-      if not t.c.dead then t.scene <- Some (Scene.from_controller t.c);
-      t.set_state (Stopped (_summary_to_reason summary));
-      Lwt.return ());
-  Lwt.return ()
+  if Controller.is_busy t.c || t.c.dead then Lwt.return ()
+  else (
+    Lwt.async (fun () ->
+        _sync_breakpoints t;%lwt
+        t.scene <- None;
+        t.set_state Running;
+        let%lwt summary = f () in
+        if not t.c.dead then t.scene <- Some (Scene.from_controller t.c);
+        t.set_state (Stopped (_summary_to_reason summary));
+        Lwt.return ());
+    Lwt.return () )
 
 let run t =
   _wrap_run t (fun () ->
@@ -328,13 +329,15 @@ let _go_out t (stack_pos, pc) =
   loop ()
 
 let step_out t =
-  assert ((not (Controller.is_busy t.c)) && not t.c.dead);
-  let frames = Scene.frames (t.c, t.c.time) in
-  Lwt_stream.junk frames;%lwt
-  let%lwt frame1 = Lwt_stream.get frames in
-  match frame1 with
-  | None -> failwith "Cannot step out"
-  | Some frame -> _wrap_run t (fun () -> _go_out t (frame.stack_pos, frame.pc))
+  if Controller.is_busy t.c || t.c.dead then Lwt.return ()
+  else
+    let frames = Scene.frames (t.c, t.c.time) in
+    Lwt_stream.junk frames;%lwt
+    let%lwt frame1 = Lwt_stream.get frames in
+    match frame1 with
+    | None -> failwith "Cannot step out"
+    | Some frame ->
+        _wrap_run t (fun () -> _go_out t (frame.stack_pos, frame.pc))
 
 let next t =
   _wrap_run t (fun () ->
