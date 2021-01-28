@@ -35,9 +35,6 @@ let run ~launch_args ~dbg rpc =
             (module Stopped_event)
             Stopped_event.Payload.(make ~reason:Pause ~thread_id:(Some 0) ())
     in
-    Debug_rpc.send_event rpc
-      (module Stopped_event)
-      Stopped_event.Payload.(make ~reason:Entry ~thread_id:(Some 0) ());%lwt
     Debugger.state dbg |> Lwt_react.S.changes |> Lwt_react.E.to_stream
     |> Lwt_stream.iter_s process
   in

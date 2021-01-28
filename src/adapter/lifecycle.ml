@@ -10,7 +10,11 @@ let run ~launch_args ~dbg rpc =
     (module Configuration_done_command)
     (fun _ ->
       let open Launch_command.Arguments in
-      if not launch_args.stop_on_entry then Debugger.run dbg else Lwt.return ());
+      if not launch_args.stop_on_entry then Debugger.run dbg
+      else
+        Debug_rpc.send_event rpc
+          (module Stopped_event)
+          Stopped_event.Payload.(make ~reason:Entry ~thread_id:(Some 0) ()));
   Debug_rpc.set_command_handler rpc
     (module Terminate_command)
     (fun _ ->
