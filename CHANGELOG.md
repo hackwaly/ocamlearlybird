@@ -1,3 +1,3 @@
-# 1.0.0-beta.0
+# 1.0.0~beta1
 
 Initial release.

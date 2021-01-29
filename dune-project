@@ -1,7 +1,7 @@
 (lang dune 2.8)
 (using menhir 2.1)
 
-(name earlybird-411)
+(name earlybird)
 
 (generate_opam_files true)
 (authors hackwaly@qq.com)
@@ -12,7 +12,7 @@
 (bug_reports https://github.com/hackwaly/ocamlearlybird/issues)
 
 (package
-  (name earlybird-411)
+  (name earlybird)
   (synopsis "Debug adapter for OCaml 4.11")
   (description "Debug adapter for OCaml 4.11.")
   (depends

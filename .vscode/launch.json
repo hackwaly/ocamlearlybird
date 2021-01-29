@@ -6,7 +6,7 @@
   "configurations": [
     {
       "name": "OCaml Debug",
-      "type": "ocaml",
+      "type": "ocamlearlybird",
       "request": "launch",
       "program": "${workspaceRoot}/_build/default/src/main/main.bc",
       "arguments": [
