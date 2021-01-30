@@ -38,7 +38,7 @@ const debugConfigProvider = {
     if (!config.type) {
       config = {
         name: '${fileBasename}',
-        type: 'ocaml',
+        type: 'ocamlearlybird',
         request: 'launch',
         program: '${file}',
       };
@@ -60,14 +60,14 @@ module.exports = {
       const folder = vscode.workspace.getWorkspaceFolder(uri);
       await vscode.debug.startDebugging(folder, {
         name: Path.basename(uri.fsPath),
-        type: "ocaml",
+        type: "ocamlearlybird",
         request: "launch",
         stopOnEntry: true,
         yieldSteps: 4096,
         program: uri.fsPath,
       });
     }));
-    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('ocaml', debugConfigProvider));
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('ocamlearlybird', debugConfigProvider));
   },
   deactivate() {}
 };
