@@ -6,15 +6,6 @@
 2. Install earlybird and make sure ocamlearlybird in your PATH.
 3. Install vscode extension hackwaly/ocamlearlybird
 
-## How to install
-
-```
-git clone https://github.com/hackwaly/ocamlearlybird.git
-cd ocamlearlybird
-git checkout 411
-opam install .
-```
-
 ## Quick debug
 
 You can select context menu "Start an OCaml Debug Session" on bytecode file in vscode explorer to quickly start an debug session.
