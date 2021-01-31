@@ -23,7 +23,7 @@ Used to debug utop examples.
     "configurations": [
         {
             "name": "test_program",
-            "type": "ocamlEarlybird",
+            "type": "ocamlearlybird",
             "request": "launch",
             "stopOnEntry": true,
             "console": "integratedTerminal",
