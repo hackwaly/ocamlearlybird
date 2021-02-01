@@ -12,7 +12,7 @@ You can select context menu "Start an OCaml Debug Session" on bytecode file in v
 
 ## Example
 
-https://i.imgur.com/U3GDHXM.mp4
+![Debug utop](https://i.imgur.com/U3GDHXM.gif)
 
 ## Example launch configuration
 
