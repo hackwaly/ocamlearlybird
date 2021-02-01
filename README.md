@@ -10,6 +10,10 @@
 
 You can select context menu "Start an OCaml Debug Session" on bytecode file in vscode explorer to quickly start an debug session.
 
+## Example
+
+[!Debug utop](_assets/utop.webp)
+
 ## Example launch configuration
 
 Used to debug utop examples.
