@@ -12,7 +12,7 @@ You can select context menu "Start an OCaml Debug Session" on bytecode file in v
 
 ## Example
 
-![Debug utop](https://media.githubusercontent.com/media/hackwaly/ocamlearlybird/master/_assets/ocamlearlybird-debugging-utop-demo.gif)
+https://i.imgur.com/U3GDHXM.mp4
 
 ## Example launch configuration
 
