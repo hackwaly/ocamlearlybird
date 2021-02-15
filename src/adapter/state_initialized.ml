@@ -89,7 +89,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
   let open Initialize_command.Arguments in
   if launch_args._debug_log |> Option.is_some then (
     Logs.set_level (Some Debug);
-    let file = open_out "/Users/wenyuxiang/Sandbox/debug-ocaml/debug.log" in
+    let file = open_out (launch_args._debug_log |> Option.get) in
     let fmt = Format.formatter_of_out_channel file in
     Logs.set_reporter (Logs_fmt.reporter ~app:fmt ~dst:fmt ());
   );
