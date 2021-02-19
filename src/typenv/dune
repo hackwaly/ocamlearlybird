@@ -1,3 +1,4 @@
 (library
  (name typenv)
+ (flags (:standard -w "-9"))
  (libraries compiler-libs.common))
