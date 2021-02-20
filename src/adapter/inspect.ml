@@ -123,15 +123,16 @@ let run ~launch_args ~dbg rpc =
             | Some Indexed ->
                 let start = arg.start |> Option.value ~default:0 in
                 let end_ =
-                  match arg.count with
+                  (match arg.count with
                   | Some count -> start + count
-                  | None -> value#num_indexed - 1
+                  | None -> value#num_indexed)
+                  - 1
                 in
                 Seq.int_range ~start ~end_ ()
                 |> List.of_seq
                 |> Lwt_list.map_s (fun i ->
                        let%lwt obj = value#get_indexed i in
-                       Lwt.return (string_of_int i, obj)) )
+                       Lwt.return (string_of_int i, obj)))
       in
       let variables =
         variables

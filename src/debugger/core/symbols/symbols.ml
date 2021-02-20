@@ -44,7 +44,6 @@ let dup t = { t with dummy = () }
 
 let add_fragment t frag =
   let resolve_module_source module_id search_dirs =
-    Log.debug (fun m -> m "%s %s" module_id ([%show: string list] search_dirs));
     let search_dirs =
       match t.get_source_dir module_id with
       | Some dir -> [ dir ]

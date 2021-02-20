@@ -31,6 +31,7 @@ let rec find_map_opt f seq =
   | Seq.Cons (hd, tl) -> (
       match f hd with Some r -> Some r | None -> find_map_opt f tl )
 
+(* end_ is inclusive *)
 let int_range ?(start = 0) ?end_ () =
   let i = ref start in
   let rec next () =
