@@ -9,6 +9,7 @@ Beta2 release.
 ## Fixed
 
 * Fix variables pane sometimes flooding by `Typenv__Envaux_hack.Error(...)`.
+* Fix inspect array variables cause infinite loading.
 
 # 1.0.0
 
