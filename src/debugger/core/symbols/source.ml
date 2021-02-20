@@ -15,7 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *)
 
-type t = { path : string; content : string; bols : int array }
+type t = {
+  path : string;
+  content : string;
+  bols : int array;
+  digest : Digest.t;
+}
 
 let from_path path =
   let%lwt content =
@@ -27,4 +32,4 @@ let from_path path =
     if content.[i] = '\n' then bols := (i + 1) :: !bols
   done;
   let bols = !bols |> List.rev |> Array.of_list in
-  Lwt.return { path; content; bols }
+  Lwt.return { path; content; bols; digest = Digest.string content }

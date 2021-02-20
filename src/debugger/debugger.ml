@@ -88,8 +88,8 @@ type frame = {
 
 let init opts =
   let%lwt c =
-    Controller.root ~debug_filter:opts.debug_filter
-      opts.debug_sock opts.symbols_file
+    Controller.root ~debug_filter:opts.debug_filter opts.debug_sock
+      opts.symbols_file
   in
   Controller.set_follow_fork_mode c opts.follow_fork_mode;%lwt
   let state, set_state = Lwt_react.S.create (Stopped Entry) in
@@ -219,7 +219,11 @@ and _resolve_bp t bp =
           Hashtbl.replace t.pc_to_bp pc bp;
           bp.bp_pc <- Some pc;
           bp.bp_resolved_loc <-
-            { bp.bp_loc with pos = Util.Debug_event.line_column event };
+            {
+              bp.bp_loc with
+              source = (module_.source |> Option.get).path;
+              pos = Util.Debug_event.line_column event;
+            };
           bp.bp_version <- bp.bp_version + 1;
           bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
           t.breakpoints <- t.breakpoints |> PcSet_.add pc;

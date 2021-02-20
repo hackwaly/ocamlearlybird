@@ -6,7 +6,6 @@
  (libraries
   ground
   adapter
-  dune_int
   logs
   logs.fmt
   logs.cli

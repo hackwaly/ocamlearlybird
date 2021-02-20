@@ -21,13 +21,13 @@ type t = {
   get_source_dir : string -> string option;
   debug_filter : string -> bool;
   mutable frags : Code_fragment.t Map.Make(Int).t;
-  mutable source_modules : Code_module.t Map.Make(String).t;
+  mutable source_module_by_digest : Code_module.t Map.Make(Digest).t;
   mutable version : int;
   dummy : unit;
 }
 
 module IntMap_ = Map.Make (Int)
-module StringMap_ = Map.Make (String)
+module DigestMap_ = Map.Make (Digest)
 
 let create ?(get_source_dir = fun _ -> None) ?(debug_filter = fun _ -> true) ()
     =
@@ -35,7 +35,7 @@ let create ?(get_source_dir = fun _ -> None) ?(debug_filter = fun _ -> true) ()
     get_source_dir;
     debug_filter;
     frags = IntMap_.empty;
-    source_modules = StringMap_.empty;
+    source_module_by_digest = DigestMap_.empty;
     version = 0;
     dummy = ();
   }
@@ -70,9 +70,9 @@ let add_fragment t frag =
   let resolve_module (module_ : Code_module.t) =
     match%lwt resolve_module_source module_.module_id module_.search_dirs with
     | source_path ->
-        t.source_modules <-
-          t.source_modules |> StringMap_.add source_path module_;
         let%lwt source = Source.from_path source_path in
+        t.source_module_by_digest <-
+          t.source_module_by_digest |> DigestMap_.add source.digest module_;
         module_.source <- Some source;
         Lwt.return ()
     | exception Not_found -> Lwt.return ()
@@ -86,9 +86,9 @@ let add_fragment t frag =
   Lwt.return ()
 
 let remove_fragment t frag_num =
-  t.source_modules <-
-    t.source_modules
-    |> StringMap_.filter (fun _ (module_ : Code_module.t) ->
+  t.source_module_by_digest <-
+    t.source_module_by_digest
+    |> DigestMap_.filter (fun _ (module_ : Code_module.t) ->
            module_.frag <> frag_num);
   t.frags <- t.frags |> IntMap_.remove frag_num;
   t.version <- t.version + 1
@@ -103,7 +103,9 @@ let find_event_opt t pc = try Some (find_event t pc) with Not_found -> None
 
 let to_fragments_seq t = t.frags |> IntMap_.to_seq |> Seq.map snd
 
-let find_source_module source t = t.source_modules |> StringMap_.find source
+let find_source_module source t =
+  let digest = Digest.file source in
+  t.source_module_by_digest |> DigestMap_.find digest
 
 let to_source_modules_seq t =
-  t.source_modules |> StringMap_.to_seq |> Seq.map snd
+  t.source_module_by_digest |> DigestMap_.to_seq |> Seq.map snd

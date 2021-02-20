@@ -1,5 +1,0 @@
-(library
- (name dune_int)
- (preprocess
-  (pps lwt_ppx))
- (libraries ground csexp lwt lwt.unix sexplib))

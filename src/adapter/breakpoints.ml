@@ -43,16 +43,15 @@ let run ~launch_args ~dbg rpc =
       Hashtbl.remove source_bp_tbl source;
       let make_breakpoint dbp is_line_bp =
         if dbp.bp_active then
-          if is_line_bp then
-            Breakpoint.make ~id:(Some dbp.bp_id) ~verified:true
-              ~line:(Some (fst dbp.bp_loc.pos))
-              ~column:(Some (snd dbp.bp_loc.pos))
-              ()
-          else
-            Breakpoint.make ~id:(Some dbp.bp_id) ~verified:true
-              ~line:(Some (fst dbp.bp_resolved_loc.pos))
-              ~column:(Some (snd dbp.bp_resolved_loc.pos))
-              ()
+          let pos =
+            if is_line_bp then dbp.bp_loc.pos else dbp.bp_resolved_loc.pos
+          in
+          Breakpoint.make ~id:(Some dbp.bp_id) ~verified:true
+            ~source:
+              (Some (Source.make ~path:(Some dbp.bp_resolved_loc.source) ()))
+            ~line:(Some (fst pos))
+            ~column:(Some (snd pos))
+            ()
         else Breakpoint.make ~id:(Some dbp.bp_id) ~verified:false ()
       in
       let breakpoints =
@@ -74,8 +73,7 @@ let run ~launch_args ~dbg rpc =
                        (module Breakpoint_event)
                        (Breakpoint_event.Payload.make ~reason:Changed
                           ~breakpoint:
-                            (Breakpoint.make ~id:(Some id) ~verified:false ()))
-                   )
+                            (Breakpoint.make ~id:(Some id) ~verified:false ())))
                  else Lwt.return ()
                in
                let dbp =
