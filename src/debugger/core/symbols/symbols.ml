@@ -44,31 +44,24 @@ let dup t = { t with dummy = () }
 
 let add_fragment t frag =
   let resolve_module_source module_id search_dirs =
-    let%lwt source_dir =
+    Log.debug (fun m -> m "%s %s" module_id ([%show: string list] search_dirs));
+    let search_dirs =
       match t.get_source_dir module_id with
-      | Some dir -> Lwt.return dir
-      | None ->
-          search_dirs
-          |> Lwt_list.find_s (fun dir ->
-                 Lwt_unix.file_exists
-                   (Filename.concat dir (String.uncapitalize_ascii module_id ^ ".cmi")))
+      | Some dir -> [ dir ]
+      | None -> search_dirs
     in
-    let module_ids =
-      let module_id' =
-        Str.split (Str.regexp "__") module_id |> List.rev |> List.hd
-      in
-      if module_id' <> module_id then [ module_id; module_id' ]
-      else [ module_id ]
+    let module_id' =
+      Str.split (Str.regexp "__") module_id |> List.rev |> List.hd
     in
     let source_paths =
-      module_ids |> List.to_seq
-      |> Seq.flat_map (fun module_id ->
+      search_dirs |> List.to_seq
+      |> Seq.flat_map (fun dir ->
              List.to_seq
                [
-                 source_dir ^ "/" ^ String.uncapitalize_ascii module_id ^ ".ml";
-                 source_dir ^ "/" ^ String.uncapitalize_ascii module_id ^ ".re";
-                 source_dir ^ "/" ^ module_id ^ ".ml";
-                 source_dir ^ "/" ^ module_id ^ ".re";
+                 dir ^ "/" ^ String.uncapitalize_ascii module_id' ^ ".ml";
+                 dir ^ "/" ^ String.uncapitalize_ascii module_id' ^ ".re";
+                 dir ^ "/" ^ module_id' ^ ".ml";
+                 dir ^ "/" ^ module_id' ^ ".re";
                ])
       |> List.of_seq
     in
