@@ -1,3 +1,4 @@
+(data_only_dirs integrations)
 (env
  (dev
   (flags

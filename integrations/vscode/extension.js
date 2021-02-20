@@ -31,7 +31,7 @@ const debugConfigProvider = {
         program: 'a.out',
         stopOnEntry: false,
         yieldSteps: 4096,
-        onlyDebugGlob: "<${workspaceRoot}/**/*>"
+        onlyDebugGlob: "<${workspaceFolder}/**/*>"
       }];
   },
   async resolveDebugConfiguration(folder, config, token) {

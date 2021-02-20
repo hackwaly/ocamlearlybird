@@ -17,6 +17,7 @@
 
 open Ground
 open Debug_protocol_ex
+open Path_glob
 
 let spawn_console ~rpc ?name ?env ?cwd prog args =
   ignore name;
@@ -36,9 +37,9 @@ let spawn_console ~rpc ?name ?env ?cwd prog args =
         | None -> String_dict.remove k curr_env
         | Some v -> String_dict.add k v curr_env)
       curr_env
-      ( env
+      (env
       |> Option.value ~default:String_opt_dict.empty
-      |> String_opt_dict.bindings )
+      |> String_opt_dict.bindings)
   in
   Lwt_unix.with_chdir ~cwd (fun () ->
       let redir_output out_chan category () =
@@ -91,8 +92,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
     Logs.set_level (Some Debug);
     let file = open_out (launch_args._debug_log |> Option.get) in
     let fmt = Format.formatter_of_out_channel file in
-    Logs.set_reporter (Logs_fmt.reporter ~app:fmt ~dst:fmt ());
-  );
+    Logs.set_reporter (Logs_fmt.reporter ~app:fmt ~dst:fmt ()));
   let kind =
     if init_args.supports_run_in_terminal_request |> Option.value ~default:false
     then launch_args.console
@@ -109,23 +109,24 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
   spawn ~kind ~rpc ?name:launch_args.name ~env ?cwd:launch_args.cwd
     launch_args.program launch_args.arguments;%lwt
   let%lwt dbg =
+    let debug_filter =
+      let globber =
+        let open Option in
+        let* glob = launch_args.only_debug_glob in
+        try Glob.parse glob |> return with _ -> None
+      in
+      match globber with
+      | None -> fun _ -> true
+      | Some globber -> fun path -> Glob.eval globber path
+    in
     Debugger.init
-      (Debugger.make_options ~debug_sock
-         ~symbols_file:launch_args.program
+      (Debugger.make_options ~debug_sock ~symbols_file:launch_args.program
          ?yield_steps:launch_args.yield_steps
-         ~source_dirs:launch_args.source_dirs
          ~follow_fork_mode:
-           ( match launch_args.follow_fork_mode with
+           (match launch_args.follow_fork_mode with
            | Fork_parent -> `Fork_parent
-           | Fork_child -> `Fork_child )
-         ~only_debug_glob:
-           ( match launch_args.only_debug_glob with
-           | Some only_debug_glob -> (
-               match Path_glob.Glob.parse only_debug_glob with
-               | globber -> Some globber
-               | exception _ -> None )
-           | None -> None )
-         ())
+           | Fork_child -> `Fork_child)
+         ~debug_filter ())
   in
   Lwt.return (launch_args, dbg)
 

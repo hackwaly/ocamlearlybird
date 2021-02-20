@@ -18,7 +18,7 @@
 open Ground
 
 type t = {
-  source_resolver : string -> string list -> string option Lwt.t;
+  get_source_dir : string -> string option;
   debug_filter : string -> bool;
   mutable frags : Code_fragment.t Map.Make(Int).t;
   mutable source_modules : Code_module.t Map.Make(String).t;
@@ -29,10 +29,10 @@ type t = {
 module IntMap_ = Map.Make (Int)
 module StringMap_ = Map.Make (String)
 
-let create ?(source_resolver = Util.Source_resolver.default)
-    ?(debug_filter = fun _ -> true) () =
+let create ?(get_source_dir = fun _ -> None) ?(debug_filter = fun _ -> true) ()
+    =
   {
-    source_resolver;
+    get_source_dir;
     debug_filter;
     frags = IntMap_.empty;
     source_modules = StringMap_.empty;
@@ -43,15 +43,46 @@ let create ?(source_resolver = Util.Source_resolver.default)
 let dup t = { t with dummy = () }
 
 let add_fragment t frag =
+  let resolve_module_source module_id search_dirs =
+    let%lwt source_dir =
+      match t.get_source_dir module_id with
+      | Some dir -> Lwt.return dir
+      | None ->
+          search_dirs
+          |> Lwt_list.find_s (fun dir ->
+                 Lwt_unix.file_exists
+                   (Filename.concat dir (String.uncapitalize_ascii module_id ^ ".cmi")))
+    in
+    let module_ids =
+      let module_id' =
+        Str.split (Str.regexp "__") module_id |> List.rev |> List.hd
+      in
+      if module_id' <> module_id then [ module_id; module_id' ]
+      else [ module_id ]
+    in
+    let source_paths =
+      module_ids |> List.to_seq
+      |> Seq.flat_map (fun module_id ->
+             List.to_seq
+               [
+                 source_dir ^ "/" ^ String.uncapitalize_ascii module_id ^ ".ml";
+                 source_dir ^ "/" ^ String.uncapitalize_ascii module_id ^ ".re";
+                 source_dir ^ "/" ^ module_id ^ ".ml";
+                 source_dir ^ "/" ^ module_id ^ ".re";
+               ])
+      |> List.of_seq
+    in
+    source_paths |> Lwt_list.find_s Lwt_unix.file_exists
+  in
   let resolve_module (module_ : Code_module.t) =
-    match%lwt t.source_resolver module_.module_id module_.search_dirs with
-    | Some source_path ->
+    match%lwt resolve_module_source module_.module_id module_.search_dirs with
+    | source_path ->
         t.source_modules <-
           t.source_modules |> StringMap_.add source_path module_;
         let%lwt source = Source.from_path source_path in
         module_.source <- Some source;
         Lwt.return ()
-    | None -> Lwt.return ()
+    | exception Not_found -> Lwt.return ()
   in
   let resolve_fragment frag =
     frag |> Code_fragment.to_modules_seq |> Lwt_seq.iter_s resolve_module

@@ -29,7 +29,7 @@ module Launch_command = struct
         | `String "integratedTerminal" -> Result.Ok Integrated_terminal
         | `String "externalTerminal" -> Result.Ok External_terminal
         | _ ->
-            Result.Error "Debug_types.Launch_command.Request.Arguments.Console"
+            Result.Error "Unsupported launchConfiguration.console"
 
       let to_yojson = function
         | Internal_console -> `String "internalConsole"
@@ -44,7 +44,7 @@ module Launch_command = struct
         | `String "forkParent" -> Result.Ok Fork_parent
         | `String "forkChild" -> Result.Ok Fork_child
         | _ ->
-            Result.Error "Debug_types.Launch_command.Request.Arguments.Console"
+            Result.Error "Unsupported launchConfiguration.followForkMode"
 
       let to_yojson = function
         | Fork_parent -> `String "forkParent"

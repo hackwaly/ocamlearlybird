@@ -62,8 +62,9 @@ let _get_frame symbols index (stack_pos, pc) =
         let get_search_dirs module_id =
           let frag_num, _ = pc in
           let frag = Symbols.find_fragment symbols frag_num in
-          let module_ = Code_fragment.find_module frag module_id in
-          module_.search_dirs
+          match Code_fragment.find_module frag module_id with
+          | module_ -> module_.search_dirs
+          | exception Not_found -> frag.all_search_dirs
         in
         Typenv.from_summary ~get_search_dirs event.ev_typenv event.ev_typsubst)
   in

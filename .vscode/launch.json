@@ -8,7 +8,7 @@
       "name": "OCaml Debug",
       "type": "ocamlearlybird",
       "request": "launch",
-      "program": "${workspaceRoot}/_build/default/src/main/main.bc",
+      "program": "${workspaceFolder}/_build/default/src/main/main.bc",
       "arguments": [
         "serve",
         "--port=4711",
@@ -16,7 +16,7 @@
       ],
       "stopOnEntry": false,
       "yieldSteps": 4096,
-      "onlyDebugGlob": "<${workspaceRoot}/**/*>"
+      "onlyDebugGlob": "<${workspaceFolder}/**/*>"
     }
   ]
 }

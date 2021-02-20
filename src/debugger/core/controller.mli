@@ -30,7 +30,6 @@ type t = {
 }
 
 val root :
-  ?source_resolver:(string -> string list -> string option Lwt.t) ->
   ?debug_filter:(string -> bool) ->
   Lwt_unix.file_descr ->
   string ->

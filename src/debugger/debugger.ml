@@ -16,7 +16,6 @@
  *)
 
 open Ground
-open Path_glob
 open Int64ops
 open Instruct
 open Frame
@@ -40,8 +39,7 @@ type options = {
   symbols_file : string;
   follow_fork_mode : [ `Fork_parent | `Fork_child ]; [@default `Fork_child]
   yield_steps : int; [@default Int.max_int]
-  source_dirs : string list; [@default []]
-  only_debug_glob : Glob.globber option; [@default None]
+  debug_filter : string -> bool;
 }
 [@@deriving make]
 
@@ -89,15 +87,9 @@ type frame = {
 }
 
 let init opts =
-  let { source_dirs; debug_sock; symbols_file; _ } = opts in
-  let source_resolver = Util.Source_resolver.make ~source_dirs () in
-  let debug_filter source =
-    match opts.only_debug_glob with
-    | Some globber -> Glob.eval globber source
-    | None -> true
-  in
   let%lwt c =
-    Controller.root ~source_resolver ~debug_filter debug_sock symbols_file
+    Controller.root ~debug_filter:opts.debug_filter
+      opts.debug_sock opts.symbols_file
   in
   Controller.set_follow_fork_mode c opts.follow_fork_mode;%lwt
   let state, set_state = Lwt_react.S.create (Stopped Entry) in
@@ -137,14 +129,14 @@ let get_frames ?start ?count t =
           loc = frame.loc;
           _frame = frame;
           scopes =
-            ( match frame.event with
+            (match frame.event with
             | Some _ ->
                 [
                   ("Stack", Inspect.scope scene frame `Stack);
                   ("Heap", Inspect.scope scene frame `Heap);
                   ("Global", Inspect.scope scene frame `Global);
                 ]
-            | None -> [] );
+            | None -> []);
         }
       in
       let frames = Scene.frames scene |> Lwt_stream.map repr_frame in
@@ -179,7 +171,7 @@ let pause t =
 let rec _sync_breakpoints t =
   if t.bp_used_symver <> t.c.symbols.version then (
     t.source_breakpoints |> Hashtbl.to_seq_values |> Seq.iter (_resolve_bp t);
-    t.bp_used_symver <- t.c.symbols.version );
+    t.bp_used_symver <- t.c.symbols.version);
   let to_set = PcSet_.diff t.breakpoints t.c.breakpoints in
   let to_unset = PcSet_.diff t.c.breakpoints t.breakpoints in
   let set_bp pc =
@@ -208,7 +200,7 @@ and _schedule_sync_breakpoints t =
     Lwt.async (fun () ->
         t.bp_sync_requested <- false;
         Lwt.pause ();%lwt
-        _sync_breakpoints t) )
+        _sync_breakpoints t))
 
 and _resolve_bp t bp =
   if t.c.symbols.debug_filter bp.bp_loc.source then
@@ -232,7 +224,7 @@ and _resolve_bp t bp =
           bp.bp_active <- t.c.breakpoints |> PcSet_.mem pc;
           t.breakpoints <- t.breakpoints |> PcSet_.add pc;
           _schedule_sync_breakpoints t
-        with _ -> () )
+        with _ -> ())
 
 let set_breakpoint t ~id ~source ~line ?(column = 0)
     ?(on_change = fun _ -> Lwt.return ()) () =
@@ -253,12 +245,12 @@ let set_breakpoint t ~id ~source ~line ?(column = 0)
   bp
 
 let remove_breakpoint t bp =
-  ( match bp.bp_pc with
+  (match bp.bp_pc with
   | Some pc ->
       t.breakpoints <- t.breakpoints |> PcSet_.remove pc;
       Hashtbl.remove t.pc_to_bp pc;
       _schedule_sync_breakpoints t
-  | _ -> () );
+  | _ -> ());
   Hashtbl.remove t.source_breakpoints bp.bp_id
 
 let breakpoint_locations t source ~line ?column ?end_line ?end_column () =
@@ -293,17 +285,17 @@ let _wrap_run t f =
         if not t.c.dead then t.scene <- Some (Scene.from_controller t.c);
         t.set_state (Stopped (_summary_to_reason summary));
         Lwt.return ());
-    Lwt.return () )
+    Lwt.return ())
 
 let run t =
   _wrap_run t (fun () ->
       let on_yield _ =
         _sync_breakpoints t;%lwt
         Lwt.return
-          ( if t.interupt_flag then (
-            t.interupt_flag <- false;
-            `Stop 1 )
-          else `Continue )
+          (if t.interupt_flag then (
+           t.interupt_flag <- false;
+           `Stop 1)
+          else `Continue)
       in
       let rec loop () =
         let%lwt summary, _, _ =
@@ -323,10 +315,10 @@ let _go_out t (stack_pos, pc) =
   let on_yield _ =
     _sync_breakpoints t;%lwt
     Lwt.return
-      ( if t.interupt_flag then (
-        t.interupt_flag <- false;
-        `Stop 1 )
-      else `Continue )
+      (if t.interupt_flag then (
+       t.interupt_flag <- false;
+       `Stop 1)
+      else `Continue)
   in
   let rec loop () =
     let%lwt summary, _, sp_pc =
@@ -398,10 +390,10 @@ let next t =
                         Lwt.return summary
                     | _ ->
                         let%lwt summary, _, _ = Controller.execute t.c _1 in
-                        goto_same_module frame0 summary )
+                        goto_same_module frame0 summary)
                 | _ -> Lwt.return summary
               in
               let%lwt summary = _go_out t (frame2.stack_pos, frame2.pc) in
               goto_same_module frame0 summary
-          | None -> Lwt.return summary )
+          | None -> Lwt.return summary)
       | _ -> Lwt.return summary)

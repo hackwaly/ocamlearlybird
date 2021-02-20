@@ -59,7 +59,7 @@ let _set_frag_events symbols conn frag =
     |> Seq.map (fun (it : Code_module.t) -> (it.frag, it.module_id))
     |> FragModuleIdSet_.of_seq )
 
-let root ?source_resolver ?debug_filter debug_sock symbols_file =
+let root ?debug_filter debug_sock symbols_file =
   let%lwt fd, _ = Lwt_unix.accept debug_sock in
   let conn = Lwt_conn.of_fd fd in
   let%lwt neg1 = Lwt_io.BE.read_int conn.io.in_ in
@@ -67,7 +67,7 @@ let root ?source_resolver ?debug_filter debug_sock symbols_file =
   let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
   let%lwt debug_info = Bytecode.load_debuginfo symbols_file in
   let frag = Code_fragment.make 0 debug_info in
-  let symbols = Symbols.create ?source_resolver ?debug_filter () in
+  let symbols = Symbols.create ?debug_filter () in
   Symbols.add_fragment symbols frag;%lwt
   let%lwt debug_modules = _set_frag_events symbols conn frag in
   Lwt.return

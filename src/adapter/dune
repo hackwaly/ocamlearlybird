@@ -2,4 +2,4 @@
  (name adapter)
  (preprocess
   (pps lwt_ppx ppx_deriving_yojson))
- (libraries ground debugger dap.rpc_lwt lwt lwt.unix logs logs.fmt))
+ (libraries ground debugger dune_int dap.rpc_lwt lwt lwt.unix logs logs.fmt))

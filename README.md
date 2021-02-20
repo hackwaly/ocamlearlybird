@@ -31,10 +31,10 @@ Used to debug utop examples.
             "request": "launch",
             "stopOnEntry": true,
             "console": "integratedTerminal",
-            "program": "${workspaceRoot}/_build/default/examples/interact/test_program.bc",
-            "onlyDebugGlob": "<${workspaceRoot}/_build/default/**/*>",
+            "program": "${workspaceFolder}/_build/default/examples/interact/test_program.bc",
+            "onlyDebugGlob": "<${workspaceFolder}/_build/default/**/*>",
             "yieldSteps": 1024,
-            "cwd": "${workspaceRoot}"
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

@@ -18,6 +18,7 @@
   "main": "extension.js",
   "activationEvents": [
     "onDebugResolve:ocamlearlybird",
+    "onDebugResolve:ocamlearlybird.dune",
     "onDebugInitialConfigurations",
     "onDebugDynamicConfigurations",
     "onCommand:ocamlDebugger.startDebug",
