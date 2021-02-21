@@ -17,7 +17,7 @@
 
 let binary_search ~cmp ~get container left right key =
   let rec aux left right =
-    if left > right then `Just_after right
+    if left >= right then `Just_after right
     else
       let middle = (left + right) / 2 in
       match cmp (get container middle) key with

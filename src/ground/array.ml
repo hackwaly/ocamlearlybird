@@ -33,7 +33,7 @@ module Sorted = struct
       match a |> bsearch ~cmp end_ with
       | `Empty -> 0
       | `At i -> i
-      | `Just_after i -> i + 1
+      | `Just_after i -> min (i + 1) (Array.length a)
     in
     Array.sub a start (end_ - start)
 end
