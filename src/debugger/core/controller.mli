@@ -27,6 +27,7 @@ type t = {
   mutable debug_modules : Set.Make(Ordered_type.Make_tuple2(Int)(String)).t;
   mutable time : int64;
   mutable dead : bool;
+  mutable unstarted : bool;
 }
 
 val root :

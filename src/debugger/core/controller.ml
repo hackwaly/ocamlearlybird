@@ -32,6 +32,7 @@ type t = {
   mutable debug_modules : FragModuleIdSet_.t;
   mutable time : int64;
   mutable dead : bool;
+  mutable unstarted : bool;
 }
 
 type execution_summary =
@@ -80,6 +81,7 @@ let root ?debug_filter debug_sock symbols_file =
       debug_modules;
       time = _0;
       dead = false;
+      unstarted = true;
     }
 
 let fork t debug_sock =
@@ -105,6 +107,7 @@ let fork t debug_sock =
       debug_modules = t.debug_modules;
       time = t.time;
       dead = false;
+      unstarted = t.unstarted;
     }
 
 let is_busy t = Lwt_conn.is_busy t.conn
@@ -145,6 +148,7 @@ let execute ?(yield_steps = Int.max_int)
   let rec exec_smallint steps =
     let int_step = min (min steps max_small_int |> Int64.to_int) yield_steps in
     let%lwt irem_steps, summary, sp_pc = Wire_protocol.go t.conn int_step in
+    t.unstarted <- false;
     let executed_steps = Int64.of_int (int_step - irem_steps) in
     t.time <- t.time ++ executed_steps;
     let remaining_steps = steps -- executed_steps in

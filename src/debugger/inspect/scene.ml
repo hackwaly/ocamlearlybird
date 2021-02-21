@@ -17,7 +17,6 @@
 
 open Ground
 open Errors
-open Int64ops
 open Controller
 open Frame
 open Instruct
@@ -77,14 +76,14 @@ let _get_frame symbols index (stack_pos, pc) =
   { Frame.index; stack_pos; pc; event; loc; typenv; globals }
 
 let top_frame (c, time) =
-  if time = _0 || c.dead then Lwt.return None
+  if c.unstarted || c.dead then Lwt.return None
   else
     _lock_conn (c, time) (fun conn ->
         let%lwt sp_pc = Wire_protocol.get_frame conn in
         Lwt.return (Some (_get_frame c.symbols 0 sp_pc)))
 
 let next_frame (c, time) frame =
-  if time = _0 || frame.event |> Option.is_none || c.dead then Lwt.return None
+  if frame.event |> Option.is_none || c.dead then Lwt.return None
   else
     _lock_conn (c, time) (fun conn ->
         let%lwt sp_pc_opt =
