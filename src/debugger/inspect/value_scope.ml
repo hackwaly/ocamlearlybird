@@ -51,7 +51,9 @@ class local_scope_value ~scene ~frame ~kind () =
                          let ty = Ctype.correct_levels val_type in
                          Some (Ident.name id, val_kind, ty, pos))
               |> Array.of_seq,
-              match event.ev_kind with Event_after ty -> Some ty | _ -> None )))
+              match (frame.index, event.ev_kind) with
+              | 0, Event_after ty -> Some ty
+              | _ -> None )))
   in
   object
     inherit scope_value
