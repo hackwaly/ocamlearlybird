@@ -230,7 +230,7 @@ and _resolve_bp t bp =
           _schedule_sync_breakpoints t
         with _ -> ())
 
-let set_breakpoint t ~id ~source ~line ?(column = 0)
+let set_breakpoint t ~id ~source ~line ?(column = 1)
     ?(on_change = fun _ -> Lwt.return ()) () =
   let loc = { source; pos = (line, column); end_ = () } in
   let bp =
