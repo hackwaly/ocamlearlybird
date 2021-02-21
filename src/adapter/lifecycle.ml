@@ -17,7 +17,8 @@
 
 open Debug_protocol_ex
 
-let run ~launch_args ~dbg rpc =
+let run ~init_args ~launch_args ~dbg rpc =
+  ignore init_args;
   let promise, resolver = Lwt.task () in
   Lwt.pause ();%lwt
   let send_initialize_event () =

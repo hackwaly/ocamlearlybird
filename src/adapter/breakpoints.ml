@@ -18,6 +18,7 @@
 open Ground
 open Debug_protocol_ex
 open Debugger
+open Util
 
 type my_bp = {
   dbp : Debugger.source_breakpoint;
@@ -25,7 +26,8 @@ type my_bp = {
   dbp_version : int ref;
 }
 
-let run ~launch_args ~dbg rpc =
+let run ~init_args ~launch_args ~dbg rpc =
+  ignore init_args;
   ignore launch_args;
   ignore dbg;
   Lwt.pause ();%lwt
@@ -49,8 +51,8 @@ let run ~launch_args ~dbg rpc =
           Breakpoint.make ~id:(Some dbp.bp_id) ~verified:true
             ~source:
               (Some (Source.make ~path:(Some dbp.bp_resolved_loc.source) ()))
-            ~line:(Some (fst pos))
-            ~column:(Some (snd pos))
+            ~line:(Some (fst pos |> line_to_client ~init_args))
+            ~column:(Some (snd pos |> column_to_client ~init_args))
             ()
         else Breakpoint.make ~id:(Some dbp.bp_id) ~verified:false ()
       in
@@ -77,8 +79,11 @@ let run ~launch_args ~dbg rpc =
                  else Lwt.return ()
                in
                let dbp =
-                 Debugger.set_breakpoint dbg ~id ~source ~line:bp.line
-                   ?column:bp.column ~on_change ()
+                 Debugger.set_breakpoint dbg ~id ~source
+                   ~line:(bp.line |> line_from_client ~init_args)
+                   ?column:
+                     (bp.column |> Option.map (column_from_client ~init_args))
+                   ~on_change ()
                in
                dbp_version := dbp.bp_version;
                { dbp; is_line_bp; dbp_version })
@@ -99,14 +104,19 @@ let run ~launch_args ~dbg rpc =
       let breakpoints =
         Debugger.breakpoint_locations dbg
           (arg.source.path |> Option.get)
-          ~line:arg.line ?column:arg.column ?end_line:arg.end_line
-          ?end_column:arg.end_column ()
+          ~line:(arg.line |> line_from_client ~init_args)
+          ?column:(arg.column |> Option.map (column_from_client ~init_args))
+          ?end_line:(arg.end_line |> Option.map (line_from_client ~init_args))
+          ?end_column:
+            (arg.end_column |> Option.map (column_from_client ~init_args))
+          ()
       in
       let breakpoints =
         breakpoints
         |> List.map (fun loc ->
-               Breakpoint_location.make ~line:(fst loc.pos)
-                 ~column:(Some (snd loc.pos))
+               Breakpoint_location.make
+                 ~line:(fst loc.pos |> line_to_client ~init_args)
+                 ~column:(Some (snd loc.pos |> column_to_client ~init_args))
                  ())
       in
       Lwt.return Breakpoint_locations_command.Result.(make ~breakpoints ()));

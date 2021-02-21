@@ -1,3 +1,13 @@
+# unreleased
+
+## Added
+
+* Show %accu pseudo variable at Event_after event.
+
+## Fixed
+
+* Respect linesStartAt1 and columnsStartAt1 options.
+
 # 1.0.1
 
 Beta2 release.

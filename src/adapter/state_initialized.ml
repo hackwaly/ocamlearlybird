@@ -128,7 +128,7 @@ let launch ~rpc ~init_args ~capabilities ~launch_args =
            | Fork_child -> `Fork_child)
          ~debug_filter ())
   in
-  Lwt.return (launch_args, dbg)
+  Lwt.return dbg
 
 let run ~init_args ~capabilities rpc =
   let promise, resolver = Lwt.task () in
@@ -141,7 +141,7 @@ let run ~init_args ~capabilities rpc =
     (fun launch_args ->
       prevent_reenter ();
       let%lwt launched = launch ~rpc ~init_args ~capabilities ~launch_args in
-      Lwt.wakeup_later resolver launched;
+      Lwt.wakeup_later resolver (launch_args, launched);
       Lwt.return_unit);
   Debug_rpc.set_command_handler rpc
     (module Attach_command)

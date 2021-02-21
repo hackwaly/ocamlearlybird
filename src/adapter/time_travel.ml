@@ -17,7 +17,8 @@
 
 open Debug_protocol_ex
 
-let run ~launch_args ~dbg rpc =
+let run ~init_args ~launch_args ~dbg rpc =
+  ignore init_args;
   ignore launch_args;
   Lwt.pause ();%lwt
   Debug_rpc.set_command_handler rpc

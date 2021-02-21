@@ -28,7 +28,7 @@ let serve in_ out =
           let%lwt launch_args, dbg =
             State_initialized.run ~init_args ~capabilities rpc
           in
-          State_debug.run ~launch_args ~dbg rpc;%lwt
+          State_debug.run ~init_args ~launch_args ~dbg rpc;%lwt
           fst (Lwt.task ())
         with Exit -> Lwt.return_unit );%lwt
       Log.debug (fun m -> m "state_end");

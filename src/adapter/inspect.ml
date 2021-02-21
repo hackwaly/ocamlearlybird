@@ -18,8 +18,10 @@
 open Ground
 open Debug_protocol_ex
 open Debugger
+open Util
 
-let run ~launch_args ~dbg rpc =
+let run ~init_args ~launch_args ~dbg rpc =
+  ignore init_args;
   ignore launch_args;
   let alloc_handle = Unique_id.make_alloc 1 in
   let frame_tbl = Hashtbl.create 0 in
@@ -88,8 +90,12 @@ let run ~launch_args ~dbg rpc =
                Hashtbl.replace frame_tbl frame.index frame;
                Stack_frame.make ~id:frame.index
                  ~name:(frame.name |> Option.value ~default:"??")
-                 ~source ~line ~column ~end_line:(Some end_line)
-                 ~end_column:(Some end_column) ())
+                 ~source
+                 ~line:(line |> line_to_client ~init_args)
+                 ~column:(column |> column_to_client ~init_args)
+                 ~end_line:(Some (end_line |> line_to_client ~init_args))
+                 ~end_column:(Some (end_column |> column_to_client ~init_args))
+                 ())
       in
       Lwt.return Stack_trace_command.Result.(make ~stack_frames ()));
   Debug_rpc.set_command_handler rpc

@@ -23,7 +23,7 @@
         "kind": "test",
         "isDefault": true
       },
-      "command": "dune exec src/main/main.bc -- serve --verbosity=debug --port=4712"
+      "command": "dune exec src/main/main.bc -- serve --verbosity=debug --port=4711"
     }
   ]
 }
