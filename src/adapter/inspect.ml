@@ -146,7 +146,7 @@ let run ~init_args ~launch_args ~dbg rpc =
                let num_named = value#num_named in
                let num_indexed = value#num_indexed in
                let is_complex =
-                 num_indexed > 0 || num_named > 0 || num_named = -1
+                 num_indexed > 0 || num_named > 0 || num_named = -1 || Option.is_some value#vscode_menu_context
                in
                let handle = if is_complex then alloc_handle () else 0 in
                Hashtbl.replace value_tbl handle value;
@@ -154,7 +154,35 @@ let run ~init_args ~launch_args ~dbg rpc =
                  ~variables_reference:handle
                  ~named_variables:
                    (if num_named = -1 then None else Some num_named)
-                 ~indexed_variables:(Some num_indexed) ())
+                 ~indexed_variables:(Some num_indexed)
+                 ~__vscode_variable_menu_context:value#vscode_menu_context ())
       in
       Lwt.return (Variables_command.Result.make ~variables ()));
+  let module VariableGetClosureCodeLocation = struct
+    let type_ = "variableGetClosureCodeLocation"
+
+    type 'a source_location = 'a Debugger.source_location = {
+      source : string;
+      pos : int * int;
+      end_ : 'a;
+    }
+    [@@deriving yojson]
+
+    type source_range = (int * int) source_location [@@deriving yojson]
+
+    module Arguments = struct
+      type t = { handle : int } [@@deriving yojson]
+    end
+
+    module Result = struct
+      type t = { location : source_range option } [@@deriving yojson]
+    end
+  end in
+  Debug_rpc.set_command_handler rpc
+    (module VariableGetClosureCodeLocation)
+    (fun arg ->
+      let open VariableGetClosureCodeLocation in
+      match Hashtbl.find_opt value_tbl arg.handle with
+      | None -> Lwt.return { Result.location = None }
+      | Some value -> Lwt.return { Result.location = value#closure_code_location });
   Lwt.join [ process_state_changes () ]

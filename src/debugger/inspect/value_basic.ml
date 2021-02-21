@@ -17,10 +17,15 @@
 
 open Ground
 open Errors
+open Debug_types
 
 class virtual value =
   object
     method virtual to_short_string : string
+
+    method vscode_menu_context : string option = None
+
+    method closure_code_location : source_range option = None
 
     method num_indexed = 0
 

@@ -22,13 +22,17 @@
     "onDebugInitialConfigurations",
     "onDebugDynamicConfigurations",
     "onCommand:ocamlDebugger.startDebug",
-    "onCustomEditor:ocamlDebugger.bytecode"
+    "onCommand:ocamlDebugger.variableGotoClosureCodeLocation"
   ],
   "contributes": {
     "commands": [
       {
         "command": "ocamlDebugger.startDebug",
         "title": "Start an OCaml Debug Session"
+      },
+      {
+        "command": "ocamlDebugger.variableGotoClosureCodeLocation",
+        "title": "Goto Closure Code Location"
       }
     ],
     "menus": {
@@ -36,6 +40,13 @@
         {
           "when": "resourceExtname =~ /.bc$|a.out$|.d.byte$/",
           "command": "ocamlDebugger.startDebug"
+        }
+      ],
+      "debug/variables/context": [
+        {
+          "when": "debugProtocolVariableMenuContext == 'ocamlearlybird.function'",
+          "command": "ocamlDebugger.variableGotoClosureCodeLocation",
+          "group": "navigation"
         }
       ]
     },

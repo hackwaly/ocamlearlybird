@@ -14,7 +14,7 @@
         "--port=4711",
         "--verbosity=debug"
       ],
-      "stopOnEntry": false,
+      "stopOnEntry": true,
       "yieldSteps": 4096,
       "onlyDebugGlob": "<${workspaceFolder}/**/*>"
     }

@@ -73,6 +73,8 @@ type t = {
 
 type value =
   < to_short_string : string
+  ; vscode_menu_context : string option
+  ; closure_code_location : source_range option
   ; num_indexed : int
   ; num_named : int
   ; get_indexed : int -> value Lwt.t

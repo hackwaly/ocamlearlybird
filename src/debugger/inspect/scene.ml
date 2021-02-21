@@ -88,9 +88,8 @@ let next_frame (c, time) frame =
     _lock_conn (c, time) (fun conn ->
         let%lwt sp_pc_opt =
           let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
-          ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
-            Wire_protocol.up_frame conn (frame.event |> Option.get).ev_stacksize
-          )
+          (Wire_protocol.set_frame conn frame.stack_pos;%lwt
+           Wire_protocol.up_frame conn (frame.event |> Option.get).ev_stacksize)
             [%finally Wire_protocol.set_frame conn stack_pos0]
         in
         match sp_pc_opt with
@@ -115,8 +114,8 @@ let get_accu (c, time) frame =
   _lock_conn (c, time) (fun conn ->
       let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
       let%lwt rv =
-        ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
-          Wire_protocol.get_accu conn )
+        (Wire_protocol.set_frame conn frame.stack_pos;%lwt
+         Wire_protocol.get_accu conn)
           [%finally Wire_protocol.set_frame conn stack_pos0]
       in
       Lwt.return (Remote rv))
@@ -125,9 +124,9 @@ let get_local (c, time) frame index =
   _lock_conn (c, time) (fun conn ->
       let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
       let%lwt rv =
-        ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
-          Wire_protocol.get_local conn
-            ((frame.event |> Option.get).ev_stacksize - index) )
+        (Wire_protocol.set_frame conn frame.stack_pos;%lwt
+         Wire_protocol.get_local conn
+           ((frame.event |> Option.get).ev_stacksize - index))
           [%finally Wire_protocol.set_frame conn stack_pos0]
       in
       Lwt.return (Remote rv))
@@ -136,8 +135,8 @@ let get_environment (c, time) frame index =
   _lock_conn (c, time) (fun conn ->
       let%lwt stack_pos0, _ = Wire_protocol.get_frame conn in
       let%lwt rv =
-        ( Wire_protocol.set_frame conn frame.stack_pos;%lwt
-          Wire_protocol.get_environment conn index )
+        (Wire_protocol.set_frame conn frame.stack_pos;%lwt
+         Wire_protocol.get_environment conn index)
           [%finally Wire_protocol.set_frame conn stack_pos0]
       in
       Lwt.return (Remote rv))
@@ -197,5 +196,15 @@ let get_closure_code (c, time) rv =
   | Remote rv ->
       _lock_conn (c, time) (fun conn ->
           let%lwt pc = Wire_protocol.get_closure_code conn rv in
-          let event = Symbols.find_event_opt c.symbols pc in
-          Lwt.return (event |> Option.map (fun event -> (fst pc, event))))
+          Lwt.return
+            ( pc,
+              let open Option in
+              let frag_num, _ = pc in
+              let frag = Symbols.find_fragment c.symbols frag_num in
+              let* event = Symbols.find_event_opt c.symbols pc in
+              let module_ = Code_fragment.find_module frag event.ev_module in
+              let* source = module_.source in
+              let source = source.path in
+              let pos = Lexing.Position.line_column event.ev_loc.loc_start in
+              let end_ = Lexing.Position.line_column event.ev_loc.loc_end in
+              return { source; pos; end_ } ))

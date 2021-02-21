@@ -15,10 +15,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *)
 
+open Debug_types
+
 type raw_value = Scene.obj * Types.type_expr
 
 type t =
   < to_short_string : string
+  ; vscode_menu_context : string option
+  ; closure_code_location : source_range option
   ; num_indexed : int
   ; num_named : int
   ; get_indexed : int -> t Lwt.t
