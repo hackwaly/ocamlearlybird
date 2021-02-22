@@ -1,6 +1,5 @@
 (**
- * Copyright (C) 2021 Yuxiang Wen
- *
+msg *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
  * published by the Free Software Foundation, either version 3 of the
@@ -50,15 +49,33 @@ let unknown_value =
     method to_short_string = "«opaque»"
   end
 
+class raw_string_value v =
+  object
+    inherit value
+
+    method to_short_string = v
+  end
+
+class tips_value tips =
+  object
+    inherit value
+
+    method to_short_string = "…"
+
+    method! num_indexed = Array.length tips
+
+    method! get_indexed i = new raw_string_value tips.(i) |> Lwt.return
+  end
+
 let adopters =
   ref
-    ( []
+    ([]
       : (Scene.t ->
         Typenv.t ->
         Scene.obj ->
         Types.type_expr ->
         value option Lwt.t)
-        list )
+        list)
 
 let adopt scene typenv obj ty =
   let rec resolve_type ty =
@@ -75,8 +92,8 @@ let adopt scene typenv obj ty =
         } -> (
             match Typenv.type_apply typenv type_params body ty_args with
             | ty -> resolve_type ty
-            | exception Ctype.Cannot_apply -> ty )
-        | _ -> ty )
+            | exception Ctype.Cannot_apply -> ty)
+        | _ -> ty)
     | _ -> ty
   in
   let ty = resolve_type ty in

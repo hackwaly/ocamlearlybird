@@ -27,6 +27,16 @@ class func_value ?pc ?loc () =
     method! vscode_menu_context = Some "ocamlearlybird.function"
 
     method! closure_code_location = loc
+
+    method! num_named = 1
+
+    method! list_named =
+      Lwt.return
+        [
+          ( "‹tips›",
+            new tips_value
+              [| "You can use context menu to goto closure code location." |] );
+        ]
   end
 
 let adopter scene typenv obj typ =
