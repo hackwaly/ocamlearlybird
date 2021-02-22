@@ -32,7 +32,7 @@ Used to debug utop examples.
             "stopOnEntry": true,
             "console": "integratedTerminal",
             "program": "${workspaceFolder}/_build/default/examples/interact/test_program.bc",
-            "onlyDebugGlob": "<${workspaceFolder}/_build/default/**/*>",
+            "onlyDebugGlob": "<${workspaceFolder}/**/*>",
             "yieldSteps": 1024,
             "cwd": "${workspaceFolder}"
         }
