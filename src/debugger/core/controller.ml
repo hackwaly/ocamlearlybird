@@ -56,9 +56,9 @@ let _set_frag_events symbols conn frag =
          |> Seq.map (fun it -> (module_.frag, it.ev_pos)))
   |> Lwt_seq.iter_s (Wire_protocol.set_event conn);%lwt
   Lwt.return
-    ( debug_modules
+    (debug_modules
     |> Seq.map (fun (it : Code_module.t) -> (it.frag, it.module_id))
-    |> FragModuleIdSet_.of_seq )
+    |> FragModuleIdSet_.of_seq)
 
 let root ?debug_filter debug_sock symbols_file =
   let%lwt fd, _ = Lwt_unix.accept debug_sock in
@@ -94,7 +94,7 @@ let fork t debug_sock =
     if pid' = pid then Lwt.return conn
     else (
       Lwt_unix.close fd;%lwt
-      wait_conn () )
+      wait_conn ())
   in
   let%lwt conn = wait_conn () in
   Lwt.return
@@ -133,14 +133,14 @@ let stop ?(gracefully = false) t =
     if gracefully then Wire_protocol.stop t.conn
     else (
       Unix.kill t.pid 9;
-      Lwt.return () );%lwt
+      Lwt.return ());%lwt
     t.dead <- true;
     let () =
       match t.parent with
       | None -> ()
       | Some parent -> Lwt.async (fun () -> Wire_protocol.wait parent.conn)
     in
-    Lwt.return () )
+    Lwt.return ())
 
 let execute ?(yield_steps = Int.max_int)
     ?(on_yield = fun () -> Lwt.return `Continue) ?trap_barrier
@@ -197,33 +197,31 @@ let execute ?(yield_steps = Int.max_int)
           let%lwt r = run () in
           if not (t.breakpoints |> PcSet_.mem pc) then (
             Wire_protocol.reset_instr t.conn pc;%lwt
-            Wire_protocol.set_event t.conn pc )
+            Wire_protocol.set_event t.conn pc)
           else Lwt.return ();%lwt
           Lwt.return r
   in
-  let run =
-    match trap_barrier with
-    | None -> run
-    | Some trap_barrier ->
-        fun () ->
-          Wire_protocol.set_trap_barrier t.conn trap_barrier;%lwt
-          let%lwt summary, remaining_steps, sp_pc = run () in
-          Wire_protocol.set_trap_barrier t.conn 0;%lwt
-          if summary = `Trap_barrier then
-            let stop_on_event () =
-              let%lwt summary', remaining_steps', sp_pc' = exec_dynlink _1 in
-              let remaining_steps =
-                remaining_steps ++ (_1 -- remaining_steps')
-              in
-              match summary' with
-              | `Trap_barrier -> assert false
-              | `Event | `Breakpoint ->
-                  Lwt.return (`Trap_barrier, remaining_steps, sp_pc')
-              | `Exited | `Uncaught_exc | `Yield_stop _ ->
-                  Lwt.return (summary', remaining_steps, sp_pc')
-            in
-            stop_on_event ()
-          else Lwt.return (summary, remaining_steps, sp_pc)
+  let run () =
+    let%lwt () =
+      match trap_barrier with
+      | None -> Lwt.return ()
+      | Some trap_barrier -> Wire_protocol.set_trap_barrier t.conn trap_barrier
+    in
+    let%lwt summary, remaining_steps, sp_pc = run () in
+    Wire_protocol.set_trap_barrier t.conn 0;%lwt
+    if summary = `Trap_barrier then
+      let rec stop_on_event () =
+        let%lwt summary', remaining_steps', sp_pc' = exec_dynlink _1 in
+        let remaining_steps = remaining_steps ++ (_1 -- remaining_steps') in
+        match summary' with
+        | `Trap_barrier -> stop_on_event ()
+        | `Event | `Breakpoint ->
+            Lwt.return (`Trap_barrier, remaining_steps, sp_pc')
+        | `Exited | `Uncaught_exc | `Yield_stop _ ->
+            Lwt.return (summary', remaining_steps, sp_pc')
+      in
+      stop_on_event ()
+    else Lwt.return (summary, remaining_steps, sp_pc)
   in
   let%lwt summary, remaining_steps, sp_pc = run () in
   if summary = `Exited || summary = `Uncaught_exc then stop ~gracefully:true t

@@ -5,6 +5,7 @@
 * Fix breakpoints resolution algorithm.
 * Fix variables pane sometimes flooding by `Assertion_failure(...)` raised at Env_hack.ml.
 * Fix incorrectly inspect 'a type as int.
+* Output to debug console when uncaught_exc occurs.
 
 ## 1.0.2 - 2021-02-22
 

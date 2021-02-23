@@ -274,7 +274,9 @@ let _summary_to_reason summary =
   match summary with
   | `Event -> Step
   | `Yield_stop 1 -> Pause
-  | `Yield_stop _ | `Trap_barrier -> raise (Invalid_argument "summary")
+  | `Yield_stop x ->
+      raise (Invalid_argument ("summary is `Yield_stop " ^ string_of_int x))
+  | `Trap_barrier -> raise (Invalid_argument "summary is `Trap_barrier")
   | `Breakpoint -> Breakpoint
   | `Exited -> Exited
   | `Uncaught_exc -> Uncaught_exc

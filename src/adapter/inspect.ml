@@ -32,7 +32,13 @@ let run ~init_args ~launch_args ~dbg rpc =
       Hashtbl.reset value_tbl;
       match status with
       | Running -> Lwt.return ()
-      | Stopped (Exited | Uncaught_exc) ->
+      | Stopped ((Exited | Uncaught_exc) as reason) ->
+          if reason = Uncaught_exc then
+            Debug_rpc.send_event rpc
+              (module Output_event)
+              Output_event.Payload.(
+                make ~output:"Program exited due to Uncaught_exc" ())
+          else Lwt.return ();%lwt
           Debug_rpc.send_event rpc
             (module Terminated_event)
             Terminated_event.Payload.(make ())
@@ -146,7 +152,8 @@ let run ~init_args ~launch_args ~dbg rpc =
                let num_named = value#num_named in
                let num_indexed = value#num_indexed in
                let is_complex =
-                 num_indexed > 0 || num_named > 0 || num_named = -1 || Option.is_some value#vscode_menu_context
+                 num_indexed > 0 || num_named > 0 || num_named = -1
+                 || Option.is_some value#vscode_menu_context
                in
                let handle = if is_complex then alloc_handle () else 0 in
                Hashtbl.replace value_tbl handle value;
@@ -184,5 +191,6 @@ let run ~init_args ~launch_args ~dbg rpc =
       let open VariableGetClosureCodeLocation in
       match Hashtbl.find_opt value_tbl arg.handle with
       | None -> Lwt.return { Result.location = None }
-      | Some value -> Lwt.return { Result.location = value#closure_code_location });
+      | Some value ->
+          Lwt.return { Result.location = value#closure_code_location });
   Lwt.join [ process_state_changes () ]
