@@ -79,10 +79,10 @@ let type_matches { env; get_search_dirs } =
 (* HACK *)
 let () =
   Env_hack.add_delayed_check_forward := Obj.magic !Env.add_delayed_check_forward;
-  Env_hack.same_constr := Obj.magic Env.same_constr;
-  Env_hack.check_well_formed_module := Obj.magic Env.check_well_formed_module;
-  Env_hack.check_functor_application := Obj.magic Env.check_functor_application;
-  Env_hack.strengthen := Obj.magic Env.strengthen;
-  Env_hack.print_longident := Obj.magic Env.print_longident;
-  Env_hack.print_path := Obj.magic Env.print_path;
+  Env_hack.same_constr := Obj.magic !Env.same_constr;
+  Env_hack.check_well_formed_module := Obj.magic !Env.check_well_formed_module;
+  Env_hack.check_functor_application := Obj.magic !Env.check_functor_application;
+  Env_hack.strengthen := Obj.magic !Env.strengthen;
+  Env_hack.print_longident := Obj.magic !Env.print_longident;
+  Env_hack.print_path := Obj.magic !Env.print_path;
 (* /HACK *)
