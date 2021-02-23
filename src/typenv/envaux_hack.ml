@@ -113,8 +113,3 @@ let () =
       | Error err -> Some (Location.error_of_printer_file report_error err)
       | _ -> None
     )
-
-(* HACK *)
-let () = Env_hack.strengthen :=
-  (fun ~aliasable env mty path -> Mtype.strengthen ~aliasable (Obj.magic env) mty path)
-(* /HACK *)
