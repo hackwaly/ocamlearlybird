@@ -38,7 +38,7 @@
     "menus": {
       "explorer/context": [
         {
-          "when": "resourceExtname =~ /\\.bc$|a\\.out$|\\.d\\.byte$/",
+          "when": "resourceExtname =~ /(\\.bc|a\\.out|\\.d\\.byte)$/",
           "command": "ocamlDebugger.startDebug"
         }
       ],
