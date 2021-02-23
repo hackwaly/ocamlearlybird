@@ -1,4 +1,10 @@
-## 1.0.2 (beta2) - 2021-02-22
+## 1.0.3 - 2021-02-23
+
+### Fixed
+
+* Fix breakpoints resolution algorithm.
+
+## 1.0.2 - 2021-02-22
 
 ### Added
 
