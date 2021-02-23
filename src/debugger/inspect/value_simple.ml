@@ -100,36 +100,38 @@ class extension_constructor_value v =
   end
 
 let adopter scene typenv obj typ =
-  if Typenv.type_matches typenv Predef.type_int typ then
+  let typ = Typenv.full_expand typenv typ in
+  match (Ctype.repr typ).desc with
+  | Tconstr (path, _, _) when path = Predef.path_int ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new int_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_char typ then
+  | Tconstr (path, _, _) when path = Predef.path_char ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new char_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_string typ then
+  | Tconstr (path, _, _) when path = Predef.path_string ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new string_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_bytes typ then
+  | Tconstr (path, _, _) when path = Predef.path_bytes ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new bytes_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_float typ then
+  | Tconstr (path, _, _) when path = Predef.path_float ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new float_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_bool typ then
+  | Tconstr (path, _, _) when path = Predef.path_bool ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new bool_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_unit typ then
+  | Tconstr (path, _, _) when path = Predef.path_unit ->
     Lwt.return (Some unit_value)
-  else if Typenv.type_matches typenv Predef.type_nativeint typ then
+  | Tconstr (path, _, _) when path = Predef.path_nativeint ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new nativeint_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_int32 typ then
+  | Tconstr (path, _, _) when path = Predef.path_int32 ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new int32_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_int64 typ then
+  | Tconstr (path, _, _) when path = Predef.path_int64 ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new int64_value (Obj.magic obj)))
-  else if Typenv.type_matches typenv Predef.type_extension_constructor typ then
+  | Tconstr (path, _, _) when path = Predef.path_extension_constructor ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new extension_constructor_value (Obj.magic obj)))
-  else Lwt.return None
+  | _ -> Lwt.return None

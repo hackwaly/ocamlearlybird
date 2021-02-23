@@ -76,6 +76,10 @@ let type_matches { env; get_search_dirs } =
   Persistent_env_hack.get_search_dirs := get_search_dirs;
   Ctype_hack.matches (Obj.magic env)
 
+let full_expand { env; get_search_dirs } =
+  Persistent_env_hack.get_search_dirs := get_search_dirs;
+  Ctype_hack.full_expand (Obj.magic env)
+
 (* HACK *)
 let () =
   Env_hack.add_delayed_check_forward := Obj.magic !Env.add_delayed_check_forward;
