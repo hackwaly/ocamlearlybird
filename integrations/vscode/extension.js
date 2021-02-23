@@ -26,7 +26,7 @@ const debugConfigProvider = {
   async provideDebugConfigurations(folder, token) {
     return [{
       name: 'OCaml Debug',
-      type: 'ocaml',
+      type: 'ocamlearlybird',
       request: 'launch',
       program: 'a.out',
       stopOnEntry: false,
