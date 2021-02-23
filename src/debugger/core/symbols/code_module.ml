@@ -62,7 +62,7 @@ let _find_event_index_by_cnum t cnum =
     match events |> Array.Sorted.bsearch ~cmp () with
     | `Empty -> None
     | `At i -> check i
-    | `Just_after i -> [ i; i + 1 ] |> List.find_map check
+    | `Just_after i -> [ i - 1; i; i + 1 ] |> List.find_map check
   in
   let content = _get_content t in
   match find content t.events cnum with
