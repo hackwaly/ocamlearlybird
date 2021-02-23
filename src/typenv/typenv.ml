@@ -85,4 +85,6 @@ let () =
   Env_hack.strengthen := Obj.magic !Env.strengthen;
   Env_hack.print_longident := Obj.magic !Env.print_longident;
   Env_hack.print_path := Obj.magic !Env.print_path;
+  Ctype_hack.package_subtype := Obj.magic !Ctype.package_subtype;
+  Persistent_env_hack.add_delayed_check_forward := Obj.magic !Persistent_env.add_delayed_check_forward;
 (* /HACK *)
