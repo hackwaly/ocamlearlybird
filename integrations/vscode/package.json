@@ -1,9 +1,9 @@
 {
   "private": true,
   "name": "ocamlearlybird",
-  "displayName": "OCaml Debugger",
+  "displayName": "Ocamlearlybird",
   "description": "OCaml debugger. Powered by ocamlearlybird.",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "publisher": "hackwaly",
   "engines": {
     "vscode": "^1.52.0"
@@ -21,17 +21,17 @@
     "onDebugResolve:ocamlearlybird.dune",
     "onDebugInitialConfigurations",
     "onDebugDynamicConfigurations",
-    "onCommand:ocamlDebugger.startDebug",
-    "onCommand:ocamlDebugger.variableGotoClosureCodeLocation"
+    "onCommand:ocamlearlybird.startDebug",
+    "onCommand:ocamlearlybird.variableGotoClosureCodeLocation"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "ocamlDebugger.startDebug",
+        "command": "ocamlearlybird.startDebug",
         "title": "Start an OCaml Debug Session"
       },
       {
-        "command": "ocamlDebugger.variableGotoClosureCodeLocation",
+        "command": "ocamlearlybird.variableGotoClosureCodeLocation",
         "title": "Goto Closure Code Location"
       }
     ],
@@ -39,13 +39,13 @@
       "explorer/context": [
         {
           "when": "resourceFilename =~ /\\.bc$/ || resourceFilename =~ /^a\\.out$/ || resourceFilename =~ /\\.d\\.byte$/",
-          "command": "ocamlDebugger.startDebug"
+          "command": "ocamlearlybird.startDebug"
         }
       ],
       "debug/variables/context": [
         {
           "when": "debugProtocolVariableMenuContext == 'ocamlearlybird.function'",
-          "command": "ocamlDebugger.variableGotoClosureCodeLocation",
+          "command": "ocamlearlybird.variableGotoClosureCodeLocation",
           "group": "navigation"
         }
       ]
@@ -64,12 +64,21 @@
         "language": "menhir"
       }
     ],
+    "configuration": [
+      {
+        "properties": {
+          "ocamlearlybird.path": {
+            "type": "string",
+            "description": "Path to ocamlearlybird executable.",
+            "default": "ocamlearlybird"
+          }
+        }
+      }
+    ],
     "debuggers": [
       {
         "type": "ocamlearlybird",
-        "label": "OCaml 4.11",
-        "runtime": "node",
-        "program": "./debug.js",
+        "label": "Ocamlearlybird",
         "configurationAttributes": {
           "launch": {
             "required": [
@@ -156,6 +165,6 @@
   },
   "devDependencies": {
     "@types/node": "^14.14.22",
-    "@types/vscode": "^1.52.0"
+    "@types/vscode": "^1.54.0"
   }
 }

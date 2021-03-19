@@ -55,8 +55,16 @@ const debugConfigProvider = {
 };
 
 module.exports = {
+  /**@param {vscode.ExtensionContext} context */
   activate(context) {
-    context.subscriptions.push(vscode.commands.registerCommand('ocamlDebugger.startDebug', async (uri) => {
+    const config = vscode.workspace.getConfiguration('ocamlearlybird');
+    const ocamlearlybirdPath = config.get('path');
+    context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('ocamlearlybird', {
+      createDebugAdapterDescriptor(session, executable) {
+        return new vscode.DebugAdapterExecutable(ocamlearlybirdPath, ['debug']);
+      }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('ocamlearlybird.startDebug', async (uri) => {
       const folder = vscode.workspace.getWorkspaceFolder(uri);
       await vscode.debug.startDebugging(folder, {
         name: Path.basename(uri.fsPath),
@@ -67,7 +75,7 @@ module.exports = {
         program: uri.fsPath,
       });
     }));
-    context.subscriptions.push(vscode.commands.registerCommand('ocamlDebugger.variableGotoClosureCodeLocation', async (context) => {
+    context.subscriptions.push(vscode.commands.registerCommand('ocamlearlybird.variableGotoClosureCodeLocation', async (context) => {
       const result = await vscode.debug.activeDebugSession.customRequest("variableGetClosureCodeLocation", { handle: context.variable.variablesReference });
       if (result.location != null) {
         const loc = result.location;
