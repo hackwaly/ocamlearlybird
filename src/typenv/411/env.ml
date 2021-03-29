@@ -15,7 +15,7 @@
 
 (* Environment handling *)
 
-module Persistent_env_hack = Persistent_env_hack
+module Persistent_env = Persistent_env
 
 open Cmi_format
 open Misc
@@ -71,16 +71,16 @@ let used_constructors : constructor_usage usage_tbl = Types.Uid.Tbl.create 16
 (** Map indexed by the name of module components. *)
 module NameMap = String.Map
 
-type value_unbound_reason = Env.value_unbound_reason =
+type value_unbound_reason =
   | Val_unbound_instance_variable
   | Val_unbound_self
   | Val_unbound_ancestor
   | Val_unbound_ghost_recursive of Location.t
 
-type module_unbound_reason = Env.module_unbound_reason =
+type module_unbound_reason =
   | Mod_unbound_illegal_recursion
 
-type summary = Env.summary =
+type summary =
     Env_empty
   | Env_value of summary * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
@@ -97,7 +97,7 @@ type summary = Env.summary =
   | Env_value_unbound of summary * string * value_unbound_reason
   | Env_module_unbound of summary * string * module_unbound_reason
 
-type address = Env.address =
+type address =
   | Aident of Ident.t
   | Adot of address * int
 
@@ -731,7 +731,7 @@ let components_of_module ~alerts ~uid env fs ps path addr mty =
     }
   }
 
-let sign_of_cmi ~freshen { Persistent_env_hack.Persistent_signature.cmi; _ } =
+let sign_of_cmi ~freshen { Persistent_env.Persistent_signature.cmi; _ } =
   let name = cmi.cmi_name in
   let sign = cmi.cmi_sign in
   let flags = cmi.cmi_flags in
@@ -771,34 +771,34 @@ let read_sign_of_cmi = sign_of_cmi ~freshen:true
 
 let save_sign_of_cmi = sign_of_cmi ~freshen:false
 
-let persistent_env : module_data Persistent_env_hack.t =
-  Persistent_env_hack.empty ()
+let persistent_env : module_data Persistent_env.t =
+  Persistent_env.empty ()
 
 let without_cmis f x =
-  Persistent_env_hack.without_cmis persistent_env f x
+  Persistent_env.without_cmis persistent_env f x
 
-let imports () = Persistent_env_hack.imports persistent_env
+let imports () = Persistent_env.imports persistent_env
 
 let import_crcs ~source crcs =
-  Persistent_env_hack.import_crcs persistent_env ~source crcs
+  Persistent_env.import_crcs persistent_env ~source crcs
 
 let read_pers_mod modname filename =
-  Persistent_env_hack.read persistent_env read_sign_of_cmi modname filename
+  Persistent_env.read persistent_env read_sign_of_cmi modname filename
 
 let find_pers_mod name =
-  Persistent_env_hack.find persistent_env read_sign_of_cmi name
+  Persistent_env.find persistent_env read_sign_of_cmi name
 
 let check_pers_mod ~loc name =
-  Persistent_env_hack.check persistent_env read_sign_of_cmi ~loc name
+  Persistent_env.check persistent_env read_sign_of_cmi ~loc name
 
 let crc_of_unit name =
-  Persistent_env_hack.crc_of_unit persistent_env read_sign_of_cmi name
+  Persistent_env.crc_of_unit persistent_env read_sign_of_cmi name
 
 let is_imported_opaque modname =
-  Persistent_env_hack.is_imported_opaque persistent_env modname
+  Persistent_env.is_imported_opaque persistent_env modname
 
 let register_import_as_opaque modname =
-  Persistent_env_hack.register_import_as_opaque persistent_env modname
+  Persistent_env.register_import_as_opaque persistent_env modname
 
 let reset_declaration_caches () =
   Types.Uid.Tbl.clear value_declarations;
@@ -809,22 +809,22 @@ let reset_declaration_caches () =
 
 let reset_cache () =
   Current_unit_name.set "";
-  Persistent_env_hack.clear persistent_env;
+  Persistent_env.clear persistent_env;
   reset_declaration_caches ();
   ()
 
 let reset_cache_toplevel () =
-  Persistent_env_hack.clear_missing persistent_env;
+  Persistent_env.clear_missing persistent_env;
   reset_declaration_caches ();
   ()
 
 (* get_components *)
 
 let get_components_res c =
-  match Persistent_env_hack.can_load_cmis persistent_env with
-  | Persistent_env_hack.Can_load_cmis ->
+  match Persistent_env.can_load_cmis persistent_env with
+  | Persistent_env.Can_load_cmis ->
     EnvLazy.force !components_of_module_maker' c.comps
-  | Persistent_env_hack.Cannot_load_cmis log ->
+  | Persistent_env.Cannot_load_cmis log ->
     EnvLazy.force_logged log !components_of_module_maker' c.comps
 
 let get_components c =
@@ -1245,7 +1245,7 @@ let rec scrape_alias_for_visit env (sub : Subst.t option) mty =
       begin match may_subst Subst.module_path sub path with
       | Pident id
         when Ident.persistent id
-          && not (Persistent_env_hack.looked_up persistent_env (Ident.name id)) ->
+          && not (Persistent_env.looked_up persistent_env (Ident.name id)) ->
           false
       | path -> (* PR#6600: find_module may raise Not_found *)
           try scrape_alias_for_visit env sub (find_module path env).md_type
@@ -1285,7 +1285,7 @@ let iter_env wrap proj1 proj2 f env () =
            iter_components (Pident id) path data.mda_components
        | Mod_persistent ->
            let modname = Ident.name id in
-           match Persistent_env_hack.find_in_cache persistent_env modname with
+           match Persistent_env.find_in_cache persistent_env modname with
            | None -> ()
            | Some data ->
                iter_components (Pident id) path data.mda_components)
@@ -1306,7 +1306,7 @@ let same_types env1 env2 =
   env1.types == env2.types && env1.modules == env2.modules
 
 let used_persistent () =
-  Persistent_env_hack.fold persistent_env
+  Persistent_env.fold persistent_env
     (fun s _m r -> Concr.add s r)
     Concr.empty
 
@@ -2117,12 +2117,12 @@ let save_signature_with_transform cmi_transform ~alerts sg modname filename =
   Subst.reset_for_saving ();
   let sg = Subst.signature Make_local (Subst.for_saving Subst.identity) sg in
   let cmi =
-    Persistent_env_hack.make_cmi persistent_env modname sg alerts
+    Persistent_env.make_cmi persistent_env modname sg alerts
     |> cmi_transform in
   let pm = save_sign_of_cmi
-      { Persistent_env_hack.Persistent_signature.cmi; filename } in
-  Persistent_env_hack.save_cmi persistent_env
-    { Persistent_env_hack.Persistent_signature.filename; cmi } pm;
+      { Persistent_env.Persistent_signature.cmi; filename } in
+  Persistent_env.save_cmi persistent_env
+    { Persistent_env.Persistent_signature.filename; cmi } pm;
   cmi
 
 let save_signature ~alerts sg modname filename =
@@ -2858,7 +2858,7 @@ let fold_modules f lid env acc =
                in
                f name p md acc
            | Mod_persistent ->
-               match Persistent_env_hack.find_in_cache persistent_env name with
+               match Persistent_env.find_in_cache persistent_env name with
                | None -> acc
                | Some mda ->
                    let md =
@@ -2919,7 +2919,7 @@ let filter_non_loaded_persistent f env =
          | Mod_local _ -> acc
          | Mod_unbound _ -> acc
          | Mod_persistent ->
-             match Persistent_env_hack.find_in_cache persistent_env name with
+             match Persistent_env.find_in_cache persistent_env name with
              | Some _ -> acc
              | None ->
                  if f (Ident.create_persistent name) then
