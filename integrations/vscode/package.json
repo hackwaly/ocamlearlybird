@@ -3,7 +3,7 @@
   "name": "ocamlearlybird",
   "displayName": "Ocamlearlybird",
   "description": "OCaml debugger. Powered by ocamlearlybird.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "hackwaly",
   "engines": {
     "vscode": "^1.54.0"
