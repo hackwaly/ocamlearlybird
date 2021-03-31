@@ -1,3 +1,10 @@
+## 1.1.0 - 2021-03-31
+
+### Added
+
+* Added OCaml 4.12.0 Support.
+Note: Ocamlearlybird built under ocamlc 4.12 can not debug bytecode produced by ocamlc 4.11, and vice versa.
+
 ## 1.0.3 - 2021-02-23
 
 ### Fixed
