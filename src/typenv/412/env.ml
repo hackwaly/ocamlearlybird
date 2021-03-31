@@ -15,8 +15,6 @@
 
 (* Environment handling *)
 
-module Persistent_env_hack = Persistent_env_hack
-
 open Cmi_format
 open Misc
 open Asttypes
@@ -24,6 +22,8 @@ open Longident
 open Path
 open Types
 open Btype
+
+open Local_store
 
 module String = Misc.Stdlib.String
 
@@ -37,9 +37,9 @@ type 'a usage_tbl = ('a -> unit) Types.Uid.Tbl.t
     (inclusion test between signatures, cf Includemod.value_descriptions, ...).
 *)
 
-let value_declarations  : unit usage_tbl = Types.Uid.Tbl.create 16
-let type_declarations   : unit usage_tbl = Types.Uid.Tbl.create 16
-let module_declarations : unit usage_tbl = Types.Uid.Tbl.create 16
+let value_declarations  : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
+let type_declarations   : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
+let module_declarations : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
 
 type constructor_usage = Positive | Pattern | Privatize
 type constructor_usages =
@@ -66,21 +66,22 @@ let add_constructor_usage ~rebind priv cu usage =
 let constructor_usages () =
   {cu_positive = false; cu_pattern = false; cu_privatize = false}
 
-let used_constructors : constructor_usage usage_tbl = Types.Uid.Tbl.create 16
+let used_constructors : constructor_usage usage_tbl ref =
+  s_table Types.Uid.Tbl.create 16
 
 (** Map indexed by the name of module components. *)
 module NameMap = String.Map
 
-type value_unbound_reason = Env.value_unbound_reason =
+type value_unbound_reason =
   | Val_unbound_instance_variable
   | Val_unbound_self
   | Val_unbound_ancestor
   | Val_unbound_ghost_recursive of Location.t
 
-type module_unbound_reason = Env.module_unbound_reason =
+type module_unbound_reason =
   | Mod_unbound_illegal_recursion
 
-type summary = Env.summary =
+type summary =
     Env_empty
   | Env_value of summary * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
@@ -97,7 +98,7 @@ type summary = Env.summary =
   | Env_value_unbound of summary * string * value_unbound_reason
   | Env_module_unbound of summary * string * module_unbound_reason
 
-type address = Env.address =
+type address =
   | Aident of Ident.t
   | Adot of address * int
 
@@ -669,7 +670,8 @@ module Current_unit_name : sig
   val get : unit -> modname
   val set : modname -> unit
   val is : modname -> bool
-  val is_name_of : Ident.t -> bool
+  val is_ident : Ident.t -> bool
+  val is_path : Path.t -> bool
 end = struct
   let current_unit =
     ref ""
@@ -679,8 +681,11 @@ end = struct
     current_unit := name
   let is name =
     !current_unit = name
-  let is_name_of id =
-    is (Ident.name id)
+  let is_ident id =
+    Ident.persistent id && is (Ident.name id)
+  let is_path = function
+  | Pident id -> is_ident id
+  | Pdot _ | Papply _ -> false
 end
 
 let set_unit_name = Current_unit_name.set
@@ -690,7 +695,7 @@ let find_same_module id tbl =
   match IdTbl.find_same id tbl with
   | x -> x
   | exception Not_found
-    when Ident.persistent id && not (Current_unit_name.is_name_of id) ->
+    when Ident.persistent id && not (Current_unit_name.is_ident id) ->
       Mod_persistent
 
 let find_name_module ~mark name tbl =
@@ -702,20 +707,34 @@ let find_name_module ~mark name tbl =
 
 let add_persistent_structure id env =
   if not (Ident.persistent id) then invalid_arg "Env.add_persistent_structure";
-  if not (Current_unit_name.is_name_of id) then
-    let summary =
+  if Current_unit_name.is_ident id then env
+  else begin
+    let material =
+      (* This addition only observably changes the environment if it shadows a
+         non-persistent module already in the environment.
+         (See PR#9345) *)
       match
         IdTbl.find_name wrap_module ~mark:false (Ident.name id) env.modules
       with
-      | exception Not_found | _, Mod_persistent -> env.summary
-      | _ -> Env_persistent (env.summary, id)
+      | exception Not_found | _, Mod_persistent -> false
+      | _ -> true
     in
-    { env with
-      modules = IdTbl.add id Mod_persistent env.modules;
-      summary
-    }
-  else
-    env
+    let summary =
+      if material then Env_persistent (env.summary, id)
+      else env.summary
+    in
+    let modules =
+      (* With [-no-alias-deps], non-material additions should not
+         affect the environment at all. We should only observe the
+         existence of a cmi when accessing components of the module.
+         (See #9991). *)
+      if material || not !Clflags.transparent_modules then
+        IdTbl.add id Mod_persistent env.modules
+      else
+        env.modules
+    in
+    { env with modules; summary }
+  end
 
 let components_of_module ~alerts ~uid env fs ps path addr mty =
   {
@@ -731,7 +750,7 @@ let components_of_module ~alerts ~uid env fs ps path addr mty =
     }
   }
 
-let sign_of_cmi ~freshen { Persistent_env_hack.Persistent_signature.cmi; _ } =
+let sign_of_cmi ~freshen { Persistent_env.Persistent_signature.cmi; _ } =
   let name = cmi.cmi_name in
   let sign = cmi.cmi_sign in
   let flags = cmi.cmi_flags in
@@ -771,60 +790,60 @@ let read_sign_of_cmi = sign_of_cmi ~freshen:true
 
 let save_sign_of_cmi = sign_of_cmi ~freshen:false
 
-let persistent_env : module_data Persistent_env_hack.t =
-  Persistent_env_hack.empty ()
+let persistent_env : module_data Persistent_env.t ref =
+  s_table Persistent_env.empty ()
 
 let without_cmis f x =
-  Persistent_env_hack.without_cmis persistent_env f x
+  Persistent_env.without_cmis !persistent_env f x
 
-let imports () = Persistent_env_hack.imports persistent_env
+let imports () = Persistent_env.imports !persistent_env
 
 let import_crcs ~source crcs =
-  Persistent_env_hack.import_crcs persistent_env ~source crcs
+  Persistent_env.import_crcs !persistent_env ~source crcs
 
 let read_pers_mod modname filename =
-  Persistent_env_hack.read persistent_env read_sign_of_cmi modname filename
+  Persistent_env.read !persistent_env read_sign_of_cmi modname filename
 
 let find_pers_mod name =
-  Persistent_env_hack.find persistent_env read_sign_of_cmi name
+  Persistent_env.find !persistent_env read_sign_of_cmi name
 
 let check_pers_mod ~loc name =
-  Persistent_env_hack.check persistent_env read_sign_of_cmi ~loc name
+  Persistent_env.check !persistent_env read_sign_of_cmi ~loc name
 
 let crc_of_unit name =
-  Persistent_env_hack.crc_of_unit persistent_env read_sign_of_cmi name
+  Persistent_env.crc_of_unit !persistent_env read_sign_of_cmi name
 
 let is_imported_opaque modname =
-  Persistent_env_hack.is_imported_opaque persistent_env modname
+  Persistent_env.is_imported_opaque !persistent_env modname
 
 let register_import_as_opaque modname =
-  Persistent_env_hack.register_import_as_opaque persistent_env modname
+  Persistent_env.register_import_as_opaque !persistent_env modname
 
 let reset_declaration_caches () =
-  Types.Uid.Tbl.clear value_declarations;
-  Types.Uid.Tbl.clear type_declarations;
-  Types.Uid.Tbl.clear module_declarations;
-  Types.Uid.Tbl.clear used_constructors;
+  Types.Uid.Tbl.clear !value_declarations;
+  Types.Uid.Tbl.clear !type_declarations;
+  Types.Uid.Tbl.clear !module_declarations;
+  Types.Uid.Tbl.clear !used_constructors;
   ()
 
 let reset_cache () =
   Current_unit_name.set "";
-  Persistent_env_hack.clear persistent_env;
+  Persistent_env.clear !persistent_env;
   reset_declaration_caches ();
   ()
 
 let reset_cache_toplevel () =
-  Persistent_env_hack.clear_missing persistent_env;
+  Persistent_env.clear_missing !persistent_env;
   reset_declaration_caches ();
   ()
 
 (* get_components *)
 
 let get_components_res c =
-  match Persistent_env_hack.can_load_cmis persistent_env with
-  | Persistent_env_hack.Can_load_cmis ->
+  match Persistent_env.can_load_cmis !persistent_env with
+  | Persistent_env.Can_load_cmis ->
     EnvLazy.force !components_of_module_maker' c.comps
-  | Persistent_env_hack.Cannot_load_cmis log ->
+  | Persistent_env.Cannot_load_cmis log ->
     EnvLazy.force_logged log !components_of_module_maker' c.comps
 
 let get_components c =
@@ -1068,7 +1087,7 @@ let find_hash_type path env =
   | Papply _ ->
       raise Not_found
 
-let required_globals = ref []
+let required_globals = s_ref []
 let reset_required_globals () = required_globals := []
 let get_required_globals () = !required_globals
 let add_required_global id =
@@ -1245,7 +1264,7 @@ let rec scrape_alias_for_visit env (sub : Subst.t option) mty =
       begin match may_subst Subst.module_path sub path with
       | Pident id
         when Ident.persistent id
-          && not (Persistent_env_hack.looked_up persistent_env (Ident.name id)) ->
+          && not (Persistent_env.looked_up !persistent_env (Ident.name id)) ->
           false
       | path -> (* PR#6600: find_module may raise Not_found *)
           try scrape_alias_for_visit env sub (find_module path env).md_type
@@ -1285,7 +1304,7 @@ let iter_env wrap proj1 proj2 f env () =
            iter_components (Pident id) path data.mda_components
        | Mod_persistent ->
            let modname = Ident.name id in
-           match Persistent_env_hack.find_in_cache persistent_env modname with
+           match Persistent_env.find_in_cache !persistent_env modname with
            | None -> ()
            | Some data ->
                iter_components (Pident id) path data.mda_components)
@@ -1306,7 +1325,7 @@ let same_types env1 env2 =
   env1.types == env2.types && env1.modules == env2.modules
 
 let used_persistent () =
-  Persistent_env_hack.fold persistent_env
+  Persistent_env.fold !persistent_env
     (fun s _m r -> Concr.add s r)
     Concr.empty
 
@@ -1480,6 +1499,16 @@ let module_declaration_address env id presence md =
     end
   | Mp_present ->
       EnvLazy.create_forced (Aident id)
+
+let is_identchar c =
+  (* This should be kept in sync with the [identchar_latin1] character class
+     in [lexer.mll] *)
+  match c with
+  | 'A'..'Z' | 'a'..'z' | '_' | '\192'..'\214'
+  | '\216'..'\246' | '\248'..'\255' | '\'' | '0'..'9' ->
+    true
+  | _ ->
+    false
 
 let rec components_of_module_maker
           {cm_env; cm_freshening_subst; cm_prefixing_subst;
@@ -1657,7 +1686,7 @@ and check_value_name name loc =
   (* Note: we could also check here general validity of the
      identifier, to protect against bad identifiers forged by -pp or
      -ppx preprocessors. *)
-  if String.length name > 0 && (name.[0] = '#') then
+  if String.length name > 0 && not (is_identchar name.[0]) then
     for i = 1 to String.length name - 1 do
       if name.[i] = '#' then
         error (Illegal_value_name(loc, name))
@@ -1666,7 +1695,7 @@ and check_value_name name loc =
 and store_value ?check id addr decl env =
   check_value_name (Ident.name id) decl.val_loc;
   Option.iter
-    (fun f -> check_usage decl.val_loc id decl.val_uid f value_declarations)
+    (fun f -> check_usage decl.val_loc id decl.val_uid f !value_declarations)
     check;
   let vda = { vda_description = decl; vda_address = addr } in
   { env with
@@ -1678,7 +1707,7 @@ and store_type ~check id info env =
   if check then
     check_usage loc id info.type_uid
       (fun s -> Warnings.Unused_type_declaration s)
-      type_declarations;
+      !type_declarations;
   let path = Pident id in
   let constructors =
     Datarepr.constructors_of_type path info
@@ -1697,9 +1726,9 @@ and store_type ~check id info env =
         let name = cstr.cstr_name in
         let loc = cstr.cstr_loc in
         let k = cstr.cstr_uid in
-        if not (Types.Uid.Tbl.mem used_constructors k) then
+        if not (Types.Uid.Tbl.mem !used_constructors k) then
           let used = constructor_usages () in
-          Types.Uid.Tbl.add used_constructors k
+          Types.Uid.Tbl.add !used_constructors k
             (add_constructor_usage ~rebind:false priv used);
           if not (ty_name = "" || ty_name.[0] = '_')
           then !add_delayed_check_forward
@@ -1749,9 +1778,9 @@ and store_extension ~check ~rebind id addr ext env =
     let is_exception = Path.same ext.ext_type_path Predef.path_exn in
     let name = cstr.cstr_name in
     let k = cstr.cstr_uid in
-    if not (Types.Uid.Tbl.mem used_constructors k) then begin
+    if not (Types.Uid.Tbl.mem !used_constructors k) then begin
       let used = constructor_usages () in
-      Types.Uid.Tbl.add used_constructors k
+      Types.Uid.Tbl.add !used_constructors k
         (add_constructor_usage ~rebind priv used);
       !add_delayed_check_forward
         (fun () ->
@@ -1770,7 +1799,7 @@ and store_extension ~check ~rebind id addr ext env =
 and store_module ~check ~freshening_sub id addr presence md env =
   let loc = md.md_loc in
   Option.iter
-    (fun f -> check_usage loc id md.md_uid f module_declarations) check;
+    (fun f -> check_usage loc id md.md_uid f !module_declarations) check;
   let alerts = Builtin_attributes.alerts_of_attrs md.md_attributes in
   let module_decl_lazy =
     match freshening_sub with
@@ -2117,12 +2146,12 @@ let save_signature_with_transform cmi_transform ~alerts sg modname filename =
   Subst.reset_for_saving ();
   let sg = Subst.signature Make_local (Subst.for_saving Subst.identity) sg in
   let cmi =
-    Persistent_env_hack.make_cmi persistent_env modname sg alerts
+    Persistent_env.make_cmi !persistent_env modname sg alerts
     |> cmi_transform in
   let pm = save_sign_of_cmi
-      { Persistent_env_hack.Persistent_signature.cmi; filename } in
-  Persistent_env_hack.save_cmi persistent_env
-    { Persistent_env_hack.Persistent_signature.filename; cmi } pm;
+      { Persistent_env.Persistent_signature.cmi; filename } in
+  Persistent_env.save_cmi !persistent_env
+    { Persistent_env.Persistent_signature.filename; cmi } pm;
   cmi
 
 let save_signature ~alerts sg modname filename =
@@ -2144,19 +2173,19 @@ let (initial_safe_string, initial_unsafe_string) =
 (* Tracking usage *)
 
 let mark_module_used uid =
-  match Types.Uid.Tbl.find module_declarations uid with
+  match Types.Uid.Tbl.find !module_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_modtype_used _uid = ()
 
 let mark_value_used uid =
-  match Types.Uid.Tbl.find value_declarations uid with
+  match Types.Uid.Tbl.find !value_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_type_used uid =
-  match Types.Uid.Tbl.find type_declarations uid with
+  match Types.Uid.Tbl.find !type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
@@ -2166,12 +2195,12 @@ let mark_type_path_used env path =
   | exception Not_found -> ()
 
 let mark_constructor_used usage cd =
-  match Types.Uid.Tbl.find used_constructors cd.cd_uid with
+  match Types.Uid.Tbl.find !used_constructors cd.cd_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
 let mark_extension_used usage ext =
-  match Types.Uid.Tbl.find used_constructors ext.ext_uid with
+  match Types.Uid.Tbl.find !used_constructors ext.ext_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
@@ -2182,7 +2211,7 @@ let mark_constructor_description_used usage env cstr =
     | _ -> assert false
   in
   mark_type_path_used env ty_path;
-  match Types.Uid.Tbl.find used_constructors cstr.cstr_uid with
+  match Types.Uid.Tbl.find !used_constructors cstr.cstr_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
@@ -2195,25 +2224,26 @@ let mark_label_description_used () env lbl =
   mark_type_path_used env ty_path
 
 let mark_class_used uid =
-  match Types.Uid.Tbl.find type_declarations uid with
+  match Types.Uid.Tbl.find !type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_cltype_used uid =
-  match Types.Uid.Tbl.find type_declarations uid with
+  match Types.Uid.Tbl.find !type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let set_value_used_callback vd callback =
-  Types.Uid.Tbl.add value_declarations vd.val_uid callback
+  Types.Uid.Tbl.add !value_declarations vd.val_uid callback
 
 let set_type_used_callback td callback =
   if Uid.for_actual_declaration td.type_uid then
     let old =
-      try Types.Uid.Tbl.find type_declarations td.type_uid
+      try Types.Uid.Tbl.find !type_declarations td.type_uid
       with Not_found -> ignore
     in
-    Types.Uid.Tbl.replace type_declarations td.type_uid (fun () -> callback old)
+    Types.Uid.Tbl.replace !type_declarations td.type_uid
+      (fun () -> callback old)
 
 (* Lookup by name *)
 
@@ -2858,7 +2888,7 @@ let fold_modules f lid env acc =
                in
                f name p md acc
            | Mod_persistent ->
-               match Persistent_env_hack.find_in_cache persistent_env name with
+               match Persistent_env.find_in_cache !persistent_env name with
                | None -> acc
                | Some mda ->
                    let md =
@@ -2919,7 +2949,7 @@ let filter_non_loaded_persistent f env =
          | Mod_local _ -> acc
          | Mod_unbound _ -> acc
          | Mod_persistent ->
-             match Persistent_env_hack.find_in_cache persistent_env name with
+             match Persistent_env.find_in_cache !persistent_env name with
              | Some _ -> acc
              | None ->
                  if f (Ident.create_persistent name) then
@@ -2984,8 +3014,8 @@ let summary env =
   if Path.Map.is_empty env.local_constraints then env.summary
   else Env_constraints (env.summary, env.local_constraints)
 
-let last_env = ref empty
-let last_reduced_env = ref empty
+let last_env = s_ref empty
+let last_reduced_env = s_ref empty
 
 let keep_only_summary env =
   if !last_env == env then !last_reduced_env
@@ -3078,21 +3108,45 @@ let report_lookup_error _loc env ppf = function
   | Unbound_type lid ->
       fprintf ppf "Unbound type constructor %a" !print_longident lid;
       spellcheck ppf extract_types env lid;
-  | Unbound_module lid ->
+  | Unbound_module lid -> begin
       fprintf ppf "Unbound module %a" !print_longident lid;
-      spellcheck ppf extract_modules env lid;
+       match find_modtype_by_name lid env with
+      | exception Not_found -> spellcheck ppf extract_modules env lid;
+      | _ ->
+         fprintf ppf
+           "@.@[%s %a, %s@]"
+           "Hint: There is a module type named"
+           !print_longident lid
+           "but module types are not modules"
+    end
   | Unbound_constructor lid ->
       fprintf ppf "Unbound constructor %a" !print_longident lid;
       spellcheck ppf extract_constructors env lid;
   | Unbound_label lid ->
       fprintf ppf "Unbound record field %a" !print_longident lid;
       spellcheck ppf extract_labels env lid;
-  | Unbound_class lid ->
+  | Unbound_class lid -> begin
       fprintf ppf "Unbound class %a" !print_longident lid;
-      spellcheck ppf extract_classes env lid;
-  | Unbound_modtype lid ->
+      match find_cltype_by_name lid env with
+      | exception Not_found -> spellcheck ppf extract_classes env lid;
+      | _ ->
+         fprintf ppf
+           "@.@[%s %a, %s@]"
+           "Hint: There is a class type named"
+           !print_longident lid
+           "but classes are not class types"
+    end
+  | Unbound_modtype lid -> begin
       fprintf ppf "Unbound module type %a" !print_longident lid;
-      spellcheck ppf extract_modtypes env lid;
+      match find_module_by_name lid env with
+      | exception Not_found -> spellcheck ppf extract_modtypes env lid;
+      | _ ->
+         fprintf ppf
+           "@.@[%s %a, %s@]"
+           "Hint: There is a module named"
+           !print_longident lid
+           "but modules are not module types"
+    end
   | Unbound_cltype lid ->
       fprintf ppf "Unbound class type %a" !print_longident lid;
       spellcheck ppf extract_cltypes env lid;
@@ -3135,9 +3189,13 @@ let report_lookup_error _loc env ppf = function
       fprintf ppf "@[The functor %a is generative,@ it@ cannot@ be@ \
                    applied@ in@ type@ expressions@]" !print_longident lid
   | Cannot_scrape_alias(lid, p) ->
+      let cause =
+        if Current_unit_name.is_path p then "is the current compilation unit"
+        else "is missing"
+      in
       fprintf ppf
-        "The module %a is an alias for module %a, which is missing"
-        !print_longident lid !print_path p
+        "The module %a is an alias for module %a, which %s"
+        !print_longident lid !print_path p cause
 
 let report_error ppf = function
   | Missing_module(_, path1, path2) ->
@@ -3154,11 +3212,6 @@ let report_error ppf = function
       fprintf ppf "'%s' is not a valid value identifier."
         name
   | Lookup_error(loc, t, err) -> report_lookup_error loc t ppf err
-
-let is_structure_module path env =
-  match find_structure_components path env with
-  | _ -> true
-  | exception Not_found -> false
 
 let () =
   Location.register_error_of_exn
@@ -3179,3 +3232,10 @@ let () =
       | _ ->
           None
     )
+
+(* HACK *)
+let is_structure_module path env =
+  match find_structure_components path env with
+  | _ -> true
+  | exception Not_found -> false
+(* /HACK *)

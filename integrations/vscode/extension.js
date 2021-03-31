@@ -4,16 +4,19 @@ const Path = require('path');
 const CP = require('child_process');
 const Util = require('util');
 
-const magic = 'Caml1999X028';
+const SUPPORTED_MAGICS = ['Caml1999X028', 'Caml1999X029'];
+const MAGIC_LENGTH = SUPPORTED_MAGICS[0].length;
+
 
 const isBytecodeFile = async (path) => {
   try {
     const stat = await FS.promises.stat(path);
     const file = await FS.promises.open(path);
     try {
-      const buffer = Buffer.alloc(magic.length);
-      await file.read(buffer, 0, magic.length, stat.size - magic.length);
-      return buffer.toString('ascii') === magic;
+      const buffer = Buffer.alloc(MAGIC_LENGTH);
+      await file.read(buffer, 0, MAGIC_LENGTH, stat.size - MAGIC_LENGTH);
+      const magic = buffer.toString('ascii');
+      return SUPPORTED_MAGICS.includes(magic);
     } finally {
       file.close();
     }
@@ -28,7 +31,7 @@ const debugConfigProvider = {
       name: 'OCaml Debug',
       type: 'ocamlearlybird',
       request: 'launch',
-      program: 'a.out',
+      program: '${workspaceFolder}/a.out',
       stopOnEntry: false,
       yieldSteps: 4096,
       onlyDebugGlob: "<${workspaceFolder}/**/*>"

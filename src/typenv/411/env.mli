@@ -18,16 +18,16 @@
 open Types
 open Misc
 
-type value_unbound_reason = Env.value_unbound_reason =
+type value_unbound_reason =
   | Val_unbound_instance_variable
   | Val_unbound_self
   | Val_unbound_ancestor
   | Val_unbound_ghost_recursive of Location.t
 
-type module_unbound_reason = Env.module_unbound_reason =
+type module_unbound_reason =
   | Mod_unbound_illegal_recursion
 
-type summary = Env.summary =
+type summary =
     Env_empty
   | Env_value of summary * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
@@ -46,7 +46,7 @@ type summary = Env.summary =
   | Env_value_unbound of summary * string * value_unbound_reason
   | Env_module_unbound of summary * string * module_unbound_reason
 
-type address = Env.address =
+type address =
   | Aident of Ident.t
   | Adot of address * int
 

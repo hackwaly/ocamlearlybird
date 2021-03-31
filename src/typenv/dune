@@ -1,4 +1,5 @@
 (library
  (name typenv)
  (flags (:standard -w "-9"))
- (libraries compiler-libs.common))
+ (libraries compiler-libs.common)
+ (virtual_modules typenv))

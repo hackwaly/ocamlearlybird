@@ -148,7 +148,7 @@ val set_object_name:
         Ident.t -> type_expr -> type_expr list -> type_expr -> unit
 val remove_object_name: type_expr -> unit
 val hide_private_methods: type_expr -> unit
-val find_cltype_for_path: Env_hack.t -> Path.t -> type_declaration * type_expr
+val find_cltype_for_path: Env.t -> Path.t -> type_declaration * type_expr
 
 val sort_row_fields: (label * row_field) list -> (label * row_field) list
 val merge_row_fields:
@@ -160,7 +160,7 @@ val filter_row_fields:
 
 val generalize: type_expr -> unit
         (* Generalize in-place the given type *)
-val lower_contravariant: Env_hack.t -> type_expr -> unit
+val lower_contravariant: Env.t -> type_expr -> unit
         (* Lower level of type variables inside contravariant branches;
            to be used before generalize for expansive expressions *)
 val generalize_structure: type_expr -> unit
@@ -173,7 +173,7 @@ val limited_generalize: type_expr -> type_expr -> unit
         (* Only generalize some part of the type
            Make the remaining of the type non-generalizable *)
 
-val check_scope_escape : Env_hack.t -> int -> type_expr -> unit
+val check_scope_escape : Env.t -> int -> type_expr -> unit
         (* [check_scope_escape env lvl ty] ensures that [ty] could be raised
            to the level [lvl] without any scope escape.
            Raises [Unify] otherwise *)
@@ -189,7 +189,7 @@ val instance_list: type_expr list -> type_expr list
         (* Take an instance of a list of type schemes *)
 val existential_name: constructor_description -> type_expr -> string
 val instance_constructor:
-        ?in_pattern:Env_hack.t ref * int ->
+        ?in_pattern:Env.t ref * int ->
         constructor_description -> type_expr list * type_expr
         (* Same, for a constructor *)
 val instance_parameterized_type:
@@ -207,74 +207,74 @@ val instance_poly:
         ?keep_names:bool ->
         bool -> type_expr list -> type_expr -> type_expr list * type_expr
         (* Take an instance of a type scheme containing free univars *)
-val polyfy: Env_hack.t -> type_expr -> type_expr list -> type_expr * bool
+val polyfy: Env.t -> type_expr -> type_expr list -> type_expr * bool
 val instance_label:
         bool -> label_description -> type_expr list * type_expr * type_expr
         (* Same, for a label *)
 val apply:
-        Env_hack.t -> type_expr list -> type_expr -> type_expr list -> type_expr
+        Env.t -> type_expr list -> type_expr -> type_expr list -> type_expr
         (* [apply [p1...pN] t [a1...aN]] match the arguments [ai] to
         the parameters [pi] and returns the corresponding instance of
         [t]. Exception [Cannot_apply] is raised in case of failure. *)
 
-val expand_head_once: Env_hack.t -> type_expr -> type_expr
-val expand_head: Env_hack.t -> type_expr -> type_expr
-val try_expand_once_opt: Env_hack.t -> type_expr -> type_expr
-val expand_head_opt: Env_hack.t -> type_expr -> type_expr
+val expand_head_once: Env.t -> type_expr -> type_expr
+val expand_head: Env.t -> type_expr -> type_expr
+val try_expand_once_opt: Env.t -> type_expr -> type_expr
+val expand_head_opt: Env.t -> type_expr -> type_expr
 (** The compiler's own version of [expand_head] necessary for type-based
     optimisations. *)
 
-val full_expand: Env_hack.t -> type_expr -> type_expr
+val full_expand: Env.t -> type_expr -> type_expr
 val extract_concrete_typedecl:
-        Env_hack.t -> type_expr -> Path.t * Path.t * type_declaration
+        Env.t -> type_expr -> Path.t * Path.t * type_declaration
         (* Return the original path of the types, and the first concrete
            type declaration found expanding it.
            Raise [Not_found] if none appears or not a type constructor. *)
 
-val enforce_constraints: Env_hack.t -> type_expr -> unit
+val enforce_constraints: Env.t -> type_expr -> unit
 
-val unify: Env_hack.t -> type_expr -> type_expr -> unit
+val unify: Env.t -> type_expr -> type_expr -> unit
         (* Unify the two types given. Raise [Unify] if not possible. *)
 val unify_gadt:
-        equations_level:int -> Env_hack.t ref -> type_expr -> type_expr -> unit
+        equations_level:int -> Env.t ref -> type_expr -> type_expr -> unit
         (* Unify the two types given and update the environment with the
            local constraints. Raise [Unify] if not possible. *)
-val unify_var: Env_hack.t -> type_expr -> type_expr -> unit
+val unify_var: Env.t -> type_expr -> type_expr -> unit
         (* Same as [unify], but allow free univars when first type
            is a variable. *)
-val filter_arrow: Env_hack.t -> type_expr -> arg_label -> type_expr * type_expr
+val filter_arrow: Env.t -> type_expr -> arg_label -> type_expr * type_expr
         (* A special case of unification (with l:'a -> 'b). *)
-val filter_method: Env_hack.t -> string -> private_flag -> type_expr -> type_expr
+val filter_method: Env.t -> string -> private_flag -> type_expr -> type_expr
         (* A special case of unification (with {m : 'a; 'b}). *)
-val check_filter_method: Env_hack.t -> string -> private_flag -> type_expr -> unit
+val check_filter_method: Env.t -> string -> private_flag -> type_expr -> unit
         (* A special case of unification (with {m : 'a; 'b}), returning unit. *)
-val occur_in: Env_hack.t -> type_expr -> type_expr -> bool
+val occur_in: Env.t -> type_expr -> type_expr -> bool
 val deep_occur: type_expr -> type_expr -> bool
 val filter_self_method:
-        Env_hack.t -> string -> private_flag -> (Ident.t * type_expr) Meths.t ref ->
+        Env.t -> string -> private_flag -> (Ident.t * type_expr) Meths.t ref ->
         type_expr -> Ident.t * type_expr
-val moregeneral: Env_hack.t -> bool -> type_expr -> type_expr -> bool
+val moregeneral: Env.t -> bool -> type_expr -> type_expr -> bool
         (* Check if the first type scheme is more general than the second. *)
 
 val rigidify: type_expr -> type_expr list
         (* "Rigidify" a type and return its type variable *)
-val all_distinct_vars: Env_hack.t -> type_expr list -> bool
+val all_distinct_vars: Env.t -> type_expr list -> bool
         (* Check those types are all distinct type variables *)
-val matches: Env_hack.t -> type_expr -> type_expr -> bool
+val matches: Env.t -> type_expr -> type_expr -> bool
         (* Same as [moregeneral false], implemented using the two above
            functions and backtracking. Ignore levels *)
 
-val reify_univars : Env_hack.t -> Types.type_expr -> Types.type_expr
+val reify_univars : Env.t -> Types.type_expr -> Types.type_expr
         (* Replaces all the variables of a type by a univar. *)
 
 type class_match_failure =
     CM_Virtual_class
   | CM_Parameter_arity_mismatch of int * int
-  | CM_Type_parameter_mismatch of Env_hack.t * Unification_trace.t
-  | CM_Class_type_mismatch of Env_hack.t * class_type * class_type
-  | CM_Parameter_mismatch of Env_hack.t * Unification_trace.t
-  | CM_Val_type_mismatch of string * Env_hack.t * Unification_trace.t
-  | CM_Meth_type_mismatch of string * Env_hack.t * Unification_trace.t
+  | CM_Type_parameter_mismatch of Env.t * Unification_trace.t
+  | CM_Class_type_mismatch of Env.t * class_type * class_type
+  | CM_Parameter_mismatch of Env.t * Unification_trace.t
+  | CM_Val_type_mismatch of string * Env.t * Unification_trace.t
+  | CM_Meth_type_mismatch of string * Env.t * Unification_trace.t
   | CM_Non_mutable_value of string
   | CM_Non_concrete_value of string
   | CM_Missing_value of string
@@ -285,20 +285,20 @@ type class_match_failure =
   | CM_Private_method of string
   | CM_Virtual_method of string
 val match_class_types:
-    ?trace:bool -> Env_hack.t -> class_type -> class_type -> class_match_failure list
+    ?trace:bool -> Env.t -> class_type -> class_type -> class_match_failure list
         (* Check if the first class type is more general than the second. *)
-val equal: Env_hack.t -> bool -> type_expr list -> type_expr list -> bool
+val equal: Env.t -> bool -> type_expr list -> type_expr list -> bool
         (* [equal env [x1...xn] tau [y1...yn] sigma]
            checks whether the parameterized types
            [/\x1.../\xn.tau] and [/\y1.../\yn.sigma] are equivalent. *)
 val match_class_declarations:
-        Env_hack.t -> type_expr list -> class_type -> type_expr list ->
+        Env.t -> type_expr list -> class_type -> type_expr list ->
         class_type -> class_match_failure list
         (* Check if the first class type is more general than the second. *)
 
-val enlarge_type: Env_hack.t -> type_expr -> type_expr * bool
+val enlarge_type: Env.t -> type_expr -> type_expr * bool
         (* Make a type larger, flag is true if some pruning had to be done *)
-val subtype: Env_hack.t -> type_expr -> type_expr -> unit -> unit
+val subtype: Env.t -> type_expr -> type_expr -> unit -> unit
         (* [subtype env t1 t2] checks that [t1] is a subtype of [t2].
            It accumulates the constraints the type variables must
            enforce and returns a function that enforces this
@@ -306,34 +306,34 @@ val subtype: Env_hack.t -> type_expr -> type_expr -> unit -> unit
 
 exception Nondep_cannot_erase of Ident.t
 
-val nondep_type: Env_hack.t -> Ident.t list -> type_expr -> type_expr
+val nondep_type: Env.t -> Ident.t list -> type_expr -> type_expr
         (* Return a type equivalent to the given type but without
            references to any of the given identifiers.
            Raise [Nondep_cannot_erase id] if no such type exists because [id],
            in particular, could not be erased. *)
 val nondep_type_decl:
-        Env_hack.t -> Ident.t list -> bool -> type_declaration -> type_declaration
+        Env.t -> Ident.t list -> bool -> type_declaration -> type_declaration
         (* Same for type declarations. *)
 val nondep_extension_constructor:
-        Env_hack.t -> Ident.t list -> extension_constructor ->
+        Env.t -> Ident.t list -> extension_constructor ->
         extension_constructor
           (* Same for extension constructor *)
 val nondep_class_declaration:
-        Env_hack.t -> Ident.t list -> class_declaration -> class_declaration
+        Env.t -> Ident.t list -> class_declaration -> class_declaration
         (* Same for class declarations. *)
 val nondep_cltype_declaration:
-  Env_hack.t -> Ident.t list -> class_type_declaration -> class_type_declaration
+  Env.t -> Ident.t list -> class_type_declaration -> class_type_declaration
         (* Same for class type declarations. *)
-(*val correct_abbrev: Env_hack.t -> Path.t -> type_expr list -> type_expr -> unit*)
-val cyclic_abbrev: Env_hack.t -> Ident.t -> type_expr -> bool
-val is_contractive: Env_hack.t -> Path.t -> bool
-val normalize_type: Env_hack.t -> type_expr -> unit
+(*val correct_abbrev: Env.t -> Path.t -> type_expr list -> type_expr -> unit*)
+val cyclic_abbrev: Env.t -> Ident.t -> type_expr -> bool
+val is_contractive: Env.t -> Path.t -> bool
+val normalize_type: Env.t -> type_expr -> unit
 
-val closed_schema: Env_hack.t -> type_expr -> bool
+val closed_schema: Env.t -> type_expr -> bool
         (* Check whether the given type scheme contains no non-generic
            type variables *)
 
-val free_variables: ?env:Env_hack.t -> type_expr -> type_expr list
+val free_variables: ?env:Env.t -> type_expr -> type_expr list
         (* If env present, then check for incomplete definitions too *)
 val closed_type_decl: type_declaration -> type_expr option
 val closed_extension_constructor: extension_constructor -> type_expr option
@@ -351,21 +351,21 @@ val class_type_arity: class_type -> int
 val arity: type_expr -> int
         (* Return the arity (as for curried functions) of the given type. *)
 
-val collapse_conj_params: Env_hack.t -> type_expr list -> unit
+val collapse_conj_params: Env.t -> type_expr list -> unit
         (* Collapse conjunctive types in class parameters *)
 
 val get_current_level: unit -> int
-val wrap_trace_gadt_instances: Env_hack.t -> ('a -> 'b) -> 'a -> 'b
+val wrap_trace_gadt_instances: Env.t -> ('a -> 'b) -> 'a -> 'b
 val reset_reified_var_counter: unit -> unit
 
-val immediacy : Env_hack.t -> type_expr -> Type_immediacy.t
+val immediacy : Env.t -> type_expr -> Type_immediacy.t
 
-val maybe_pointer_type : Env_hack.t -> type_expr -> bool
+val maybe_pointer_type : Env.t -> type_expr -> bool
        (* True if type is possibly pointer, false if definitely not a pointer *)
 
 (* Stubs *)
 val package_subtype :
-    (Env_hack.t -> Path.t -> Longident.t list -> type_expr list ->
+    (Env.t -> Path.t -> Longident.t list -> type_expr list ->
       Path.t -> Longident.t list -> type_expr list -> bool) ref
 
-val mcomp : Env_hack.t -> type_expr -> type_expr -> unit
+val mcomp : Env.t -> type_expr -> type_expr -> unit

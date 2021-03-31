@@ -8,11 +8,13 @@ homepage: "https://github.com/hackwaly/ocamlearlybird"
 bug-reports: "https://github.com/hackwaly/ocamlearlybird/issues"
 depends: [
   "dune" {>= "2.8"}
-  "ocaml" {>= "4.11.0" & < "4.12.0"}
+  "ocaml" {>= "4.11.0" & <= "4.12.0"}
   "ppx_deriving" {>= "5.1"}
   "ppx_deriving_yojson" {>= "3.6.1"}
   "menhir" {>= "20201216" & build}
+  "semver2" {>= "1.1.0" & build}
   "menhirLib" {>= "20201216"}
+  "ocaml-compiler-libs" {>= "0.12.3"}
   "iter" {>= "1.2.1"}
   "lwt" {>= "5.4.0"}
   "lwt_ppx" {>= "2.0.1"}
