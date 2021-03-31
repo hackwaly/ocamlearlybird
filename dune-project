@@ -14,9 +14,8 @@
 (package
   (name earlybird)
   (synopsis "Debug adapter for OCaml 4.11+")
-  (description "Debug adapter for OCaml 4.11+.")
   (depends
-    (ocaml (and (>= 4.11.0) (<= 4.12.0)))
+    (ocaml (and (>= 4.11.0) (< 4.13)))
     (ppx_deriving (>= 5.1))
     (ppx_deriving_yojson (>= 3.6.1))
     (menhir (and (>= 20201216) :build))
