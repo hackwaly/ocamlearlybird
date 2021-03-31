@@ -1,3 +1,4 @@
+
 (**************************************************************************)
 (*                                                                        *)
 (*                                 OCaml                                  *)
@@ -18,22 +19,16 @@
 open Types
 open Misc
 
-(* HACK *)
-type value_unbound_reason = Ocaml_common.Env.value_unbound_reason =
-(* /HACK *)
+type value_unbound_reason =
   | Val_unbound_instance_variable
   | Val_unbound_self
   | Val_unbound_ancestor
   | Val_unbound_ghost_recursive of Location.t
 
-(* HACK *)
-type module_unbound_reason = Ocaml_common.Env.module_unbound_reason =
-(* /HACK *)
+type module_unbound_reason =
   | Mod_unbound_illegal_recursion
 
-(* HACK *)
-type summary = Ocaml_common.Env.summary =
-(* /HACK *)
+type summary =
     Env_empty
   | Env_value of summary * Ident.t * value_description
   | Env_type of summary * Ident.t * type_declaration
@@ -52,9 +47,7 @@ type summary = Ocaml_common.Env.summary =
   | Env_value_unbound of summary * string * value_unbound_reason
   | Env_module_unbound of summary * string * module_unbound_reason
 
-(* HACK *)
-type address = Ocaml_common.Env.address =
-(* /HACK *)
+type address =
   | Aident of Ident.t
   | Adot of address * int
 
@@ -182,11 +175,9 @@ val lookup_error: Location.t -> t -> lookup_error -> 'a
 (* The [lookup_foo] functions will emit proper error messages (by
    raising [Error]) if the identifier cannot be found, whereas the
    [find_foo_by_name] functions will raise [Not_found] instead.
-
    The [~use] parameters of the [lookup_foo] functions control
    whether this lookup should be counted as a use for usage
    warnings and alerts.
-
    [Longident.t]s in the program source should be looked up using
    [lookup_foo ~use:true] exactly one time -- otherwise warnings may be
    emitted the wrong number of times. *)
@@ -289,7 +280,6 @@ val add_local_type: Path.t -> type_declaration -> t -> t
 (* [add_persistent_structure id env] is an environment such that
    module [id] points to the persistent structure contained in the
    external compilation unit with the same name.
-
    The compilation unit itself is looked up in the load path when the
    contents of the module is accessed. *)
 val add_persistent_structure : Ident.t -> t -> t
