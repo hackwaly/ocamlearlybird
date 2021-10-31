@@ -9,16 +9,14 @@
       "type": "ocamlearlybird",
       "request": "launch",
       "program": "${workspaceFolder}/_build/default/src/main/main.bc",
-      "arguments": ["serve", "--port=4711", "--verbosity=debug"],
+      "arguments": [
+        "serve",
+        "--port=4711",
+        "--verbosity=debug"
+      ],
       "stopOnEntry": true,
       "yieldSteps": 4096,
       "onlyDebugGlob": "<${workspaceFolder}/**/*>"
-    },
-    {
-      "name": "Run Extension",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}"]
-    },
+    }
   ]
 }
