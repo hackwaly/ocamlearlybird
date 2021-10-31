@@ -3,8 +3,8 @@ const FS = require("fs");
 const Path = require("path");
 
 const EXT_NAME = "ocamlearlybird";
-const MAGIC_LENGTH = SUPPORTED_MAGICS[0].length;
 const SUPPORTED_MAGICS = ["Caml1999X028", "Caml1999X029"];
+const MAGIC_LENGTH = SUPPORTED_MAGICS[0].length;
 
 const log = (() => {
   const logger = vscode.window.createOutputChannel(EXT_NAME);
@@ -87,7 +87,7 @@ module.exports = {
                 yieldSteps: 4096,
                 program: uri.fsPath,
               };
-              log.file(`debug session starting with: ${asJson(options)}`);
+              log.info(`debug session starting with: ${asJson(options)}`);
               await vscode.debug.startDebugging(folder, options);
               log.info("debug session complete");
             } catch (err) {
