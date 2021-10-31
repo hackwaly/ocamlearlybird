@@ -19,8 +19,11 @@ const log = (() => {
 })();
 
 const isBytecodeFile = async (path) => {
-  const stat = await FS.promises.stat(path);
-  if (!stat.isFile()) return false;
+  const stat = await FS.promises.stat(path).catch((err) => {
+    if (err.code === "ENOENT") return null;
+    throw err;
+  });
+  if (!stat || !stat.isFile()) return false;
   const file = await FS.promises.open(path);
   try {
     const buffer = Buffer.alloc(MAGIC_LENGTH);
@@ -84,9 +87,7 @@ module.exports = {
                 yieldSteps: 4096,
                 program: uri.fsPath,
               };
-              log.file(
-                `debug session starting with: ${asJson(options)}`
-              );
+              log.file(`debug session starting with: ${asJson(options)}`);
               await vscode.debug.startDebugging(folder, options);
               log.info("debug session complete");
             } catch (err) {
