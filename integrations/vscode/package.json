@@ -71,6 +71,11 @@
             "type": "string",
             "description": "Path to ocamlearlybird executable.",
             "default": "ocamlearlybird"
+          },
+          "ocamlearlybird.connectToLocalDebugAdapterServer": {
+            "type": "boolean",
+            "description": "Connect to a running ocamlearlybird server.",
+            "default": false
           }
         }
       }
@@ -165,6 +170,10 @@
   },
   "devDependencies": {
     "@types/node": "^14.14.22",
-    "@types/vscode": "^1.54.0"
+    "@types/vscode": "^1.54.0",
+    "prettier": "2.4.1"
+  },
+  "scripts": {
+    "format": "prettier . --write"
   }
 }
