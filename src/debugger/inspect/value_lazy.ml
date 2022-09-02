@@ -40,7 +40,7 @@ class lazy_value f =
   end
 
 let adopter scene typenv obj typ =
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Tconstr (_, [ rty ], _)
     when Typenv.type_matches typenv (Predef.type_lazy_t rty) typ ->
       let%lwt tag = Scene.get_tag scene obj in
@@ -50,7 +50,7 @@ let adopter scene typenv obj typ =
         Lwt.return (Some (new forced_value v))
       else
         let fty =
-          Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, rty, Cok))
+          Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, rty, Types.commu_ok))
         in
         let%lwt fobj = Scene.get_field scene obj 0 in
         let%lwt f = adopt scene typenv fobj fty in

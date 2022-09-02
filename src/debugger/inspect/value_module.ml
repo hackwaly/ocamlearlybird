@@ -81,8 +81,8 @@ class module_value ~scene ~typenv ~obj ~path () =
   end
 
 let adopter scene typenv obj typ =
-  match (Ctype.repr typ).desc with
-  | Tpackage (path, [], []) -> (
+  match Types.get_desc typ with
+  | Tpackage (path, []) -> (
       try
         let mty = typenv |> Typenv.find_modtype_expansion path in
         let mid =

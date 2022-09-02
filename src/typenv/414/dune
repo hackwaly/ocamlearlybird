@@ -1,6 +1,6 @@
 (library
- (name typenv_412)
+ (name typenv_414)
  (flags (:standard -w "-9"))
  (libraries ocaml-compiler-libs.common)
- (enabled_if (and (>= %{ocaml_version} 4.12) (< %{ocaml_version} 4.14)))
+ (enabled_if (and (>= %{ocaml_version} 4.14) (< %{ocaml_version} 5.0)))
  (implements typenv))

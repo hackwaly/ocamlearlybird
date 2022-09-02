@@ -46,7 +46,7 @@ class object_value ~scene ~typenv ~obj ~members () =
       members
       |> Lwt_list.map_s (fun (name, _, ty) ->
              let ty =
-               Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, ty, Cok))
+               Ctype.newty (Types.Tarrow (Nolabel, Predef.type_unit, ty, Types.commu_ok))
              in
              let%lwt meth = find_method name in
              let%lwt value = adopt scene typenv meth ty in
@@ -54,7 +54,7 @@ class object_value ~scene ~typenv ~obj ~members () =
   end
 
 let adopter scene typenv obj ty =
-  match (Ctype.repr ty).desc with
+  match Types.get_desc ty with
   | Tobject (fields_ty, _) ->
       let members, _ = Ctype.flatten_fields fields_ty in
       Lwt.return (Some (new object_value ~scene ~typenv ~obj ~members ()))

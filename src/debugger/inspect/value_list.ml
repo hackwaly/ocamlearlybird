@@ -45,7 +45,7 @@ class list_value ~scene ~typenv ~obj ~element_type () =
   end
 
 let adopter scene typenv obj typ =
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Tconstr (_, [ element_type ], _)
     when Typenv.type_matches typenv (Predef.type_list element_type) typ ->
       if Scene.is_block obj then

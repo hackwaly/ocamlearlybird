@@ -79,8 +79,8 @@ let adopters =
 
 let adopt scene typenv obj ty =
   let rec resolve_type ty =
-    match (Ctype.repr ty).desc with
-    | Tlink ty | Tsubst ty | Tpoly (ty, _) -> resolve_type ty
+    match Types.get_desc ty with
+    | Tlink ty | Tsubst (ty, _) | Tpoly (ty, _) -> resolve_type ty
     | Tconstr (path, ty_args, _) -> (
         match Typenv.find_type path typenv with
         | exception Not_found -> ty

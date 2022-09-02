@@ -101,7 +101,7 @@ class extension_constructor_value v =
 
 let adopter scene typenv obj typ =
   let typ = Typenv.full_expand typenv typ in
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Tconstr (path, _, _) when path = Predef.path_int ->
     let%lwt obj = Scene.marshal_obj scene obj in
     Lwt.return (Some (new int_value (Obj.magic obj)))

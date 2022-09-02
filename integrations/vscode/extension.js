@@ -3,7 +3,7 @@ const FS = require("fs");
 const Path = require("path");
 
 const EXT_NAME = "ocamlearlybird";
-const SUPPORTED_MAGICS = ["Caml1999X028", "Caml1999X029"];
+const SUPPORTED_MAGICS = ["Caml1999X028", "Caml1999X029", "Caml1999X031"];
 const MAGIC_LENGTH = SUPPORTED_MAGICS[0].length;
 
 const log = (() => {

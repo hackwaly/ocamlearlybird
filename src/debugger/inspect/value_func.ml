@@ -41,7 +41,7 @@ class func_value ?pc ?loc () =
 
 let adopter scene typenv obj typ =
   ignore typenv;
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Types.Tarrow _ ->
       let%lwt pc, loc =
         if Scene.is_block obj then
