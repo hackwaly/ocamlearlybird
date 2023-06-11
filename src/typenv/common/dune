@@ -1,0 +1,5 @@
+(library
+ (name typenv_common)
+ (flags (:standard -w "-9"))
+ (libraries ocaml-compiler-libs.common)
+ (implements typenv))
