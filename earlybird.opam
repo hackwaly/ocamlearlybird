@@ -26,6 +26,7 @@ depends: [
   "csexp" {>= "1.3.2"}
   "lru" {>= "0.3.0"}
   "dap" {>= "1.0.6"}
+  "ppx_optcomp"
   "odoc" {with-doc}
 ]
 build: [

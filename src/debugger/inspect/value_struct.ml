@@ -119,7 +119,9 @@ let adopter scene typenv obj typ =
         | (l, f) :: fields ->
             if Btype.hash_variant l = tag then
               match Types.row_field_repr f with
-              | Rpresent (Some ty) | Reither (_, [ ty ], _) -> Some (l, ty)
+              | Rpresent (Some ty) -> Some (l, ty)
+              | Reither (_, [ ty ], _, _) [@if ocaml_version < (4, 14, 0)] -> Some (l, ty)
+              | Reither (_, [ ty ], _) [@if ocaml_version >= (4, 14, 0)] -> Some (l, ty)
               | _ -> find fields
             else find fields
         | [] -> None
