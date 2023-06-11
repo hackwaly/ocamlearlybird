@@ -1,4 +1,7 @@
 (library
  (name typenv)
  (flags (:standard -w "-9"))
- (libraries ocaml-compiler-libs.common))
+ (libraries ocaml-compiler-libs.common)
+ (preprocess
+  (action
+   (run %{bin:cppo} -V OCAML:%{ocaml_version} %{input-file}))))
