@@ -6,7 +6,6 @@
  (libraries
   ground
   adapter
-  typenv_common
   logs
   logs.fmt
   logs.cli
