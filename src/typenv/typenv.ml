@@ -48,7 +48,7 @@ let env_is_structure_module path env =
  let from_summary ~get_search_dirs summary subst =
    persistent_env_get_search_dirs := get_search_dirs;
    Envaux.reset_cache ();
-   let env = Envaux.env_from_summary (Obj.magic summary) subst in
+   let env = Envaux.env_from_summary summary subst in
    { env; get_search_dirs }
 
  let find_value path { env; get_search_dirs } =
@@ -69,11 +69,11 @@ let env_is_structure_module path env =
 
  let find_value_address path { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   Env.find_value_address path env |> Obj.magic
+   Env.find_value_address path env
 
  let find_module_address path { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   Env.find_module_address path env |> Obj.magic
+   Env.find_module_address path env
 
  let find_modtype_expansion path { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
@@ -98,25 +98,12 @@ let env_is_structure_module path env =
 
  let type_apply { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   Ctype.apply (Obj.magic env)
+   Ctype.apply env
 
  let type_matches { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   Ctype.does_match (Obj.magic env)
+   Ctype.does_match env
 
  let full_expand { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   Ctype.full_expand ~may_forget_scope:false (Obj.magic env)
-
- (* HACK *)
- let () =
-   Env.add_delayed_check_forward := Obj.magic !Ocaml_common.Env.add_delayed_check_forward;
-   Env.same_constr := Obj.magic !Ocaml_common.Env.same_constr;
-   Env.check_well_formed_module := Obj.magic !Ocaml_common.Env.check_well_formed_module;
-   Env.check_functor_application := Obj.magic !Ocaml_common.Env.check_functor_application;
-   Env.strengthen := Obj.magic !Ocaml_common.Env.strengthen;
-   Env.print_longident := Obj.magic !Ocaml_common.Env.print_longident;
-   Env.print_path := Obj.magic !Ocaml_common.Env.print_path;
-   Ctype.package_subtype := Obj.magic !Ocaml_common.Ctype.package_subtype;
-   Persistent_env.add_delayed_check_forward := Obj.magic !Ocaml_common.Persistent_env.add_delayed_check_forward;
- (* /HACK *)
+   Ctype.full_expand ~may_forget_scope:false env
