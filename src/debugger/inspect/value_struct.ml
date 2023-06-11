@@ -169,8 +169,9 @@ let adopter scene typenv obj typ =
   let variant typ type_args =
     let constr_list, unboxed =
       match typ.Types.type_kind with
-      | Type_variant (constr_list, Variant_regular) -> constr_list, false
-      | Type_variant (constr_list, Variant_unboxed) -> constr_list, true
+      | Type_variant constr_list [@if ocaml_version < (4, 13, 0)] -> constr_list, typ.type_unboxed.unboxed
+      | Type_variant (constr_list, Variant_regular) [@if ocaml_version >= (4, 13, 0)] -> constr_list, false
+      | Type_variant (constr_list, Variant_unboxed) [@if ocaml_version >= (4, 13, 0)] -> constr_list, true
       | _ -> assert false
     in
     let type_params = typ.type_params in

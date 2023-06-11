@@ -106,10 +106,22 @@ let env_is_structure_module path env =
    persistent_env_get_search_dirs := get_search_dirs;
    Ctype.apply env
 
+[%%if ocaml_version < (4, 13, 0)]
+ let type_matches { env; get_search_dirs } =
+   persistent_env_get_search_dirs := get_search_dirs;
+   Ctype.matches env
+[%%else]
  let type_matches { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
    Ctype.does_match env
+[%%endif]
 
+[%%if ocaml_version < (4, 13, 0)]
+ let full_expand { env; get_search_dirs } =
+   persistent_env_get_search_dirs := get_search_dirs;
+   Ctype.full_expand env
+[%%else]
  let full_expand { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
    Ctype.full_expand ~may_forget_scope:false env
+[%%endif]

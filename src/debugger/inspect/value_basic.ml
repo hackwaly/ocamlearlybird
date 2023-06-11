@@ -80,7 +80,9 @@ let adopters =
 let adopt scene typenv obj ty =
   let rec resolve_type ty =
     match Types.get_desc ty with
-    | Tlink ty | Tsubst (ty, _) | Tpoly (ty, _) -> resolve_type ty
+    | Tlink ty | Tpoly (ty, _) -> resolve_type ty
+    | Tsubst ty [@if ocaml_version < (4, 13, 0)] -> resolve_type ty
+    | Tsubst (ty, _) [@if ocaml_version >= (4, 13, 0)] -> resolve_type ty
     | Tconstr (path, ty_args, _) -> (
         match Typenv.find_type path typenv with
         | exception Not_found -> ty
