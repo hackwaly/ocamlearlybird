@@ -15,7 +15,7 @@
   (name earlybird)
   (synopsis "Debug adapter for OCaml 4.11+")
   (depends
-    (ocaml (and (>= 4.11.0) (< 4.13)))
+    (ocaml (and (>= 4.14.0) (< 5.0)))
     (ppx_deriving (>= 5.1))
     (ppx_deriving_yojson (>= 3.6.1))
     (menhir (and (>= 20201216) :build))
@@ -26,7 +26,7 @@
     (lwt (>= 5.4.0))
     (lwt_ppx (>= 2.0.1))
     (lwt_react (>= 1.1.3))
-    (cmdliner (>= 1.0.4))
+    (cmdliner (>= 1.1.0))
     (logs (>= 0.7.0))
     (fmt (>= 0.8.9))
     (path_glob (>= 0.2))

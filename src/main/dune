@@ -7,7 +7,8 @@ let impl_libs =
     (fun maj min _ ->
       match maj, min with
       | 4, 11 -> ["typenv_411"]
-      | 4, min when min >= 12 -> ["typenv_412"]
+      | 4, (12 | 13) -> ["typenv_412"]
+      | 4, 14 -> ["typenv_414"]
       | _ -> assert false)
 
 let () = Jbuild_plugin.V1.send @@ {|

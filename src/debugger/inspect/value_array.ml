@@ -36,7 +36,7 @@ class array_value ~scene ~typenv ~obj ~element_type ~len () =
   end
 
 let adopter scene typenv obj typ =
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Tconstr (_, [ element_type ], _)
     when Typenv.type_matches typenv (Predef.type_array element_type) typ
          && Scene.is_block obj ->

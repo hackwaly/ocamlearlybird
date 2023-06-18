@@ -50,15 +50,18 @@ let setup_log =
 
 let debug_command =
   let debug () = Lwt_main.run (debug ()) in
-  Term.(const debug $ setup_log, info "debug")
+  let term = Term.(const debug $ setup_log) in
+  Cmd.v (Cmd.info "debug") term
 
 let serve_command =
   let port_arg = Arg.(value & opt int 4711 & info [ "port" ]) in
   let serve port () = Lwt_main.run (serve port) in
-  Term.(const serve $ port_arg $ setup_log, info "serve")
+  let term = Term.(const serve $ port_arg $ setup_log) in
+  Cmd.v (Cmd.info "serve") term
 
-let default_command =
-  Term.(ret (const (`Help (`Pager, None))), info "ocamlearybird")
+let main_command =
+  let term = Term.(ret (const (`Help (`Pager, None)))) in
+  Cmd.group ~default:term (Cmd.info "ocamlearybird") [debug_command; serve_command]
 
 let () =
   (Lwt.async_exception_hook :=
@@ -66,4 +69,4 @@ let () =
        if exn <> Exit then
          let backtrace = Printexc.get_backtrace () in
          Log.err (fun m -> m "%s\n%s" (Printexc.to_string exn) backtrace));
-  Term.(exit @@ eval_choice default_command [ debug_command; serve_command ])
+  exit (Cmd.eval main_command)

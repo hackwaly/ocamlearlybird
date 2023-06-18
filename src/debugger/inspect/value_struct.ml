@@ -112,20 +112,19 @@ let adopter scene typenv obj typ =
       (Some (new record_value ~scene ~typenv ~obj ~pos ~unboxed ~members ()))
   in
   let poly_variant row =
-    let row = Btype.row_repr row in
     if Scene.is_block obj then
       let%lwt tag = Scene.get_field scene obj 0 in
       let%lwt tag = Scene.marshal_obj scene tag in
       let rec find = function
         | (l, f) :: fields ->
             if Btype.hash_variant l = tag then
-              match Btype.row_field_repr f with
-              | Rpresent (Some ty) | Reither (_, [ ty ], _, _) -> Some (l, ty)
+              match Types.row_field_repr f with
+              | Rpresent (Some ty) | Reither (_, [ ty ], _) -> Some (l, ty)
               | _ -> find fields
             else find fields
         | [] -> None
       in
-      match find row.row_fields with
+      match find (Types.row_fields row) with
       | Some (l, typ') ->
           let%lwt obj' = Scene.get_field scene obj 1 in
           let%lwt payload = adopt scene typenv obj' typ' in
@@ -138,7 +137,7 @@ let adopter scene typenv obj typ =
             if Btype.hash_variant l = tag then Some l else find fields
         | [] -> None
       in
-      match find row.row_fields with
+      match find (Types.row_fields row) with
       | Some l -> Lwt.return (Some (new variant_value ~tag:("`" ^ l) ()))
       | None -> Lwt.return None
   in
@@ -166,12 +165,12 @@ let adopter scene typenv obj typ =
     Lwt.return (Some (new variant_value ~tag ?payload ~embed:true ()))
   in
   let variant typ type_args =
-    let constr_list =
+    let constr_list, unboxed =
       match typ.Types.type_kind with
-      | Type_variant constr_list -> constr_list
+      | Type_variant (constr_list, Variant_regular) -> constr_list, false
+      | Type_variant (constr_list, Variant_unboxed) -> constr_list, true
       | _ -> assert false
     in
-    let unboxed = typ.type_unboxed.unboxed in
     let type_params = typ.type_params in
     let%lwt tag =
       if unboxed then Lwt.return Types.Cstr_unboxed
@@ -214,7 +213,7 @@ let adopter scene typenv obj typ =
         let tag = Ident.name constr.cd_id in
         Lwt.return (Some (new variant_value ~tag ?payload ~embed:true ()))
   in
-  match (Ctype.repr typ).desc with
+  match Types.get_desc typ with
   | Ttuple tys ->
       Lwt.return (Some (new tuple_value ~scene ~typenv ~obj ~members:tys ()))
   | Tconstr (path, type_args, _) -> (
