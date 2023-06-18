@@ -22,6 +22,7 @@
     (semver2 (and (>= 1.1.0) :build))
     (menhirLib (>= 20201216))
     (ocaml-compiler-libs (>= 0.12.3))
+    (ppx_optcomp (>= 0.11))
     (iter (>= 1.2.1))
     (lwt (>= 5.4.0))
     (lwt_ppx (>= 2.0.1))
