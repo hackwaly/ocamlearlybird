@@ -2,7 +2,7 @@
 
 ## How to use
 
-1. Switch to ocaml 4.11 or 4.12
+1. Switch to ocaml 4.12+
 2. Install earlybird and make sure ocamlearlybird in your PATH.
 3. Install vscode extension hackwaly/ocamlearlybird
 
