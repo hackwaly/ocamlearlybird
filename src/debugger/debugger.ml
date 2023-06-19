@@ -363,13 +363,11 @@ let next t =
       let%lwt summary, _, _ = Controller.execute t.c _1 in
       let%lwt frame1 = Scene.top_frame (t.c, t.c.time) in
       let should_go_out (stack_pos1, e1) (stack_pos2, e2) =
-        let is_entered =
-          Debug_types.Sp.(compare (base stack_pos2 e2.ev_stacksize) (base stack_pos1 e1.ev_stacksize) > 0)
+        let c =
+          Debug_types.Sp.(compare (base stack_pos2 e2.ev_stacksize) (base stack_pos1 e1.ev_stacksize))
         in
-        let is_tco =
-          Debug_types.Sp.(compare (base stack_pos2 e2.ev_stacksize) (base stack_pos1 e1.ev_stacksize) = 0)
-          && e2.ev_info = Event_function
-        in
+        let is_entered = c > 0 in
+        let is_tco = c = 0 && e2.ev_info = Event_function in
         is_entered || is_tco
       in
       match (frame0, frame1) with
