@@ -69,10 +69,10 @@ module.exports = {
       context.subscriptions.push(
         vscode.commands.registerCommand(
           "ocamlearlybird.startDebug",
-          async () => {
+          async (resourceUri) => {
             try {
               log.info(`on:ocamlearlybird.startDebug`);
-              const uri = vscode.window.activeTextEditor.document.uri;
+              const uri = resourceUri ?? vscode.window.activeTextEditor.document.uri;
               const folder = vscode.workspace.getWorkspaceFolder(uri);
               if (!folder) {
                 throw new Error(
