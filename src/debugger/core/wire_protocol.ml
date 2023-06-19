@@ -16,10 +16,11 @@
  *)
 
 open Ground
+open Debug_types
 open Errors
 open Lwt_conn
 
-type pc = int * int
+type pc = int * int (* TODO: deduplicate with Debug_types *)
 
 let _read_pc conn =
   let%lwt frag_num = Lwt_io.BE.read_int conn.io.in_ in
@@ -29,6 +30,15 @@ let _read_pc conn =
 let _write_pc conn (frag_num, pos) =
   Lwt_io.BE.write_int conn.io.out frag_num;%lwt
   Lwt_io.BE.write_int conn.io.out pos
+
+let _read_sp conn =
+  let%lwt block = Lwt_io.BE.read_int conn.io.in_ in
+  let%lwt offset = Lwt_io.BE.read_int conn.io.in_ in
+  Lwt.return Sp.{block; offset}
+
+let _write_sp conn Sp.{block; offset} =
+  Lwt_io.BE.write_int conn.io.out block;%lwt
+  Lwt_io.BE.write_int conn.io.out offset
 
 let set_fork_mode conn mode =
   Lwt_conn.atomic conn (fun conn ->
@@ -54,7 +64,7 @@ let reset_instr conn pc =
 let set_trap_barrier conn pos =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out 'b';%lwt
-      Lwt_io.BE.write_int conn.io.out pos)
+      _write_sp conn pos)
 
 let checkpoint conn =
   Lwt_conn.atomic conn (fun conn ->
@@ -104,12 +114,12 @@ let go conn steps =
         | _ -> assert false
       in
       let%lwt executed_steps = Lwt_io.BE.read_int conn.io.in_ in
-      let%lwt sp = Lwt_io.BE.read_int conn.io.in_ in
+      let%lwt sp = _read_sp conn in
       let%lwt pc = _read_pc conn in
       Lwt.return
         ( executed_steps,
           summary,
-          match (sp, pc) with 0, (-1, 0) -> None | _ -> Some (sp, pc) ))
+          match pc with (-1, 0) when sp = Sp.null -> None | _ -> Some (sp, pc) ))
 
 let wait conn =
   Lwt_conn.atomic conn (fun conn -> Lwt_io.write_char conn.io.out 'w')
@@ -120,29 +130,32 @@ let stop conn =
 let initial_frame conn =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out '0';%lwt
-      let%lwt stack_pos = Lwt_io.BE.read_int conn.io.in_ in
+      let%lwt stack_pos = _read_sp conn in
       let%lwt pc = _read_pc conn in
       Lwt.return (stack_pos, pc))
 
 let get_frame conn =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out 'f';%lwt
-      let%lwt stack_pos = Lwt_io.BE.read_int conn.io.in_ in
+      let%lwt stack_pos = _read_sp conn in
       let%lwt pc = _read_pc conn in
       Lwt.return (stack_pos, pc))
 
 let set_frame conn stack_pos =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out 'S';%lwt
-      Lwt_io.BE.write_int conn.io.out stack_pos)
+      _write_sp conn stack_pos)
 
 let up_frame conn stacksize =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out 'U';%lwt
       Lwt_io.BE.write_int conn.io.out stacksize;%lwt
-      let%lwt stack_pos = Lwt_io.BE.read_int conn.io.in_ in
+      let%lwt stack_pos = _read_sp conn in
       let%lwt res =
-        if stack_pos = -1 then Lwt.return None
+        if stack_pos.block = -1 then (
+          assert (stack_pos.offset = -1);
+          Lwt.return None
+        )
         else
           let%lwt pc = _read_pc conn in
           Lwt.return (Some (stack_pos, pc))

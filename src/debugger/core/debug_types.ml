@@ -17,17 +17,30 @@
 
 type pc = int * int
 
-module Sp : sig
+module Sp = struct
+
+  (* Position in the debuggee's stack. *)
   type t = {
     block : int;
     offset : int;
   }
-  val null : t
-  val base : t -> int -> t
-  val compare : t -> t -> int
+
+  let null = { block = -1; offset = -1}
+
+  let base sp n = {sp with offset = sp.offset - n}
+
+  let compare sp1 sp2 =
+    match Stdlib.compare sp1.block sp2.block with
+    | 0 -> Stdlib.compare sp1.offset sp2.offset
+    | x -> x
+
 end
 
-val main_frag : int
+(* Identifier of the code fragment for the main program.
+   Numbering starts at 1 and the runtime registers 2 fragments before
+   the main program: one for uncaught exceptions and one for callbacks.
+*)
+let main_frag = 3
 
 type 'a source_location = {
   source : string;

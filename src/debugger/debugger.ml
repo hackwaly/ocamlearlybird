@@ -364,10 +364,10 @@ let next t =
       let%lwt frame1 = Scene.top_frame (t.c, t.c.time) in
       let should_go_out (stack_pos1, e1) (stack_pos2, e2) =
         let is_entered =
-          stack_pos2 - e2.ev_stacksize > stack_pos1 - e1.ev_stacksize
+          Debug_types.Sp.(compare (base stack_pos2 e2.ev_stacksize) (base stack_pos1 e1.ev_stacksize) > 0)
         in
         let is_tco =
-          stack_pos2 - e2.ev_stacksize = stack_pos1 - e1.ev_stacksize
+          Debug_types.Sp.(compare (base stack_pos2 e2.ev_stacksize) (base stack_pos1 e1.ev_stacksize) = 0)
           && e2.ev_info = Event_function
         in
         is_entered || is_tco

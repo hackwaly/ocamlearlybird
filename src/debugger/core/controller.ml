@@ -67,7 +67,7 @@ let root ?debug_filter debug_sock symbols_file =
   assert (neg1 = -1);
   let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
   let%lwt debug_info = Bytecode.load_debuginfo symbols_file in
-  let frag = Code_fragment.make 0 debug_info in
+  let frag = Code_fragment.make Debug_types.main_frag debug_info in
   let symbols = Symbols.create ?debug_filter () in
   Symbols.add_fragment symbols frag;%lwt
   let%lwt debug_modules = _set_frag_events symbols conn frag in
@@ -208,7 +208,7 @@ let execute ?(yield_steps = Int.max_int)
       | Some trap_barrier -> Wire_protocol.set_trap_barrier t.conn trap_barrier
     in
     let%lwt summary, remaining_steps, sp_pc = run () in
-    Wire_protocol.set_trap_barrier t.conn 0;%lwt
+    Wire_protocol.set_trap_barrier t.conn Debug_types.Sp.null;%lwt
     if summary = `Trap_barrier then
       let rec stop_on_event () =
         let%lwt summary', remaining_steps', sp_pc' = exec_dynlink _1 in
