@@ -114,7 +114,10 @@ let go conn steps =
       Lwt.return
         ( executed_steps,
           summary,
-          match pc with (-1, 0) when sp = Sp.null -> None | _ -> Some (sp, pc) ))
+          match pc with
+          | (-1, 0) when sp = Sp.null [@if ocaml_version < (5, 0, 0)] -> None
+          | (0, 0) when sp = Sp.null [@if ocaml_version >= (5, 0, 0)] -> None
+          | _ -> Some (sp, pc) ))
 
 let wait conn =
   Lwt_conn.atomic conn (fun conn -> Lwt_io.write_char conn.io.out 'w')

@@ -17,6 +17,32 @@
 
 type pc = int * int
 
+[%%if ocaml_version < (5, 0, 0)]
+
+module Sp = struct
+
+  type t = int
+
+  let null = 0
+  let mone = -1
+
+  let base sp n = sp - n
+
+  let compare sp1 sp2 = Stdlib.compare sp1 sp2
+
+
+  let read in_ =
+    let%lwt sp = Lwt_io.BE.read_int in_ in
+    Lwt.return sp
+
+  let write out sp =
+    Lwt_io.BE.write_int out sp
+end
+
+let main_frag = 0
+
+[%%else]
+
 module Sp = struct
 
   (* Position in the debuggee's stack. *)
@@ -51,6 +77,8 @@ end
    the main program: one for uncaught exceptions and one for callbacks.
 *)
 let main_frag = 3
+
+[%%endif]
 
 type 'a source_location = {
   source : string;
