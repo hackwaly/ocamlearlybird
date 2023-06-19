@@ -5,7 +5,7 @@
 
 (generate_opam_files true)
 (authors hackwaly@qq.com)
-(maintainers hackwaly@qq.com)
+(maintainers "Simmo Saan <simmo.saan@gmail.com>")
 (source (github hackwaly/ocamlearlybird))
 
 (homepage https://github.com/hackwaly/ocamlearlybird)
