@@ -31,14 +31,9 @@ let _write_pc conn (frag_num, pos) =
   Lwt_io.BE.write_int conn.io.out frag_num;%lwt
   Lwt_io.BE.write_int conn.io.out pos
 
-let _read_sp conn =
-  let%lwt block = Lwt_io.BE.read_int conn.io.in_ in
-  let%lwt offset = Lwt_io.BE.read_int conn.io.in_ in
-  Lwt.return Sp.{block; offset}
+let _read_sp conn = Sp.read conn.io.in_
 
-let _write_sp conn Sp.{block; offset} =
-  Lwt_io.BE.write_int conn.io.out block;%lwt
-  Lwt_io.BE.write_int conn.io.out offset
+let _write_sp conn sp = Sp.write conn.io.out sp
 
 let set_fork_mode conn mode =
   Lwt_conn.atomic conn (fun conn ->
@@ -152,10 +147,7 @@ let up_frame conn stacksize =
       Lwt_io.BE.write_int conn.io.out stacksize;%lwt
       let%lwt stack_pos = _read_sp conn in
       let%lwt res =
-        if stack_pos.block = -1 then (
-          assert (stack_pos.offset = -1);
-          Lwt.return None
-        )
+        if stack_pos = Sp.mone then Lwt.return None
         else
           let%lwt pc = _read_pc conn in
           Lwt.return (Some (stack_pos, pc))

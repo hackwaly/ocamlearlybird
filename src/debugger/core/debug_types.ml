@@ -26,6 +26,7 @@ module Sp = struct
   }
 
   let null = { block = -1; offset = -1}
+  let mone = { block = -1; offset = -1}
 
   let base sp n = {sp with offset = sp.offset - n}
 
@@ -34,6 +35,15 @@ module Sp = struct
     | 0 -> Stdlib.compare sp1.offset sp2.offset
     | x -> x
 
+
+  let read in_ =
+    let%lwt block = Lwt_io.BE.read_int in_ in
+    let%lwt offset = Lwt_io.BE.read_int in_ in
+    Lwt.return {block; offset}
+
+  let write out {block; offset} =
+    Lwt_io.BE.write_int out block;%lwt
+    Lwt_io.BE.write_int out offset
 end
 
 (* Identifier of the code fragment for the main program.
