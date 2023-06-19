@@ -81,8 +81,21 @@ class module_value ~scene ~typenv ~obj ~path () =
   end
 
 let adopter scene typenv obj typ =
+  (* TODO: deduplicate *)
   match Types.get_desc typ with
-  | Tpackage (path, []) -> (
+  | Tpackage (path, [], []) [@if ocaml_version < (4, 13, 0)] -> (
+      try
+        let mty = typenv |> Typenv.find_modtype_expansion path in
+        let mid =
+          Ident.create_persistent
+            (Printf.sprintf "M_%04x"
+                (Float.to_int (Sys.time () *. 1e9) mod 0x10000))
+        in
+        let typenv' = typenv |> Typenv.add_module mid Types.Mp_present mty in
+        Lwt.return
+          (Some (new module_value ~scene ~typenv:typenv' ~obj ~path:(Path.Pident mid) ()))
+      with _ -> Lwt.return (Some unknown_module_value) )
+  | Tpackage (path, []) [@if ocaml_version >= (4, 13, 0)] -> (
       try
         let mty = typenv |> Typenv.find_modtype_expansion path in
         let mid =

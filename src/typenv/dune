@@ -1,5 +1,6 @@
 (library
  (name typenv)
  (flags (:standard -w "-9"))
- (libraries compiler-libs.common)
- (virtual_modules typenv))
+ (preprocess
+  (pps ppx_optcomp))
+ (libraries ocaml-compiler-libs.common))

@@ -1,17 +1,3 @@
-(* -*- tuareg -*- *)
-
-let impl_libs =
-  Scanf.sscanf
-    Sys.ocaml_version
-    "%d.%2d.%s"
-    (fun maj min _ ->
-      match maj, min with
-      | 4, 11 -> ["typenv_411"]
-      | 4, (12 | 13) -> ["typenv_412"]
-      | 4, 14 -> ["typenv_414"]
-      | _ -> assert false)
-
-let () = Jbuild_plugin.V1.send @@ {|
 (executable
  (name main)
  (modes byte native)
@@ -28,10 +14,8 @@ let () = Jbuild_plugin.V1.send @@ {|
   fmt.cli
   lwt
   lwt.unix
-  cmdliner
-|} ^ String.concat "\n" impl_libs ^ {|))
+  cmdliner))
 
 (install
  (section bin)
  (files (main.exe as ocamlearlybird)))
-|}

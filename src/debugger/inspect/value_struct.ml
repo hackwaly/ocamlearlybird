@@ -119,7 +119,9 @@ let adopter scene typenv obj typ =
         | (l, f) :: fields ->
             if Btype.hash_variant l = tag then
               match Types.row_field_repr f with
-              | Rpresent (Some ty) | Reither (_, [ ty ], _) -> Some (l, ty)
+              | Rpresent (Some ty) -> Some (l, ty)
+              | Reither (_, [ ty ], _, _) [@if ocaml_version < (4, 14, 0)] -> Some (l, ty)
+              | Reither (_, [ ty ], _) [@if ocaml_version >= (4, 14, 0)] -> Some (l, ty)
               | _ -> find fields
             else find fields
         | [] -> None
@@ -167,8 +169,9 @@ let adopter scene typenv obj typ =
   let variant typ type_args =
     let constr_list, unboxed =
       match typ.Types.type_kind with
-      | Type_variant (constr_list, Variant_regular) -> constr_list, false
-      | Type_variant (constr_list, Variant_unboxed) -> constr_list, true
+      | Type_variant constr_list [@if ocaml_version < (4, 13, 0)] -> constr_list, typ.type_unboxed.unboxed
+      | Type_variant (constr_list, Variant_regular) [@if ocaml_version >= (4, 13, 0)] -> constr_list, false
+      | Type_variant (constr_list, Variant_unboxed) [@if ocaml_version >= (4, 13, 0)] -> constr_list, true
       | _ -> assert false
     in
     let type_params = typ.type_params in
