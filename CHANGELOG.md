@@ -1,3 +1,13 @@
+## Unreleased
+
+### Added
+
+* Add OCaml 4.13 and 4.14 support.
+
+### Removed
+
+* Remove OCaml 4.11 support.
+
 ## 1.1.0 - 2021-03-31
 
 ### Added
