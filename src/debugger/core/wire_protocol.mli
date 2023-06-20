@@ -16,6 +16,7 @@
  *)
 
 open Ground
+open Debug_types
 
 type pc = int * int
 
@@ -42,24 +43,24 @@ val set_breakpoint : Lwt_conn.t -> pc -> unit Lwt.t
 
 val reset_instr : Lwt_conn.t -> pc -> unit Lwt.t
 
-val set_trap_barrier : Lwt_conn.t -> int -> unit Lwt.t
+val set_trap_barrier : Lwt_conn.t -> Sp.t -> unit Lwt.t
 
 val checkpoint : Lwt_conn.t -> int Lwt.t
 
 val go :
-  Lwt_conn.t -> int -> (int * execution_summary * (int * pc) option) Lwt.t
+  Lwt_conn.t -> int -> (int * execution_summary * (Sp.t * pc) option) Lwt.t
 
 val stop : Lwt_conn.t -> unit Lwt.t
 
 val wait : Lwt_conn.t -> unit Lwt.t
 
-val initial_frame : Lwt_conn.t -> (int * pc) Lwt.t
+val initial_frame : Lwt_conn.t -> (Sp.t * pc) Lwt.t
 
-val get_frame : Lwt_conn.t -> (int * pc) Lwt.t
+val get_frame : Lwt_conn.t -> (Sp.t * pc) Lwt.t
 
-val set_frame : Lwt_conn.t -> int -> unit Lwt.t
+val set_frame : Lwt_conn.t -> Sp.t -> unit Lwt.t
 
-val up_frame : Lwt_conn.t -> int -> (int * pc) option Lwt.t
+val up_frame : Lwt_conn.t -> int -> (Sp.t * pc) option Lwt.t
 
 val get_local : Lwt_conn.t -> int -> remote_value Lwt.t
 

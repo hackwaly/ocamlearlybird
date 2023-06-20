@@ -4,5 +4,4 @@
  (name debugger)
  (preprocess
   (pps lwt_ppx ppx_deriving.show ppx_deriving.make ppx_optcomp))
- (modules_without_implementation debug_types)
  (libraries ground ocaml-compiler-libs.common typenv trivia_check lwt lwt.unix lwt_react path_glob str iter))

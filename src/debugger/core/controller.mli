@@ -51,7 +51,7 @@ val stop : ?gracefully:bool -> t -> unit Lwt.t
 val execute :
   ?yield_steps:int ->
   ?on_yield:(unit -> [ `Continue | `Stop of int ] Lwt.t) ->
-  ?trap_barrier:int ->
+  ?trap_barrier:Sp.t ->
   ?temporary_breakpoint:pc ->
   t ->
   int64 ->
@@ -61,5 +61,5 @@ val execute :
     | `Exited
     | `Trap_barrier
     | `Uncaught_exc ]
-  * int64 * (int * (int * int)) option )
+  * int64 * (Sp.t * (int * int)) option )
   Lwt.t
