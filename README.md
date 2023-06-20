@@ -1,5 +1,7 @@
 # ocamlearlybird
 
+[![ci workflow status](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml/badge.svg)](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml)
+
 ## How to use
 
 1. Switch to ocaml 4.12+
