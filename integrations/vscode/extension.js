@@ -1,10 +1,7 @@
 const vscode = require("vscode");
-const FS = require("fs");
 const Path = require("path");
 
 const EXT_NAME = "ocamlearlybird";
-const SUPPORTED_MAGICS = ["Caml1999X029", "Caml1999X030", "Caml1999X031", "Caml1999X032"];
-const MAGIC_LENGTH = SUPPORTED_MAGICS[0].length;
 
 const log = (() => {
   const logger = vscode.window.createOutputChannel(EXT_NAME);
@@ -17,23 +14,6 @@ const log = (() => {
     error: logWithLevel("error"),
   };
 })();
-
-const isBytecodeFile = async (path) => {
-  const stat = await FS.promises.stat(path).catch((err) => {
-    if (err.code === "ENOENT") return null;
-    throw err;
-  });
-  if (!stat || !stat.isFile()) return false;
-  const file = await FS.promises.open(path);
-  try {
-    const buffer = Buffer.alloc(MAGIC_LENGTH);
-    await file.read(buffer, 0, MAGIC_LENGTH, stat.size - MAGIC_LENGTH);
-    const magic = buffer.toString("ascii");
-    return SUPPORTED_MAGICS.includes(magic);
-  } finally {
-    file.close();
-  }
-};
 
 const jsonStringifyFnSerializer = (k, v) =>
   k ? (typeof v === "function" ? `[fn ${v.name || k}]` : v) : v;
@@ -146,19 +126,6 @@ module.exports = {
                 request: "launch",
                 program: "${file}",
               };
-            }
-            return config;
-          },
-          async resolveDebugConfigurationWithSubstitutedVariables(
-            folder,
-            config,
-            token
-          ) {
-            if (!(await isBytecodeFile(config.program))) {
-              vscode.window.showErrorMessage(
-                `Expected OCaml bytecode file. ${config.program} is not supported`
-              );
-              return;
             }
             return config;
           },
