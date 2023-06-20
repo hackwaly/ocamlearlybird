@@ -2,7 +2,7 @@
 
 ### Added
 
-* Add OCaml 4.13 and 4.14 support.
+* Add OCaml 4.13, 4.14 and 5.0 support.
 
 ### Removed
 
