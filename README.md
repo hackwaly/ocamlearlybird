@@ -1,6 +1,8 @@
 # ocamlearlybird
 
 [![ci workflow status](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml/badge.svg)](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml)
+[![GitHub release status](https://img.shields.io/github/v/release/hackwaly/ocamlearlybird)](https://github.com/hackwaly/ocamlearlybird/releases)
+[![opam package status](https://badgen.net/opam/v/earlybird)](https://opam.ocaml.org/packages/earlybird)
 
 ## How to use
 
