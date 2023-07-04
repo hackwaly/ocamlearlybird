@@ -61,12 +61,15 @@ let _set_frag_events symbols conn frag =
     |> FragModuleIdSet_.of_seq)
 
 let root ?debug_filter debug_sock symbols_file =
+  (* Load debug info from bytecode executable before waiting to accept connection.
+     So if the executable doesn't exist and thus never connects,
+     the adapter exits with error instead of getting stuck waiting for the impossible. *)
+  let%lwt debug_info = Bytecode.load_debuginfo symbols_file in
   let%lwt fd, _ = Lwt_unix.accept debug_sock in
   let conn = Lwt_conn.of_fd fd in
   let%lwt neg1 = Lwt_io.BE.read_int conn.io.in_ in
   assert (neg1 = -1);
   let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
-  let%lwt debug_info = Bytecode.load_debuginfo symbols_file in
   let frag = Code_fragment.make Debug_types.main_frag debug_info in
   let symbols = Symbols.create ?debug_filter () in
   Symbols.add_fragment symbols frag;%lwt
