@@ -43,8 +43,7 @@ let serve_command =
   Cmd.v (Cmd.info "serve") term
 
 let main_command =
-  let term = Term.(ret (const (`Help (`Pager, None)))) in
-  Cmd.group ~default:term (Cmd.info "ocamlearybird") [debug_command; serve_command]
+  Cmd.group (Cmd.info "ocamlearybird" ~version:"%%VERSION%%") [debug_command; serve_command]
 
 let () =
   (Lwt.async_exception_hook :=
