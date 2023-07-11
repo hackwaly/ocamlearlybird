@@ -1,28 +1,34 @@
-# ocamlearlybird
+# OCaml earlybird
 
 [![ci workflow status](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml/badge.svg)](https://github.com/hackwaly/ocamlearlybird/actions/workflows/ci.yml)
 [![GitHub release status](https://img.shields.io/github/v/release/hackwaly/ocamlearlybird)](https://github.com/hackwaly/ocamlearlybird/releases)
 [![opam package status](https://badgen.net/opam/v/earlybird)](https://opam.ocaml.org/packages/earlybird)
 
-## How to use
+OCaml debug adapter.
 
-1. Switch to ocaml 4.12+
-2. Install earlybird and make sure ocamlearlybird in your PATH.
-3. Install vscode extension hackwaly/ocamlearlybird
+## Installation
 
-## Quick debug
-
-You can select context menu "Start an OCaml Debug Session" on bytecode file in vscode explorer to quickly start an debug session.
-
-## Example
-
-[Debug utop](https://i.imgur.com/U3GDHXM.gif)
-
-## Example launch configuration
-
-Used to debug utop examples.
-
+```console
+opam install earlybird
 ```
+
+## Usage
+
+### VS Code
+
+See [Debugging OCaml programs (experimental)](https://github.com/ocamllabs/vscode-ocaml-platform#debugging-ocaml-programs-experimental) in VSCode OCaml Platform README.
+This requires VSCode OCaml Platform 1.13 or newer.
+
+> PS. Since the integration into VSCode OCaml Platform, the old "Ocamlearlybird" VSCode extension is deprecated.
+
+## Examples
+
+### utop
+
+[Screen capture of debugging utop](https://i.imgur.com/U3GDHXM.gif).
+
+Launch configuration used:
+```json
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
@@ -31,7 +37,7 @@ Used to debug utop examples.
     "configurations": [
         {
             "name": "test_program",
-            "type": "ocamlearlybird",
+            "type": "ocaml.earlybird",
             "request": "launch",
             "stopOnEntry": true,
             "console": "integratedTerminal",
