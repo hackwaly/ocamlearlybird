@@ -1,8 +1,18 @@
-## Unreleased
+## 1.2.0 - 2023-07-11
 
 ### Added
 
 * Add OCaml 4.13, 4.14 and 5.0 support.
+* Add `--version` command line option.
+
+### Changed
+
+* Relicense under MIT (from GPL).
+* Deprecate own VSCode extension in favor of VSCode OCaml Platform integration: https://github.com/ocamllabs/vscode-ocaml-platform/pull/1148.
+
+### Fixed
+
+* Fix being stuck if program doesn't exist (#49).
 
 ### Removed
 
