@@ -23,7 +23,9 @@ module Path = struct
       match path with
       | Pident id -> Ident.name id
       | Pdot (p, d) -> aux p ^ "." ^ d
+      | Pextra_ty (p, Pcstr_ty d) [@if ocaml_version >= (5, 1, 0)] -> aux p ^ "." ^ d
       | Papply (p1, p2) -> aux p1 ^ " (" ^ aux p2 ^ ")"
+      | Pextra_ty (p, Pext_ty) [@if ocaml_version >= (5, 1, 0)] -> aux p
     in
     aux path
 
@@ -31,5 +33,7 @@ module Path = struct
     match path with
     | Pident id -> Longident.Lident (Ident.name id)
     | Pdot (p, d) -> Longident.Ldot (to_longident p, d)
+    | Pextra_ty (p, Pcstr_ty d) [@if ocaml_version >= (5, 1, 0)] -> Longident.Ldot (to_longident p, d)
     | Papply (p1, p2) -> Longident.Lapply (to_longident p1, to_longident p2)
+    | Pextra_ty (p, Pext_ty) [@if ocaml_version >= (5, 1, 0)] -> to_longident p
 end
