@@ -14,7 +14,7 @@
  (name earlybird)
  (synopsis "OCaml debug adapter")
  (depends
-  (ocaml (and (>= 4.12.0) (< 5.1)))
+  (ocaml (and (>= 4.12.0)))
   (ppx_deriving (>= 5.1))
   (ppx_deriving_yojson (>= 3.6.1))
   (menhir (and (>= 20201216) :build))
