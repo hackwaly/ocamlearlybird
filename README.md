@@ -21,6 +21,13 @@ This requires VSCode OCaml Platform 1.13 or newer.
 
 > PS. Since the integration into VSCode OCaml Platform, the old "Ocamlearlybird" VSCode extension is deprecated.
 
+## Troubleshooting
+
+### Breakpoints not hit with `(lang dune 3.0)` and above
+
+Change to `(lang dune 3.7)` or above and add `(map_workspace_root false)` to your `dune-project`.
+See [dune documentation](https://dune.readthedocs.io/en/stable/dune-files.html#map-workspace-root) for more information.
+
 ## Examples
 
 ### utop
