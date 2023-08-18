@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Added
+
+* Add OCaml 5.1 support.
+
 ## 1.2.0 - 2023-07-11
 
 ### Added
