@@ -6,7 +6,6 @@ open Instruct
 open Debug_types
 
 type t = Controller.t * int64
-
 type obj = Local of Obj.t | Remote of Wire_protocol.remote_value
 
 let from_controller c = (c, c.time)
@@ -146,13 +145,15 @@ let get_field (c, time) rv index =
               Lwt.return (Local (Obj.repr v)))
 
 let get_tag (c, time) rv =
-  match rv with
-  | Local v -> Lwt.return (Obj.tag v)
-  | Remote rv ->
-      _lock_conn (c, time) (fun conn ->
-          let%lwt hdr = Wire_protocol.get_header conn rv in
-          let tag = hdr land 0xff in
-          Lwt.return tag)
+  if not (is_block rv) then Lwt.return Obj.int_tag
+  else
+    match rv with
+    | Local v -> Lwt.return (Obj.tag v)
+    | Remote rv ->
+        _lock_conn (c, time) (fun conn ->
+            let%lwt hdr = Wire_protocol.get_header conn rv in
+            let tag = hdr land 0xff in
+            Lwt.return tag)
 
 let get_size (c, time) rv =
   match rv with
