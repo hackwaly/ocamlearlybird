@@ -1,3 +1,9 @@
+## 1.3.0 - 2024-01-05
+
+### Added
+
+* Add opaque value inspection using runtime representation (#9, #52, #53).
+
 ## 1.2.1 - 2023-08-18
 
 ### Added
