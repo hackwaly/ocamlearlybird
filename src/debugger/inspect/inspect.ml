@@ -52,6 +52,10 @@ let () =
          Lwt.return unknown_value
        else if tag = Obj.lazy_tag then (* TODO: *)
          Lwt.return unknown_value
+       else if tag = Obj.abstract_tag then
+         Lwt.return unknown_value (* TODO: distinct abstract_value output? *)
+       else if tag = Obj.custom_tag then
+         Lwt.return unknown_value (* TODO: distinct custom_value output? can maybe extract identifier from custom_operations? *)
        else if Scene.is_block obj then
          let%lwt size = Scene.get_size scene obj in
          Lwt.return (new opaque_block_value ~scene ~rv:obj ~size)
