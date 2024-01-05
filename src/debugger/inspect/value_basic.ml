@@ -61,6 +61,12 @@ let adopters =
         value option Lwt.t)
         list)
 
+let dyn_adopter: (Scene.t -> Scene.obj -> value Lwt.t) ref =
+  ref (fun _scene _obj -> Lwt.return unknown_value)
+
+let dyn_adopt scene obj =
+  (!dyn_adopter) scene obj
+
 let adopt scene typenv obj ty =
   let rec resolve_type ty =
     match Types.get_desc ty with
@@ -86,4 +92,4 @@ let adopt scene typenv obj ty =
   try%lwt
     !adopters |> List.to_seq
     |> Lwt_seq.find_map_s (fun adopter -> adopter scene typenv obj ty)
-  with Not_found -> Lwt.return unknown_value
+  with Not_found -> dyn_adopt scene obj
