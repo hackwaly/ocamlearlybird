@@ -61,7 +61,8 @@ let adopters =
         value option Lwt.t)
         list)
 
-let dyn_adopter: (Scene.t -> Scene.obj -> value Lwt.t) ref = ref (Obj.magic ())
+let dyn_adopter: (Scene.t -> Scene.obj -> value Lwt.t) ref =
+  ref (fun _scene _obj -> Lwt.return unknown_value)
 
 let dyn_adopt scene obj =
   (!dyn_adopter) scene obj
