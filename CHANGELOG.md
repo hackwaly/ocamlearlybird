@@ -1,3 +1,9 @@
+## 1.3.1 - 2024-01-11
+
+### Fixed
+
+* Fix bytecode-only installation (#55).
+
 ## 1.3.0 - 2024-01-05
 
 ### Added
