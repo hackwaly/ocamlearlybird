@@ -1,6 +1,8 @@
 let persistent_env_get_search_dirs = ref ((fun _ -> assert false) : string -> string list)
 
-[%%if ocaml_version >= (5, 0, 0)]
+[%%if ocaml_version >= (5, 2, 0)]
+let load_path_init visible = Load_path.init ~auto_include:Load_path.no_auto_include ~visible ~hidden:[]
+[%%elif ocaml_version >= (5, 0, 0)]
 let load_path_init = Load_path.init ~auto_include:Load_path.no_auto_include
 [%%else]
 let load_path_init = Load_path.init
