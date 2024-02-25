@@ -28,7 +28,7 @@ let value_path scene frame path =
         else
           try%lwt
             let pos = Ident.find_same id event.ev_compenv.ce_stack in
-            Scene.get_local scene frame (event.ev_stacksize - pos)
+            Scene.get_local scene frame (event.ev_stacksize - pos) (* TODO: Why subtracting from ev_stacksize? Not done in Value_scope. get_local already does that. *)
           with Not_found ->
             let pos = ident_find_same_heap id event.ev_compenv in
             Scene.get_environment scene frame pos)
