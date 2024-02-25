@@ -1,7 +1,6 @@
 (executable
  (public_name ocamlearlybird)
  (name main)
- (modes byte native)
  (preprocess
   (pps lwt_ppx))
  (libraries
