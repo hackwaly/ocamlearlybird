@@ -11,6 +11,25 @@ class virtual scope_value =
     method! num_named = -1
   end
 
+[%%if ocaml_version >= (5, 2, 0)]
+let iter_compenv_heap f (compenv: Instruct.compilation_env) =
+  match compenv.ce_closure with
+  | Not_in_closure -> ()
+  | In_closure { entries; env_pos } ->
+    entries
+    |> Ident.iter (fun id (entry: Instruct.closure_entry) ->
+        match entry with
+        | Free_variable pos ->
+          f (id, pos - env_pos)
+        | Function _pos ->
+          (* Recursive functions seem to be unhandled *)
+          ()
+      )
+[%%else]
+let iter_compenv_heap f (compenv: Instruct.compilation_env) =
+  compenv.ce_heap |> Ident.iter (fun id pos -> f (id, pos))
+[%%endif]
+
 class local_scope_value ~scene ~frame ~kind () =
   let variables_and_accu_ty =
     Lazy.from_fun (fun () ->
@@ -18,12 +37,11 @@ class local_scope_value ~scene ~frame ~kind () =
         | None -> ([||], None)
         | Some event -> (
             let typenv = Lazy.force frame.typenv in
-            let compenv =
+            let iter f =
               match kind with
-              | `Stack -> event.ev_compenv.ce_stack
-              | `Heap -> event.ev_compenv.ce_heap
+              | `Stack -> event.ev_compenv.ce_stack |> Ident.iter (fun id pos -> f (id, pos))
+              | `Heap -> iter_compenv_heap f event.ev_compenv
             in
-            let iter f = compenv |> Ident.iter (fun id pos -> f (id, pos)) in
             ( Iter.to_list iter
               |> List.fast_sort (Compare.by (fun (_, pos) -> pos))
               |> List.to_seq

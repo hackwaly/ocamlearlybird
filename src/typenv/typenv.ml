@@ -1,11 +1,22 @@
 let persistent_env_get_search_dirs = ref ((fun _ -> assert false) : string -> string list)
 
-[%%if ocaml_version >= (5, 0, 0)]
+[%%if ocaml_version >= (5, 2, 0)]
+let load_path_init visible = Load_path.init ~auto_include:Load_path.no_auto_include ~visible ~hidden:[]
+[%%elif ocaml_version >= (5, 0, 0)]
 let load_path_init = Load_path.init ~auto_include:Load_path.no_auto_include
 [%%else]
 let load_path_init = Load_path.init
 [%%endif]
 
+[%%if ocaml_version >= (5, 2, 0)]
+let () =
+  let old_load = !Persistent_env.Persistent_signature.load in
+  Persistent_env.Persistent_signature.load := (fun ~allow_hidden ~unit_name ->
+      let search_dirs = !persistent_env_get_search_dirs unit_name in
+      load_path_init search_dirs;
+      old_load ~allow_hidden ~unit_name
+    )
+[%%else]
 let () =
   let old_load = !Persistent_env.Persistent_signature.load in
   Persistent_env.Persistent_signature.load := (fun ~unit_name ->
@@ -13,6 +24,7 @@ let () =
       load_path_init search_dirs;
       old_load ~unit_name
     )
+[%%endif]
 
 let env_extract_values path env =
   Env.fold_values (fun name _ _ acc -> name :: acc) path env []

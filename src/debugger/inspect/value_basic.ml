@@ -81,7 +81,16 @@ let adopt scene typenv obj ty =
          type_manifest = Some body;
          type_params;
          _;
-        } -> (
+        } [@if ocaml_version < (5, 2, 0)] -> (
+            match Typenv.type_apply typenv type_params body ty_args with
+            | ty -> resolve_type ty
+            | exception Ctype.Cannot_apply -> ty)
+        | {
+         type_kind = Type_abstract _;
+         type_manifest = Some body;
+         type_params;
+         _;
+        } [@if ocaml_version >= (5, 2, 0)] -> (
             match Typenv.type_apply typenv type_params body ty_args with
             | ty -> resolve_type ty
             | exception Ctype.Cannot_apply -> ty)
