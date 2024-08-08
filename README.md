@@ -26,7 +26,7 @@ This requires VSCode OCaml Platform 1.13 or newer.
 ### Breakpoints not hit with `(lang dune 3.0)` and above
 
 Change to `(lang dune 3.7)` or above and add `(map_workspace_root false)` to your `dune-project`.
-See [dune documentation](https://dune.readthedocs.io/en/stable/dune-files.html#map-workspace-root) for more information.
+See [dune documentation](https://dune.readthedocs.io/en/stable/reference/dune-project/map_workspace_root.html) for more information.
 
 ## Examples
 
