@@ -4,6 +4,3 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    commit-message:
-      prefix: "GA"
-      include: "scope"
