@@ -2,8 +2,14 @@ name: ci
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * *"
 
 jobs:
   build:
@@ -13,7 +19,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          # - macos-latest
+          - macos-latest
         ocaml-compiler:
           - 5.2.x
           - 5.1.x
