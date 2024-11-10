@@ -49,7 +49,7 @@ class local_scope_value ~scene ~frame ~kind () =
                      match typenv |> Typenv.find_value (Path.Pident id) with
                      | exception Not_found -> None
                      | { val_type; val_kind; _ } ->
-                         let ty = Ctype.correct_levels val_type in
+                         let ty = Ctype.duplicate_type val_type in
                          Some (Ident.name id, val_kind, ty, pos))
               |> Array.of_seq,
               match (frame.index, event.ev_kind) with
