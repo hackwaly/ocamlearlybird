@@ -21,6 +21,22 @@ This requires VSCode OCaml Platform 1.13 or newer.
 
 > PS. Since the integration into VSCode OCaml Platform, the old "Ocamlearlybird" VSCode extension is deprecated.
 
+## Configuration
+
+| Field | Type | Default value | Description |
+| ----- | ---- | ------- | ----------- |
+| `program` | `string` | _(required)_ | The path of debuggee program. |
+| `arguments` | `string[]` | `[]` | The command-line arguments for the debuggee program. |
+| `cwd` | `string` |  | The working directory for debuggee program. |
+| `env` | `{[var: string]: string}` | `{}` | Environment variables passed to the debuggee program. |
+| `stopOnEntry` | `boolean` | `false` | Automatically stop after launch. |
+| `console` | `'internalConsole' \|`<br>`'integratedTerminal' \|`<br>` 'externalTerminal'` | `internalConsole` | Where to launch the debug target: internal console, integrated terminal, or external terminal. |
+| `followForkMode` | `'forkChild' \| 'forkParent'` | `forkParent` | Set which process the debugger follows on fork. |
+| `source_dirs` | `string[]` | `[]` | The path to search sources. |
+| `onlyDebugGlob` | `string` | `true` | Only debug sources which match `onlyDebugGlob`. |
+| `yieldSteps` | `number` | `4096` | Max steps to execute in batch. Debugger can not response other requests when executing steps in batch. |
+| `_debugLog` | `string` |  | File to Log debug messages. |
+
 ## Troubleshooting
 
 ### Breakpoints not hit with `(lang dune 3.0)` and above
