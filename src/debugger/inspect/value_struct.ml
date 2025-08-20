@@ -200,8 +200,10 @@ let adopter scene typenv obj typ =
         Lwt.return (Some (new variant_value ~tag ?payload ~embed:true ()))
   in
   match Types.get_desc typ with
-  | Ttuple tys ->
+  | Ttuple tys [@if ocaml_version < (5, 4, 0)] ->
       Lwt.return (Some (new tuple_value ~scene ~typenv ~obj ~members:tys ()))
+  | Ttuple tys [@if ocaml_version >= (5, 4, 0)] ->
+      Lwt.return (Some (new tuple_value ~scene ~typenv ~obj ~members:(List.map snd tys) ())) (* TODO: show tuple labels *)
   | Tconstr (path, type_args, _) -> (
       match typenv |> Typenv.find_type path with
       | exception Not_found -> Lwt.return None
