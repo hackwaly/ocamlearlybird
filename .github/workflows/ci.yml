@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           lfs: true # https://github.com/ocaml/setup-ocaml/issues/895#issuecomment-2477062336
 
