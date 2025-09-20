@@ -29,11 +29,17 @@ module Path = struct
     in
     aux path
 
+  [%%if ocaml_version >= (5, 4, 0)]
+  let lift_longident = Location.mknoloc
+  [%%else]
+  let lift_longident = Fun.id
+  [%%endif]
+
   let rec to_longident path =
     match path with
     | Pident id -> Longident.Lident (Ident.name id)
-    | Pdot (p, d) -> Longident.Ldot (to_longident p, d)
-    | Pextra_ty (p, Pcstr_ty d) [@if ocaml_version >= (5, 1, 0)] -> Longident.Ldot (to_longident p, d)
-    | Papply (p1, p2) -> Longident.Lapply (to_longident p1, to_longident p2)
+    | Pdot (p, d) -> Longident.Ldot (lift_longident (to_longident p), lift_longident d)
+    | Pextra_ty (p, Pcstr_ty d) [@if ocaml_version >= (5, 1, 0)] -> Longident.Ldot (lift_longident (to_longident p), lift_longident d)
+    | Papply (p1, p2) -> Longident.Lapply (lift_longident (to_longident p1), lift_longident (to_longident p2))
     | Pextra_ty (p, Pext_ty) [@if ocaml_version >= (5, 1, 0)] -> to_longident p
 end

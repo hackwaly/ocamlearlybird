@@ -38,6 +38,29 @@ class tuple_value ~scene ~typenv ~obj ?(pos = 0) ?(unboxed = false) ~members ()
       else "(‹1›, ‹2›, …)"
   end
 
+class label_tuple_value ~scene ~typenv ~obj ?(pos = 0) ?(unboxed = false) ~members ()
+  =
+  let member_name i label =
+    match label with
+    | None -> "‹" ^ string_of_int (i + 1) ^ "›"
+    | Some label -> label
+  in
+  let members =
+    members
+    |> List.mapi (fun i (label, typ) -> (member_name i label, typ))
+  in
+  object (self)
+    inherit struct_value ~scene ~typenv ~obj ~pos ~unboxed ~members
+
+    method to_short_string =
+      let num_named = self#num_named in
+      if num_named = 0 then "()"
+      else if num_named = 1 then "‹1›"
+      else if num_named = 2 then "(‹1›, ‹2›)"
+      else if num_named = 3 then "(‹1›, ‹2›, ‹3›)"
+      else "(‹1›, ‹2›, …)"
+  end
+
 class record_value ~scene ~typenv ~obj ?(pos = 0) ?(unboxed = false) ~members ()
   =
   object
@@ -200,8 +223,10 @@ let adopter scene typenv obj typ =
         Lwt.return (Some (new variant_value ~tag ?payload ~embed:true ()))
   in
   match Types.get_desc typ with
-  | Ttuple tys ->
+  | Ttuple tys [@if ocaml_version < (5, 4, 0)] ->
       Lwt.return (Some (new tuple_value ~scene ~typenv ~obj ~members:tys ()))
+  | Ttuple tys [@if ocaml_version >= (5, 4, 0)] ->
+      Lwt.return (Some (new label_tuple_value ~scene ~typenv ~obj ~members:tys ()))
   | Tconstr (path, type_args, _) -> (
       match typenv |> Typenv.find_type path with
       | exception Not_found -> Lwt.return None
