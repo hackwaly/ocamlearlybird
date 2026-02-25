@@ -11,7 +11,7 @@ class virtual scope_value =
     method! num_named = -1
   end
 
-[%%if ocaml_version >= (5, 2, 0)]
+[%%if ocaml_version >= (5, 2, 0) || (ocaml_version >= (4, 14, 3) && ocaml_version < (5, 0, 0))]
 let iter_compenv_heap f (compenv: Instruct.compilation_env) =
   match compenv.ce_closure with
   | Not_in_closure -> ()

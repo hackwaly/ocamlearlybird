@@ -1,6 +1,6 @@
 open Ground
 
-[%%if ocaml_version >= (5, 2, 0)]
+[%%if ocaml_version >= (5, 2, 0) || (ocaml_version >= (4, 14, 3) && ocaml_version < (5, 0, 0))]
 let ident_find_same_heap id (compenv: Instruct.compilation_env) =
   match compenv.ce_closure with
   | Not_in_closure -> raise Not_found
