@@ -83,9 +83,9 @@ let env_is_structure_module path env =
    persistent_env_get_search_dirs := get_search_dirs;
    env_is_structure_module path env
 
- let add_module ?arg id presence mty { env; get_search_dirs } =
+ let add_module id presence mty { env; get_search_dirs } =
    persistent_env_get_search_dirs := get_search_dirs;
-   let env' = Env.add_module ?arg id presence mty env in
+   let env' = Env.add_module id presence mty env in
    { env = env'; get_search_dirs }
 
  let extract_modules path { env; get_search_dirs } =

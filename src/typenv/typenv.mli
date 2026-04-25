@@ -13,7 +13,7 @@ val find_module_address : Path.t -> t -> Env.address
 val find_modtype_expansion : Path.t -> t -> Types.module_type
 val is_structure_module : Path.t -> t -> bool
 val add_module :
-  ?arg:bool ->
+  (* ?arg / ?noalias argument removed: unused here and changed in OCaml 5.5 *)
   Ident.t -> Types.module_presence -> Types.module_type -> t -> t
 val extract_modules : Longident.t option -> t -> string list
 val extract_values : Longident.t option -> t -> string list
