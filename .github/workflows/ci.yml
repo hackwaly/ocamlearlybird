@@ -21,7 +21,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
         ocaml-compiler:
-          - ocaml-base-compiler.5.5.0~beta1
+          - 5.5.x
           - 5.4.x
           - 5.3.x
           - 5.2.x
