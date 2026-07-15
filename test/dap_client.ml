@@ -182,6 +182,19 @@ let expand t ~(variable : Variable.t) =
     in
     Lwt.return (named @ indexed)
 
+(* Children of a value fetched in a single request with no filter. The DAP spec
+   says an omitted filter returns both named and indexed children. *)
+let children_unfiltered t ~(variable : Variable.t) =
+  if variable.variables_reference = 0 then Lwt.return []
+  else
+    let%lwt res =
+      Debug_rpc.exec_command t.rpc
+        (module Variables_command)
+        Variables_command.Arguments.(
+          make ~variables_reference:variable.variables_reference ())
+    in
+    Lwt.return res.Variables_command.Result.variables
+
 (* Stepping. Each returns the frame the debuggee comes to rest in. *)
 
 let step t ~thread_id command =
