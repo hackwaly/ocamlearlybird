@@ -5,6 +5,14 @@ open Frame
 module PcSet_ = Set.Make (Ordered_type.Make_tuple2 (Int) (Int))
 module IntMap_ = Map.Make (Int)
 
+(* The symbol table, re-exported so that it can be exercised on its own. Mapping
+   a source line to a debug event is subtle enough to be worth testing directly,
+   without a debuggee in the way. *)
+module Bytecode = Bytecode
+module Code_fragment = Code_fragment
+module Code_module = Code_module
+module Symbols = Symbols
+
 type pc = int * int
 
 type 'a source_location = 'a Debug_types.source_location = {
