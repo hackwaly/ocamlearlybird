@@ -50,7 +50,8 @@ let spawn_terminal ~kind ~rpc ?name ?env ?cwd prog args =
         Debug_rpc.exec_command rpc
           (module Run_in_terminal_command)
           Run_in_terminal_command.Arguments.
-            { kind = Some kind; title = name; cwd; env; args = prog :: args }
+            { kind = Some kind; title = name; cwd; env; args = prog :: args;
+              args_can_be_interpreted_by_shell = None }
       in
       Lwt.return ());
   Lwt.return ()
