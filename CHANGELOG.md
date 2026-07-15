@@ -5,6 +5,13 @@
 * Fix the empty "Globals" scope on OCaml >= 5.2 (#74). Globals are numbered by
   `Symtable.Global.t` rather than by `Ident.t` since 5.2, and reading the SYMB
   section with the old key type left the scope empty.
+* Fix a crash when inspecting an array or other indexed value with a `variables`
+  request that omits the `filter` field. The spec says an omitted filter returns
+  both named and indexed children, however the adapter asserted there were no
+  indexed children and raised instead of returning them. Editors that page
+  variables send the filter and are unaffected (VS Code, and emacs dap-mode),
+  but nvim-dap has no variable paging and sends only `variablesReference`, so
+  expanding an array in nvim-dap crashed the adapter.
 
 ### Added
 

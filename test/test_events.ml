@@ -10,6 +10,14 @@
 
 open Debugger
 
+(* [In_channel] was only added in OCaml 4.14. Read the file the old way so the
+   tests build on 4.12/4.13. Remove once when pre-4.14 versions are dropped. *)
+let read_file path =
+  let ic = open_in_bin path in
+  Fun.protect
+    ~finally:(fun () -> close_in ic)
+    (fun () -> really_input_string ic (in_channel_length ic))
+
 let module_of_bytecode ~program ~module_id =
   let%lwt debug_info = Bytecode.load_debuginfo program in
   let frag = Code_fragment.make 0 debug_info in
@@ -27,7 +35,7 @@ let main () =
   let%lwt module_ =
     module_of_bytecode ~program:"fixtures/hello.bc" ~module_id:"Hello"
   in
-  let source = In_channel.with_open_text "fixtures/hello.ml" In_channel.input_all in
+  let source = read_file "fixtures/hello.ml" in
   (* Drop the empty string after the file's trailing newline so we only query
      lines that actually exist. *)
   let lines =

@@ -109,25 +109,28 @@ let run ~init_args ~launch_args ~dbg rpc =
       let%lwt variables =
         match Hashtbl.find_opt value_tbl arg.variables_reference with
         | None -> Lwt.return []
-        | Some value -> (
+        | Some value ->
+            let indexed ?(start = 0) ?count () =
+              let end_ =
+                (match count with
+                | Some count -> start + count
+                | None -> value#num_indexed)
+                - 1
+              in
+              Seq.int_range ~start ~end_ ()
+              |> List.of_seq
+              |> Lwt_list.map_s (fun i ->
+                     let%lwt obj = value#get_indexed i in
+                     Lwt.return (string_of_int i, obj))
+            in
+            (* An omitted filter means fetch both named and indexed children. *)
             match arg.filter with
             | None ->
-                assert (value#num_indexed = 0);
-                value#list_named
+                let%lwt named = value#list_named in
+                let%lwt indexed = indexed () in
+                Lwt.return (named @ indexed)
             | Some Named -> value#list_named
-            | Some Indexed ->
-                let start = arg.start |> Option.value ~default:0 in
-                let end_ =
-                  (match arg.count with
-                  | Some count -> start + count
-                  | None -> value#num_indexed)
-                  - 1
-                in
-                Seq.int_range ~start ~end_ ()
-                |> List.of_seq
-                |> Lwt_list.map_s (fun i ->
-                       let%lwt obj = value#get_indexed i in
-                       Lwt.return (string_of_int i, obj)))
+            | Some Indexed -> indexed ?start:arg.start ?count:arg.count ()
       in
       let variables =
         variables
