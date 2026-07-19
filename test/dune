@@ -16,8 +16,10 @@
  (libraries dap.types dap.rpc_lwt lwt lwt.unix lwt_react))
 
 (executables
- (names test_scopes test_frames test_stepping test_values test_heap test_indexed)
- (modules test_scopes test_frames test_stepping test_values test_heap test_indexed)
+ (names test_scopes test_frames test_stepping test_values test_heap test_indexed
+   test_dune_source)
+ (modules test_scopes test_frames test_stepping test_values test_heap test_indexed
+   test_dune_source)
  (preprocess
   (pps lwt_ppx))
  (libraries dap.types dap_client lwt lwt.unix))
@@ -120,11 +122,27 @@
  (action
   (diff test_indexed.expected test_indexed.actual)))
 
+(rule
+ (targets test_dune_source.actual)
+ (deps
+  (:driver test_dune_source.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/wsroot.bc
+  fixtures/wsroot.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_dune_source.expected test_dune_source.actual)))
+
 ; --- symbol table, exercised directly --------------------------------------
 
-(executable
- (name test_events)
- (modules test_events)
+(executables
+ (names test_events test_workspace)
+ (modules test_events test_workspace)
  (preprocess
   (pps lwt_ppx))
  (libraries debugger lwt lwt.unix))
@@ -142,3 +160,15 @@
  (alias runtest)
  (action
   (diff test_events.expected test_events.actual)))
+
+(rule
+ (targets test_workspace.actual)
+ (deps
+  (:driver test_workspace.exe))
+ (action
+  (with-stdout-to %{targets} (run %{driver}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_workspace.expected test_workspace.actual)))

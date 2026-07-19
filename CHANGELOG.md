@@ -12,6 +12,12 @@
   variables send the filter and are unaffected (VS Code, and emacs dap-mode),
   but nvim-dap has no variable paging and sends only `variablesReference`, so
   expanding an array in nvim-dap crashed the adapter.
+* Resolve sources and bind breakpoints for executables built by dune >= 3.0
+  (#58, #11, #20, #47, #57). Since dune 3.0, `map_workspace_root` is on by
+  default and rewrites the build directory in the debug info to a fixed
+  `/workspace_root`, which does not exist on disk, so a module's source could
+  not be found and no breakpoint in it would bind. The prefix is now mapped back
+  to the real directories derived from the executable's location.
 
 ### Added
 

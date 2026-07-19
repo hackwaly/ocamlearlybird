@@ -3,6 +3,7 @@ open Ground
 type t = {
   get_source_dir : string -> string option;
   debug_filter : string -> bool;
+  workspace_dirs : string list;
   mutable frags : Code_fragment.t Map.Make(Int).t;
   mutable source_module_by_digest : Code_module.t Map.Make(Digest).t;
   mutable version : int;
@@ -12,16 +13,72 @@ type t = {
 module IntMap_ = Map.Make (Int)
 module DigestMap_ = Map.Make (Digest)
 
-let create ?(get_source_dir = fun _ -> None) ?(debug_filter = fun _ -> true) ()
-    =
+let create ?(get_source_dir = fun _ -> None) ?(debug_filter = fun _ -> true)
+    ?(workspace_dirs = []) () =
   {
     get_source_dir;
     debug_filter;
+    workspace_dirs;
     frags = IntMap_.empty;
     source_module_by_digest = DigestMap_.empty;
     version = 0;
     dummy = ();
   }
+
+(* Since dune 3.0, [map_workspace_root] is on by default and rewrites the build
+   directory prefix in the debug info to a fixed "/workspace_root", which does
+   not exist on disk, so a module's source cannot be found there. Rewrite that
+   prefix back to the real directories derived from the executable's location
+   ([workspace_dirs]). A dir with no such prefix is left as is. *)
+let workspace_root_prefix = "/workspace_root"
+
+let remap_dir workspace_dirs dir =
+  let n = String.length workspace_root_prefix in
+  let has_prefix =
+    String.length dir >= n
+    && String.sub dir 0 n = workspace_root_prefix
+    && (String.length dir = n || dir.[n] = '/')
+  in
+  if has_prefix && workspace_dirs <> [] then
+    let suffix = String.sub dir n (String.length dir - n) in
+    List.map (fun root -> root ^ suffix) workspace_dirs
+  else [ dir ]
+
+(* The real directories that dune's "/workspace_root" stands for, derived from
+   the executable's path. A dune executable lives at
+   <root>/_build/<context>/<...>, and dune mirrors the source tree under the
+   build context, so both the source root <root> and the build context
+   <root>/_build/<context> hold the sources (byte-identical copies). The source
+   root is listed first so a resolved source is the user's own file rather than
+   the build copy. Returns [] when the path is not under a "_build" directory,
+   in which case no rewriting happens. *)
+let derive_workspace_dirs executable =
+  let executable =
+    if Filename.is_relative executable then
+      Filename.concat (Sys.getcwd ()) executable
+    else executable
+  in
+  let marker = "/_build/" in
+  let marker_len = String.length marker in
+  let len = String.length executable in
+  let rec find i =
+    if i + marker_len > len then None
+    else if String.sub executable i marker_len = marker then Some i
+    else find (i + 1)
+  in
+  match find 0 with
+  | None -> []
+  | Some i ->
+      let source_root = String.sub executable 0 i in
+      let after =
+        String.sub executable (i + marker_len) (len - i - marker_len)
+      in
+      let context =
+        match String.index_opt after '/' with
+        | Some j -> String.sub after 0 j
+        | None -> after
+      in
+      [ source_root; source_root ^ marker ^ context ]
 
 let dup t = { t with dummy = () }
 
@@ -31,6 +88,9 @@ let add_fragment t frag =
       match t.get_source_dir module_id with
       | Some dir -> [ dir ]
       | None -> search_dirs
+    in
+    let search_dirs =
+      search_dirs |> List.concat_map (remap_dir t.workspace_dirs)
     in
     let module_id' =
       Str.split (Str.regexp "__") module_id |> List.rev |> List.hd

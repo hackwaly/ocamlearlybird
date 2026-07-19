@@ -20,3 +20,13 @@
  (deps closure.ml)
  (action
   (run %{bin:ocamlc} -g closure.ml -o closure.bc)))
+
+; wsroot.bc mimics a dune >= 3.0 build: its debug info records the source search
+; dir as "/workspace_root/test/fixtures" rather than a real path. See
+; make_wsroot_bc.sh and test_dune_source.ml.
+
+(rule
+ (targets wsroot.bc)
+ (deps wsroot.ml make_wsroot_bc.sh)
+ (action
+  (run sh make_wsroot_bc.sh %{bin:ocamlc} %{targets} wsroot.ml)))

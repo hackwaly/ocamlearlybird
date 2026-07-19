@@ -54,7 +54,8 @@ let root ?debug_filter debug_sock symbols_file =
   assert (neg1 = -1);
   let%lwt pid = Lwt_io.BE.read_int conn.io.in_ in
   let frag = Code_fragment.make Debug_types.main_frag debug_info in
-  let symbols = Symbols.create ?debug_filter () in
+  let workspace_dirs = Symbols.derive_workspace_dirs symbols_file in
+  let symbols = Symbols.create ?debug_filter ~workspace_dirs () in
   Symbols.add_fragment symbols frag;%lwt
   let%lwt debug_modules = _set_frag_events symbols conn frag in
   Lwt.return
