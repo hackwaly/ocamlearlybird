@@ -1,0 +1,58 @@
+; Integration tests. Each test runs the real debug adapter against the bytecode
+; program in fixtures/, drives it over the debug adapter protocol just like an
+; editor would, and diffs the transcript it prints against a recorded .expected
+; file. Adding a test means adding a scenario module plus the two rules below.
+
+(library
+ (name dap_client)
+ (modules dap_client)
+ (preprocess
+  (pps lwt_ppx ppx_deriving_yojson))
+ (libraries dap.types dap.rpc_lwt lwt lwt.unix lwt_react))
+
+(executables
+ (names test_scopes test_frames)
+ (modules test_scopes test_frames)
+ (preprocess
+  (pps lwt_ppx))
+ (libraries dap.types dap_client lwt lwt.unix))
+
+(rule
+ (targets test_scopes.actual)
+ (deps
+  (:driver test_scopes.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/hello.bc
+  fixtures/hello.ml)
+ (action
+  (setenv
+   EARLYBIRD_ADAPTER
+   %{adapter}
+   (with-stdout-to
+    %{targets}
+    (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_scopes.expected test_scopes.actual)))
+
+(rule
+ (targets test_frames.actual)
+ (deps
+  (:driver test_frames.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/hello.bc
+  fixtures/hello.ml)
+ (action
+  (setenv
+   EARLYBIRD_ADAPTER
+   %{adapter}
+   (with-stdout-to
+    %{targets}
+    (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_frames.expected test_frames.actual)))

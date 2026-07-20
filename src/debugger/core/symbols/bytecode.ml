@@ -3,6 +3,51 @@ open Instruct
 
 type debug_info = (Instruct.debug_event list * string list) list
 
+let seek_section (pos, section_table) name =
+  let rec seek_sec pos = function
+    | [] -> raise Not_found
+    | (name', len) :: rest ->
+        let pos = Int64.sub pos (Int64.of_int len) in
+        if name' = name then (pos, len) else seek_sec pos rest
+  in
+  seek_sec pos section_table
+
+[%%if ocaml_version >= (5, 2, 0)]
+
+(* Since 5.2, globals are numbered by [Symtable.Global.t] (compilation units and
+   predefined exceptions) rather than by [Ident.t]. *)
+let read_global_table ic toc =
+  let pos, _ = seek_section toc "SYMB" in
+  Lwt_io.set_position ic pos;%lwt
+  let module T = struct
+    type t = { cnt : int; tbl : int Symtable.Global.Map.t }
+  end in
+  let%lwt (global_table : T.t) = Lwt_io.read_value ic in
+  let ident_of_global global =
+    let name = Symtable.Global.name global in
+    match global with
+    | Symtable.Global.Glob_compunit _ -> Ident.create_persistent name
+    | Symtable.Global.Glob_predef _ -> Ident.create_predef name
+  in
+  Lwt.return
+    (global_table.tbl
+    |> Symtable.Global.Map.to_seq
+    |> Seq.map (fun (global, pos) -> (ident_of_global global, pos))
+    |> Ident.Map.of_seq)
+
+[%%else]
+
+let read_global_table ic toc =
+  let pos, _ = seek_section toc "SYMB" in
+  Lwt_io.set_position ic pos;%lwt
+  let module T = struct
+    type t = { cnt : int; tbl : int Ident.Map.t }
+  end in
+  let%lwt (global_table : T.t) = Lwt_io.read_value ic in
+  Lwt.return global_table.tbl
+
+[%%endif]
+
 let load_debuginfo file =
   let read_toc ic =
     let%lwt len = Lwt_io.length ic in
@@ -24,24 +69,6 @@ let load_debuginfo file =
       Lwt.return_unit
     done;%lwt
     Lwt.return (pos_toc, !section_table)
-  in
-  let seek_section (pos, section_table) name =
-    let rec seek_sec pos = function
-      | [] -> raise Not_found
-      | (name', len) :: rest ->
-          let pos = Int64.sub pos (Int64.of_int len) in
-          if name' = name then (pos, len) else seek_sec pos rest
-    in
-    seek_sec pos section_table
-  in
-  let read_global_table ic toc =
-    let pos, _ = seek_section toc "SYMB" in
-    Lwt_io.set_position ic pos;%lwt
-    let module T = struct
-      type t = { cnt : int; tbl : int Ident.Map.t }
-    end in
-    let%lwt (global_table : T.t) = Lwt_io.read_value ic in
-    Lwt.return global_table.tbl
   in
   let relocate_event orig ev =
     ev.Instruct.ev_pos <- orig + ev.Instruct.ev_pos;

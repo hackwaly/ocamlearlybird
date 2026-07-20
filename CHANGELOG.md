@@ -1,3 +1,15 @@
+## Unreleased
+
+### Fixed
+
+* Fix the empty "Globals" scope on OCaml >= 5.2 (#74). Globals are numbered by
+  `Symtable.Global.t` rather than by `Ident.t` since 5.2, and reading the SYMB
+  section with the old key type left the scope empty.
+
+### Added
+
+* Add integration tests driving the adapter over the debug adapter protocol.
+
 ## 1.3.6 - 2026-04-25
 
 ### Added

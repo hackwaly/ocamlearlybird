@@ -1,0 +1,10 @@
+; The debuggee used by the integration tests. It is compiled with ocamlc
+; directly rather than with an (executable) stanza so that the debug information
+; records this directory as a search dir, which is what lets the adapter resolve
+; hello.ml back from the bytecode.
+
+(rule
+ (targets hello.bc)
+ (deps hello.ml)
+ (action
+  (run %{bin:ocamlc} -g hello.ml -o hello.bc)))

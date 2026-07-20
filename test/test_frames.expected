@@ -1,0 +1,6 @@
+frame Hello.greet at line 5
+  Stack: name = "world"
+  Heap: <empty>
+frame Hello at line 11
+  Stack: greet = «fun», x = 41, y = 42
+  Heap: <empty>
