@@ -1,0 +1,22 @@
+== derive_workspace_dirs
+  /home/me/proj/_build/default/bin/main.bc
+    -> [/home/me/proj; /home/me/proj/_build/default]
+  /home/me/proj/_build/default/lib/sub/sub.bc
+    -> [/home/me/proj; /home/me/proj/_build/default]
+  /home/me/proj/_build/foo/bin/main.bc
+    -> [/home/me/proj; /home/me/proj/_build/foo]
+  /home/me/proj/bin/main.bc
+    -> []
+== remap_dir
+  /workspace_root
+    -> [/home/me/proj; /home/me/proj/_build/default]
+  /workspace_root/bin
+    -> [/home/me/proj/bin; /home/me/proj/_build/default/bin]
+  /workspace_root/lib/sub/.sub.objs/byte
+    -> [/home/me/proj/lib/sub/.sub.objs/byte; /home/me/proj/_build/default/lib/sub/.sub.objs/byte]
+  /home/me/.opam/lib/ocaml
+    -> [/home/me/.opam/lib/ocaml]
+  /workspace_root_other/bin
+    -> [/workspace_root_other/bin]
+  (no workspace dirs) /workspace_root/bin
+    -> [/workspace_root/bin]

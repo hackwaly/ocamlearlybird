@@ -141,6 +141,94 @@ let scopes t ~(frame : Stack_frame.t) =
          in
          Lwt.return (scope.name, variables))
 
+let scope t ~frame ~name =
+  let%lwt scopes = scopes t ~frame in
+  match List.assoc_opt name scopes with
+  | Some variables -> Lwt.return variables
+  | None -> Lwt.fail_with (Printf.sprintf "no %s scope" name)
+
+(* One level of children of a structured value (the elements of a list, the
+   fields of a record, ...).
+
+   Values expose named children (record fields, closure captures) and indexed
+   children (array and list elements) separately, and the adapter expects them
+   to be fetched separately, with a filter, the way VS Code does when a value
+   reports both counts. *)
+let expand t ~(variable : Variable.t) =
+  let open Variables_command.Arguments in
+  let reference = variable.variables_reference in
+  let vars args =
+    let%lwt res = Debug_rpc.exec_command t.rpc (module Variables_command) args in
+    Lwt.return res.Variables_command.Result.variables
+  in
+  let named = Option.value variable.named_variables ~default:0 in
+  let indexed = Option.value variable.indexed_variables ~default:0 in
+  if reference = 0 then Lwt.return []
+  else if named = 0 && indexed = 0 then
+    (* Counts unknown; a single unfiltered request returns everything. *)
+    vars (make ~variables_reference:reference ())
+  else
+    let%lwt named =
+      if named > 0 then
+        vars (make ~variables_reference:reference ~filter:(Some Filter.Named) ())
+      else Lwt.return []
+    in
+    let%lwt indexed =
+      if indexed > 0 then
+        vars
+          (make ~variables_reference:reference ~filter:(Some Filter.Indexed)
+             ~start:(Some 0) ~count:(Some indexed) ())
+      else Lwt.return []
+    in
+    Lwt.return (named @ indexed)
+
+(* Children of a value fetched in a single request with no filter. The DAP spec
+   says an omitted filter returns both named and indexed children. *)
+let children_unfiltered t ~(variable : Variable.t) =
+  if variable.variables_reference = 0 then Lwt.return []
+  else
+    let%lwt res =
+      Debug_rpc.exec_command t.rpc
+        (module Variables_command)
+        Variables_command.Arguments.(
+          make ~variables_reference:variable.variables_reference ())
+    in
+    Lwt.return res.Variables_command.Result.variables
+
+(* Stepping. Each returns the frame the debuggee comes to rest in. *)
+
+let step t ~thread_id command =
+  let%lwt () = command () in
+  let%lwt _ = wait_stopped t in
+  top_frame t ~thread_id
+
+let next t ~thread_id =
+  step t ~thread_id (fun () ->
+      Debug_rpc.exec_command t.rpc
+        (module Next_command)
+        Next_command.Arguments.(make ~thread_id ()))
+
+let step_in t ~thread_id =
+  step t ~thread_id (fun () ->
+      Debug_rpc.exec_command t.rpc
+        (module Step_in_command)
+        Step_in_command.Arguments.(make ~thread_id ()))
+
+let step_out t ~thread_id =
+  step t ~thread_id (fun () ->
+      Debug_rpc.exec_command t.rpc
+        (module Step_out_command)
+        Step_out_command.Arguments.(make ~thread_id ()))
+
+let continue t ~thread_id =
+  step t ~thread_id (fun () ->
+      let%lwt _ =
+        Debug_rpc.exec_command t.rpc
+          (module Continue_command)
+          Continue_command.Arguments.(make ~thread_id ())
+      in
+      Lwt.return ())
+
 let string_of_reason (reason : Stopped_event.Payload.Reason.t) =
   match reason with
   | Breakpoint -> "breakpoint"

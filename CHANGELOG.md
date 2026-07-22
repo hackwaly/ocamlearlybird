@@ -5,6 +5,19 @@
 * Fix the empty "Globals" scope on OCaml >= 5.2 (#74). Globals are numbered by
   `Symtable.Global.t` rather than by `Ident.t` since 5.2, and reading the SYMB
   section with the old key type left the scope empty.
+* Fix a crash when inspecting an array or other indexed value with a `variables`
+  request that omits the `filter` field. The spec says an omitted filter returns
+  both named and indexed children, however the adapter asserted there were no
+  indexed children and raised instead of returning them. Editors that page
+  variables send the filter and are unaffected (VS Code, and emacs dap-mode),
+  but nvim-dap has no variable paging and sends only `variablesReference`, so
+  expanding an array in nvim-dap crashed the adapter.
+* Resolve sources and bind breakpoints for executables built by dune >= 3.0
+  (#58, #11, #20, #47, #57). Since dune 3.0, `map_workspace_root` is on by
+  default and rewrites the build directory in the debug info to a fixed
+  `/workspace_root`, which does not exist on disk, so a module's source could
+  not be found and no breakpoint in it would bind. The prefix is now mapped back
+  to the real directories derived from the executable's location.
 
 ### Added
 

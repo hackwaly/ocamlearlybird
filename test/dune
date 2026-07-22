@@ -1,7 +1,12 @@
-; Integration tests. Each test runs the real debug adapter against the bytecode
-; program in fixtures/, drives it over the debug adapter protocol just like an
-; editor would, and diffs the transcript it prints against a recorded .expected
-; file. Adding a test means adding a scenario module plus the two rules below.
+; Integration tests. Most run the real debug adapter against a bytecode program
+; in fixtures/, drive it over the debug adapter protocol just like an editor
+; would, and diff the transcript the scenario prints against a recorded
+; .expected file. test_events is different: it links against the debugger
+; library and exercises the symbol table directly.
+;
+; Adding a protocol-driven test means adding a scenario module to the
+; (executables) below and a pair of rules (run -> .actual, then diff) like the
+; ones here.
 
 (library
  (name dap_client)
@@ -11,11 +16,15 @@
  (libraries dap.types dap.rpc_lwt lwt lwt.unix lwt_react))
 
 (executables
- (names test_scopes test_frames)
- (modules test_scopes test_frames)
+ (names test_scopes test_frames test_stepping test_values test_heap test_indexed
+   test_dune_source)
+ (modules test_scopes test_frames test_stepping test_values test_heap test_indexed
+   test_dune_source)
  (preprocess
   (pps lwt_ppx))
  (libraries dap.types dap_client lwt lwt.unix))
+
+; --- protocol-driven scenarios ---------------------------------------------
 
 (rule
  (targets test_scopes.actual)
@@ -25,12 +34,8 @@
   fixtures/hello.bc
   fixtures/hello.ml)
  (action
-  (setenv
-   EARLYBIRD_ADAPTER
-   %{adapter}
-   (with-stdout-to
-    %{targets}
-    (run %{driver})))))
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
 
 (rule
  (alias runtest)
@@ -45,14 +50,125 @@
   fixtures/hello.bc
   fixtures/hello.ml)
  (action
-  (setenv
-   EARLYBIRD_ADAPTER
-   %{adapter}
-   (with-stdout-to
-    %{targets}
-    (run %{driver})))))
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
 
 (rule
  (alias runtest)
  (action
   (diff test_frames.expected test_frames.actual)))
+
+(rule
+ (targets test_stepping.actual)
+ (deps
+  (:driver test_stepping.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/hello.bc
+  fixtures/hello.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_stepping.expected test_stepping.actual)))
+
+(rule
+ (targets test_values.actual)
+ (deps
+  (:driver test_values.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/values.bc
+  fixtures/values.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_values.expected test_values.actual)))
+
+(rule
+ (targets test_heap.actual)
+ (deps
+  (:driver test_heap.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/closure.bc
+  fixtures/closure.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_heap.expected test_heap.actual)))
+
+(rule
+ (targets test_indexed.actual)
+ (deps
+  (:driver test_indexed.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/values.bc
+  fixtures/values.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_indexed.expected test_indexed.actual)))
+
+(rule
+ (targets test_dune_source.actual)
+ (deps
+  (:driver test_dune_source.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/wsroot.bc
+  fixtures/wsroot.ml)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_dune_source.expected test_dune_source.actual)))
+
+; --- symbol table, exercised directly --------------------------------------
+
+(executables
+ (names test_events test_workspace)
+ (modules test_events test_workspace)
+ (preprocess
+  (pps lwt_ppx))
+ (libraries debugger lwt lwt.unix))
+
+(rule
+ (targets test_events.actual)
+ (deps
+  (:driver test_events.exe)
+  fixtures/hello.bc
+  fixtures/hello.ml)
+ (action
+  (with-stdout-to %{targets} (run %{driver}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_events.expected test_events.actual)))
+
+(rule
+ (targets test_workspace.actual)
+ (deps
+  (:driver test_workspace.exe))
+ (action
+  (with-stdout-to %{targets} (run %{driver}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_workspace.expected test_workspace.actual)))
