@@ -1,0 +1,1 @@
+fixtures/not_bytecode.txt is not an OCaml bytecode executable. earlybird debugs bytecode programs, not native executables. Compile with `ocamlc -g` or a dune `(modes byte)` target and set "program" to the resulting .bc file.

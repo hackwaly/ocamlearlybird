@@ -8,3 +8,15 @@
  (deps hello.ml)
  (action
   (run %{bin:ocamlc} -g hello.ml -o hello.bc)))
+
+(rule
+ (targets values.bc)
+ (deps values.ml)
+ (action
+  (run %{bin:ocamlc} -g values.ml -o values.bc)))
+
+(rule
+ (targets closure.bc)
+ (deps closure.ml)
+ (action
+  (run %{bin:ocamlc} -g closure.ml -o closure.bc)))

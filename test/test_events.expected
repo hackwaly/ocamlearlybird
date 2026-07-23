@@ -1,0 +1,13 @@
+ 1  snaps to none    contains []  | (* Fixture program debugged by the integration tests. Keep the line numbers
+ 2  snaps to none    contains []  |    stable as the tests set breakpoints by line. *)
+ 3  snaps to none    contains []  | 
+ 4  snaps to none    contains []  | let greet name =
+ 5  snaps to 5:3     contains []  |   let greeting = "Hello, " ^ name in
+ 6  snaps to 6:3     contains [6:3]  |   greeting
+ 7  snaps to none    contains []  | 
+ 8  snaps to none    contains []  | let () =
+ 9  snaps to none    contains []  |   let x = 41 in
+10  snaps to 10:3    contains [10:3; 11:3]  |   let y = x + 1 in
+11  snaps to 11:3    contains []  |   let msg = greet "world" in
+12  snaps to 12:3    contains [12:3; 12:3]  |   print_endline msg;
+13  snaps to 12:3    contains []  |   print_endline (string_of_int y)
