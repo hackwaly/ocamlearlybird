@@ -1,0 +1,3 @@
+This file stands in for a native executable (or any non-bytecode file) passed to
+the debugger. It is deliberately not an OCaml bytecode executable, so loading its
+debug info fails. See test_bad_magic.ml.

@@ -12,6 +12,9 @@
   variables send the filter and are unaffected (VS Code, and emacs dap-mode),
   but nvim-dap has no variable paging and sends only `variablesReference`, so
   expanding an array in nvim-dap crashed the adapter.
+* Report a clear error when `program` is a native executable or other
+  non-bytecode file (#33). Loading such a file failed with `Bad magic`; it now
+  explains that earlybird debugs bytecode and to point `program` at a `.bc`.
 
 ### Added
 

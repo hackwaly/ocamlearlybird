@@ -122,9 +122,9 @@
 
 ; --- symbol table, exercised directly --------------------------------------
 
-(executable
- (name test_events)
- (modules test_events)
+(executables
+ (names test_events test_bad_magic)
+ (modules test_events test_bad_magic)
  (preprocess
   (pps lwt_ppx))
  (libraries debugger lwt lwt.unix))
@@ -142,3 +142,16 @@
  (alias runtest)
  (action
   (diff test_events.expected test_events.actual)))
+
+(rule
+ (targets test_bad_magic.actual)
+ (deps
+  (:driver test_bad_magic.exe)
+  fixtures/not_bytecode.txt)
+ (action
+  (with-stdout-to %{targets} (run %{driver}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_bad_magic.expected test_bad_magic.actual)))

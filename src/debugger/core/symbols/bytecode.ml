@@ -3,6 +3,15 @@ open Instruct
 
 type debug_info = (Instruct.debug_event list * string list) list
 
+(* Raised when [load_debuginfo] is pointed at a file that is not an OCaml
+   bytecode executable (most often a native executable). *)
+exception Not_ocaml_bytecode of string
+
+let () =
+  Printexc.register_printer (function
+    | Not_ocaml_bytecode message -> Some message
+    | _ -> None)
+
 let seek_section (pos, section_table) name =
   let rec seek_sec pos = function
     | [] -> raise Not_found
@@ -58,7 +67,14 @@ let load_debuginfo file =
       Lwt_io.read_string_exactly ic (String.length Config.exec_magic_number)
     in
     if%lwt Lwt.return (magic <> Config.exec_magic_number) then
-      Lwt.fail_invalid_arg "Bad magic";%lwt
+      Lwt.fail
+        (Not_ocaml_bytecode
+           (Printf.sprintf
+              "%s is not an OCaml bytecode executable. earlybird debugs \
+               bytecode programs, not native executables. Compile with \
+               `ocamlc -g` or a dune `(modes byte)` target and set \"program\" \
+               to the resulting .bc file."
+              file));%lwt
     let pos_toc = Int64.sub pos_trailer (Int64.of_int (8 * num_sections)) in
     Lwt_io.set_position ic pos_toc;%lwt
     let section_table = ref [] in
