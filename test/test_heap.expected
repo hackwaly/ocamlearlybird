@@ -1,0 +1,4 @@
+stopped in Closure.make_counter.bump:9
+Stack: <empty>
+Heap: step = 5, count = {…}
+  count.contents = 10
