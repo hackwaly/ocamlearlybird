@@ -17,6 +17,29 @@
   (pps lwt_ppx))
  (libraries dap.types dap_client lwt lwt.unix))
 
+; A raw-framing client (does not use dap_client, so it can pipeline requests).
+(executable
+ (name test_launch_race)
+ (modules test_launch_race)
+ (preprocess
+  (pps lwt_ppx))
+ (libraries lwt lwt.unix))
+
+(rule
+ (targets test_launch_race.actual)
+ (deps
+  (:driver test_launch_race.exe)
+  (:adapter %{exe:../src/main/main.exe})
+  fixtures/hello.bc)
+ (action
+  (setenv EARLYBIRD_ADAPTER %{adapter}
+   (with-stdout-to %{targets} (run %{driver})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff test_launch_race.expected test_launch_race.actual)))
+
 (rule
  (targets test_scopes.actual)
  (deps
