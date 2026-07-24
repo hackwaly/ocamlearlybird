@@ -5,6 +5,11 @@
 * Fix the empty "Globals" scope on OCaml >= 5.2 (#74). Globals are numbered by
   `Symtable.Global.t` rather than by `Ident.t` since 5.2, and reading the SYMB
   section with the old key type left the scope empty.
+* Fix a `launch` request being dropped when sent immediately after
+  `initialize`. The Launch handler was registered one scheduler tick after the
+  initialize response was sent, so a pipelined `launch` could arrive first, be
+  silently dropped ("Can not find handler"), and leave the session stuck with no
+  `initialized` event.
 
 ### Added
 

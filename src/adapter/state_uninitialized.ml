@@ -18,6 +18,11 @@ let run rpc =
             ~supports_breakpoint_locations_request:(Some true)
             ~supports_value_formatting_options:(Some true) ())
       in
-      Lwt.wakeup_later resolver (arg, caps);
+      (* Wake immediately so that the next state registers
+         its Launch/Attach handlers synchronously, before this handler returns
+         and the initialize response is sent. Otherwise a client that pipelines
+         "launch" right after "initialize" can have it arrive before the handler
+         exists, and it is silently dropped. *)
+      Lwt.wakeup resolver (arg, caps);
       Lwt.return caps);
   promise
