@@ -21,6 +21,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
         ocaml-compiler:
+          - ocaml-variants.5.6.0+trunk
           - 5.5.x
           - 5.4.x
           - 5.3.x
@@ -43,6 +44,10 @@ jobs:
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - name: Pin dependencies
+        if: ${{ matrix.ocaml-compiler == 'ocaml-variants.5.6.0+trunk' }}
+        run: opam pin add ppxlib git+https://github.com/ocaml-ppx/ppxlib.git#377fee7793ee12d82772c619efee7985ea31f53f
 
       - name: Install dependencies
         run: opam install . --deps-only

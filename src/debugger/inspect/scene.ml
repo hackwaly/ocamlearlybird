@@ -144,6 +144,9 @@ let get_field (c, time) rv index =
           | exception Wire_protocol.Float_field v ->
               Lwt.return (Local (Obj.repr v)))
 
+let _tag_of_header header =
+  Nativeint.to_int (Nativeint.logand header 0xFFn)
+
 let get_tag (c, time) rv =
   if not (is_block rv) then Lwt.return Obj.int_tag
   else
@@ -152,8 +155,23 @@ let get_tag (c, time) rv =
     | Remote rv ->
         _lock_conn (c, time) (fun conn ->
             let%lwt hdr = Wire_protocol.get_header conn rv in
-            let tag = hdr land 0xff in
+            let tag = _tag_of_header hdr in
             Lwt.return tag)
+
+[%%if ocaml_version >= (5, 6, 0)]
+let _header_without_reserved_bits header =
+  if Config.reserved_header_bits > 0 then
+    let mask =
+      Nativeint.sub
+        (Nativeint.shift_left 1n (Sys.word_size - Config.reserved_header_bits))
+        1n
+    in
+    Nativeint.logand header mask
+  else
+    header
+[%%else]
+let _header_without_reserved_bits header = header
+[%%endif]
 
 let get_size (c, time) rv =
   match rv with
@@ -161,10 +179,11 @@ let get_size (c, time) rv =
   | Remote rv ->
       _lock_conn (c, time) (fun conn ->
           let%lwt hdr = Wire_protocol.get_header conn rv in
+          let hdr = _header_without_reserved_bits hdr in
           let size =
-            if hdr land 0xff = Obj.double_array_tag && Sys.word_size = 32 then
-              hdr lsr 11
-            else hdr lsr 10
+            if _tag_of_header hdr = Obj.double_array_tag && Sys.word_size = 32 then
+              Nativeint.(to_int (shift_right_logical hdr 11))
+            else Nativeint.(to_int (shift_right_logical hdr 10))
           in
           Lwt.return size)
 
