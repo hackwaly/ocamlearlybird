@@ -53,7 +53,7 @@ val get_global : Lwt_conn.t -> int -> remote_value Lwt.t
 
 val get_accu : Lwt_conn.t -> remote_value Lwt.t
 
-val get_header : Lwt_conn.t -> remote_value -> int Lwt.t
+val get_header : Lwt_conn.t -> remote_value -> nativeint Lwt.t
 
 val get_field : Lwt_conn.t -> remote_value -> int -> remote_value Lwt.t
 

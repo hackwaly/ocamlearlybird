@@ -174,12 +174,36 @@ let get_accu conn =
       let%lwt rv = _read_remote_value conn in
       Lwt.return rv)
 
+let _read_nativeint conn =
+  match Sys.word_size with
+  | 32 ->
+      let%lwt int = Lwt_io.BE.read_int conn in
+      Lwt.return (Nativeint.of_int int)
+  | 64 ->
+      let%lwt high = Lwt_io.BE.read_int conn in
+      let%lwt low = Lwt_io.BE.read_int conn in
+      (* [low] was sent as an unsigned 32-bit integer, but [Lwt_io.BE.read_int]
+         sign-extended it. Masking the high bits away recovers the original
+         unsigned number. *)
+      Lwt.return (Nativeint.(add (logand (of_int low) 0xFFFF_FFFFn)
+                            (shift_left (of_int high) 32)))
+  | _ -> failwith "Unsupported word size"
+
+[%%if ocaml_version >= (5, 6, 0)]
+let get_header conn rv =
+  Lwt_conn.atomic conn (fun conn ->
+      Lwt_io.write_char conn.io.out 'H';%lwt
+      _write_remote_value conn rv;%lwt
+      let%lwt hdr = _read_nativeint conn.io.in_ in
+      Lwt.return hdr)
+[%%else]
 let get_header conn rv =
   Lwt_conn.atomic conn (fun conn ->
       Lwt_io.write_char conn.io.out 'H';%lwt
       _write_remote_value conn rv;%lwt
       let%lwt hdr = Lwt_io.BE.read_int conn.io.in_ in
-      Lwt.return hdr)
+      Lwt.return (Nativeint.of_int hdr))
+[%%endif]
 
 exception Float_field of float
 
